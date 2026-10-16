@@ -1,5 +1,5 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -271,6 +271,7 @@ export default function ExercisesScreen() {
   const [selected, setSelected] = useState<Exercise | null>(null);
   const [info, setInfo] = useState<DatabaseInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<SectionList<Exercise, ExerciseSection>>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -337,6 +338,18 @@ export default function ExercisesScreen() {
 
   const searching = searchTerm.trim().length > 0;
 
+  const submitSearch = useCallback(() => {
+    setSearchTerm(query);
+    // Remonte en haut de la liste une fois les nouveaux résultats rendus.
+    requestAnimationFrame(() => {
+      try {
+        listRef.current?.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: false });
+      } catch {
+        // Liste vide ou pas encore prête : rien à faire.
+      }
+    });
+  }, [query]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -358,13 +371,13 @@ export default function ExercisesScreen() {
             placeholderTextColor={neutrals.textMuted}
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={() => setSearchTerm(query)}
+            onSubmitEditing={submitSearch}
             autoCorrect={false}
             autoCapitalize="none"
             clearButtonMode="while-editing"
             returnKeyType="search"
           />
-          <Pressable style={styles.searchButton} onPress={() => setSearchTerm(query)}>
+          <Pressable style={styles.searchButton} onPress={submitSearch}>
             <Text style={styles.searchButtonText}>Rechercher</Text>
           </Pressable>
         </View>
@@ -384,6 +397,7 @@ export default function ExercisesScreen() {
         </View>
       ) : (
         <SectionList
+          ref={listRef}
           sections={sections}
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
