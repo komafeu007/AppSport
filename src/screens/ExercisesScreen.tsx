@@ -78,16 +78,81 @@ const MUSCLE_ALIASES: Record<string, string[]> = {
   cardio: ['cardiovascular system', 'cardio'],
 };
 
+/** Mots de mouvement : si le terme cherché est immédiatement suivi de l'un d'eux, c'est un match "central". */
+const MOVEMENT_WORDS = new Set([
+  'press', 'squat', 'deadlift', 'curl', 'row', 'raise', 'extension', 'fly', 'flye',
+  'pulldown', 'pull', 'push', 'lunge', 'dip', 'crunch', 'plank', 'thrust', 'bridge',
+  'shrug', 'kickback', 'pushdown', 'pullover', 'crossover', 'clean', 'snatch', 'jerk',
+  'march', 'walk', 'run', 'jump', 'swing', 'twist', 'rotation', 'stretch', 'climber',
+]);
+
+/** Mouvements classiques : bonus pour faire remonter les exercices "principaux". */
+const CLASSIC_PHRASES = [
+  'bench press', 'incline bench press', 'decline bench press',
+  'full squat', 'front squat', 'back squat', 'hack squat',
+  'deadlift', 'romanian deadlift', 'stiff leg deadlift',
+  'pull-up', 'chin-up', 'push-up', 'dip', 'overhead press', 'military press',
+  'shoulder press', 'lateral raise', 'front raise', 'rear delt',
+  'barbell row', 'dumbbell row', 'seated row', 'lat pulldown', 'upright row',
+  'biceps curl', 'hammer curl', 'preacher curl', 'triceps extension', 'triceps pushdown',
+  'leg press', 'leg extension', 'leg curl', 'calf raise', 'lunge', 'shrug',
+  'plank', 'crunch', 'hip thrust', 'glute bridge', 'face pull', 'good morning',
+  'pullover', 'pushdown', 'push down',
+];
+
+function classicBonus(name: string | null | undefined, terms: string[]): number {
+  if (!name) return 0;
+  const n = normalize(name);
+  return CLASSIC_PHRASES.some(
+    (phrase) => n.includes(phrase) && terms.some((term) => term.length > 0 && phrase.includes(term))
+  )
+    ? 5
+    : 0;
+}
+
 function queryTerms(query: string): string[] {
   const base = normalize(query.trim());
   if (!base) return [];
   return [base, ...(MUSCLE_ALIASES[base] ?? []).map(normalize)];
 }
 
-function matches(value: string | null | undefined, terms: string[]): boolean {
-  if (!value) return false;
-  const text = normalize(value);
-  return terms.some((term) => term.length > 0 && text.includes(term));
+/**
+ * Score de pertinence d'un terme dans un texte (0 = pas de match).
+ * Plus le score est élevé, plus le match est "central".
+ */
+function matchScore(text: string | null | undefined, terms: string[]): number {
+  if (!text) return 0;
+  const t = normalize(text);
+  let best = 0;
+
+  for (let i = 0; i < terms.length; i += 1) {
+    const term = terms[i];
+    if (!term) continue;
+    const idx = t.indexOf(term);
+    if (idx < 0) continue;
+
+    let s = 1; // sous-chaîne
+    if (t === term) s = 5; // nom identique
+    else if (idx === 0) s = 4; // commence par le terme
+    else if (/[\s\-/()]/.test(t[idx - 1] ?? '')) s = 3; // début de mot
+
+    // bonus si le mot suivant est un mouvement (ex. "bench press" avant "bench front squat")
+    const after = t
+      .slice(idx + term.length)
+      .replace(/^[\s\-/()]+/, '')
+      .split(/[\s\-/()]+/)[0];
+    if (after && MOVEMENT_WORDS.has(after)) s += 1.2;
+
+    // léger bonus : match plus tôt dans le nom et nom plus court
+    s += Math.max(0, (30 - Math.min(idx, 30)) / 200);
+    s += Math.max(0, (40 - Math.min(t.length, 40)) / 200);
+
+    // un alias (i > 0) pèse un peu moins que le terme saisi
+    if (i > 0) s *= 0.9;
+
+    if (s > best) best = s;
+  }
+  return best;
 }
 
 function ExerciseRow({ exercise, onPress }: { exercise: Exercise; onPress: () => void }) {
@@ -185,10 +250,24 @@ function DetailModal({ exercise, onClose }: { exercise: Exercise | null; onClose
 
 type ExerciseSection = { title: string; data: Exercise[] };
 
+interface Ranked {
+  exercise: Exercise;
+  score: number;
+}
+
+function sortByRelevance(a: Ranked, b: Ranked): number {
+  if (b.score !== a.score) return b.score - a.score;
+  if (a.exercise.nom.length !== b.exercise.nom.length) {
+    return a.exercise.nom.length - b.exercise.nom.length;
+  }
+  return a.exercise.nom.localeCompare(b.exercise.nom);
+}
+
 export default function ExercisesScreen() {
   const db = useSQLiteContext();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [query, setQuery] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState<Exercise | null>(null);
   const [info, setInfo] = useState<DatabaseInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -210,39 +289,53 @@ export default function ExercisesScreen() {
   }, [db]);
 
   const sections = useMemo<ExerciseSection[]>(() => {
-    const terms = queryTerms(query);
+    const terms = queryTerms(searchTerm);
     if (terms.length === 0) {
       return [{ title: '', data: exercises }];
     }
 
-    const primary: Exercise[] = [];
-    const secondary: Exercise[] = [];
-    for (const ex of exercises) {
-      const nameMatch = matches(ex.nom, terms) || matches(ex.nom_fr, terms);
-      // `target` = muscle principal ; `muscle_group` est un synergiste (trop large) -> exclu.
-      const primaryMuscle = matches(ex.target, terms) || matches(ex.category, terms);
-      const secondaryMuscle = parseSecondary(ex.secondary_muscles).some((m) => matches(m, terms));
+    const primary: Ranked[] = [];
+    const secondary: Ranked[] = [];
 
-      if (nameMatch || primaryMuscle) primary.push(ex);
-      else if (secondaryMuscle) secondary.push(ex);
+    for (const ex of exercises) {
+      const baseName = Math.max(matchScore(ex.nom, terms), matchScore(ex.nom_fr, terms));
+      const nameScore = baseName > 0 ? baseName + classicBonus(ex.nom, terms) : 0;
+      const targetScore = matchScore(ex.target, terms);
+      const categoryScore = matchScore(ex.category, terms);
+      // nom > muscle cible > partie du corps
+      const primaryScore = Math.max(nameScore * 3, targetScore * 2, categoryScore);
+
+      const secondaryScore = Math.max(
+        0,
+        ...parseSecondary(ex.secondary_muscles).map((m) => matchScore(m, terms))
+      );
+
+      if (primaryScore > 0) primary.push({ exercise: ex, score: primaryScore });
+      else if (secondaryScore > 0) secondary.push({ exercise: ex, score: secondaryScore });
     }
+
+    primary.sort(sortByRelevance);
+    secondary.sort(sortByRelevance);
 
     const result: ExerciseSection[] = [];
     if (primary.length > 0) {
-      result.push({ title: secondary.length > 0 ? 'Principal' : '', data: primary });
+      result.push({
+        title: secondary.length > 0 ? 'Principal' : '',
+        data: primary.map((r) => r.exercise),
+      });
     }
     if (secondary.length > 0) {
-      result.push({ title: 'Secondaire', data: secondary });
+      result.push({ title: 'Secondaire', data: secondary.map((r) => r.exercise) });
     }
     return result;
-  }, [exercises, query]);
+  }, [exercises, searchTerm]);
 
   const resultCount = useMemo(
     () => sections.reduce((total, section) => total + section.data.length, 0),
     [sections]
   );
 
-  const searching = query.trim().length > 0;
+  const searching = searchTerm.trim().length > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -250,7 +343,7 @@ export default function ExercisesScreen() {
         <Text style={styles.title}>AppSport Local</Text>
         <Text style={styles.subtitle}>
           {searching
-            ? `${resultCount} résultat${resultCount > 1 ? 's' : ''}`
+            ? `${resultCount} résultat${resultCount > 1 ? 's' : ''} pour « ${searchTerm.trim()} »`
             : `${exercises.length} exercice${exercises.length > 1 ? 's' : ''} au catalogue`}
         </Text>
         {info && (
@@ -258,17 +351,23 @@ export default function ExercisesScreen() {
             SQLite {info.sqliteVersion} · schéma v{info.schemaVersion} · {info.exerciseCount} lignes
           </Text>
         )}
-        <TextInput
-          style={styles.search}
-          placeholder="Rechercher un exercice ou un muscle…"
-          placeholderTextColor={neutrals.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCorrect={false}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-          returnKeyType="search"
-        />
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.search}
+            placeholder="Rechercher un exercice ou un muscle…"
+            placeholderTextColor={neutrals.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={() => setSearchTerm(query)}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+          <Pressable style={styles.searchButton} onPress={() => setSearchTerm(query)}>
+            <Text style={styles.searchButtonText}>Rechercher</Text>
+          </Pressable>
+        </View>
       </View>
 
       {error ? (
@@ -281,7 +380,7 @@ export default function ExercisesScreen() {
         </View>
       ) : resultCount === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Aucun résultat pour « {query.trim()} »</Text>
+          <Text style={styles.emptyText}>Aucun résultat pour « {searchTerm.trim()} »</Text>
         </View>
       ) : (
         <SectionList
@@ -295,7 +394,6 @@ export default function ExercisesScreen() {
           }
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          SectionSeparatorComponent={() => <View style={styles.sectionSeparator} />}
           keyboardShouldPersistTaps="handled"
           stickySectionHeadersEnabled={false}
         />
@@ -336,8 +434,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
   },
-  search: {
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 12,
+    gap: 8,
+  },
+  search: {
+    flex: 1,
     backgroundColor: neutrals.surface,
     borderWidth: 1,
     borderColor: neutrals.border,
@@ -346,6 +450,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: neutrals.text,
     fontSize: 15,
+  },
+  searchButton: {
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchButtonText: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: '800',
   },
   listContent: {
     paddingHorizontal: 20,
@@ -359,9 +474,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 16,
     marginBottom: 8,
-  },
-  sectionSeparator: {
-    height: 0,
   },
   row: {
     flexDirection: 'row',
