@@ -1,0 +1,18 @@
+# Normalise les fins de ligne (LF partout)
+* text=auto eol=lf
+
+# Fichiers binaires (pas de diff texte)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+
+# Fichiers générés / tiers : repliés dans l'UI GitHub (diffs & stats de langage)
+package-lock.json linguist-generated=true
+src/data/exercises.seed.json linguist-generated=true
+src/data/exerciseImages.ts linguist-generated=true
+assets/exercises/** linguist-vendored=true
