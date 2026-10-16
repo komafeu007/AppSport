@@ -1,41 +1,49 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# AGENTS.md
 
-## Expo has changed — do not trust your training data
+Expo SDK 57 + React Native + TypeScript (strict) training app. Code and comments in English, but the product, UI copy, and specs are French ("AppSport Local").
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+## Do not trust your Expo training data
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+Expo ships breaking changes every SDK release. Before using any Expo/EAS/React Native API, check the installed version and read the versioned docs — do not answer from memory.
+
+- SDK version lives in the `expo` dependency in `package.json` (currently `~57`).
+- Versioned docs: https://docs.expo.dev/versions/v57.0.0/
+- Full index with common-LLM-misconception corrections: https://docs.expo.dev/llms.txt
 
 ## Commands
 
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
+This is an npm project (`package-lock.json`, no `bun.lock`) — use `npx`, not `bunx`.
 
 ```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
+npx expo install <package>   # always, instead of npm/yarn/bun add — resolves SDK-compatible versions
+npx expo start               # dev server
+npx tsc --noEmit             # typecheck — the only configured verification step
+npx expo-doctor              # diagnose dependency/config problems
+npx expo install --fix       # fix incompatible package versions
 ```
 
-Run lint and typecheck before declaring any task done.
+- No lint or test setup exists: no ESLint config, no test runner, no `lint`/`test` scripts. `npx expo lint` will prompt to install `eslint-config-expo` first — don't assume it works out of the box.
+- Run `npx tsc --noEmit` before declaring any task done.
 
-## Navigation & Routing
+## Architecture
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- Entrypoint: `index.ts` calls `registerRootComponent(App)`; the app lives in `App.tsx` (`package.json` `"main": "index.ts"`).
+- Navigation is **React Navigation** (`@react-navigation/native` + `@react-navigation/native-stack`), **not** Expo Router. There is no `src/app/` route tree — do not add Expo Router or a file-based routes directory.
+- No `src/` directory yet; the project is near the blank Expo template plus dependencies. Create new folders as needed rather than assuming a layout.
 
-## Building with EAS
+## Data & domain
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+- `docs/CDC.md` — product spec (French, v2.0): dark high-contrast theme, palette `#121218` bg / `#00E676` accent / `#00B0FF` secondary / `#FF3D00` alert; rest-time and set rules keyed on `is_poly`; program-generation rules; 4 modules (Onboarding, Programme, Live Workout, Stats). Product source of truth — keep user-facing strings and domain terms in French.
+- `docs/SCHEMA.sql` — SQLite schema source of truth: `ACCOUNTS`, `EXERCISES`, `PROGRAMS`, `WORKOUT_EXOS`, `LOGS_SESSION`, `LOGS_SETS`. Persistence is SQLite via `expo-sqlite` (registered as a config plugin in `app.json`); keep the schema and this file in sync.
+- `src/services/database.ts` — opens the DB, runs versioned migrations (`PRAGMA user_version`, currently **v3**) and seeds the exercise catalogue. Bump `DATABASE_VERSION` and add a migration branch for each change; any pre-v3 DB drops/recreates `EXERCISES`.
+- `src/data/exercises.seed.json` — 1 324 exercises imported from [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset) (MIT). `SEED_EXERCISES` in the service wraps it.
+  - **Derived fields, not from the source:** `nom_fr` is an auto-generated best-effort translation (the dataset ships English names + French *instructions* only), and `is_poly` comes from an isolation-keyword heuristic. Don't treat either as authoritative.
+- `src/data/exerciseImages.ts` — generated map `filename → require()` for the 1 324 local 180×180 thumbnails in `assets/exercises/` (~12 MB, image © Gym visual). `EXERCISES.image` holds the filename key. Animated GIFs (122 MB) are **not** bundled; the detail view streams them from GitHub.
+- `docs/TESTING.md` — how to run the app on a phone (Expo Go, dev build) and surface what works/fails.
+- `src/theme/colors.ts` — official palette (`#121218` bg, `#00E676` accent, `#00B0FF` secondary, `#FF3D00` alert) plus derived neutrals. Use these instead of hard-coded colors.
 
 ## Rules
 
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+- `ios/` and `android/` are gitignored and generated (Continuous Native Generation). Never create or hand-edit them — configure native behavior in `app.json` and config plugins.
+- After adding any library with native code, the app needs a development build (`npx expo run:ios|android`, or `eas build --profile development`). EAS is not configured yet (no `eas.json`); run the CLI as `npx eas-cli@latest <command>`, not bare `eas`.
+- Prefer recommended Expo modules over third-party libraries before adding dependencies.

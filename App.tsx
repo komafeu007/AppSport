@@ -1,20 +1,39 @@
+import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { Suspense } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-export default function App() {
+import ExercisesScreen from './src/screens/ExercisesScreen';
+import { DATABASE_NAME, migrateDbIfNeeded } from './src/services/database';
+import { colors } from './src/theme/colors';
+
+function LoadingFallback() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
+    <View style={styles.loading}>
+      <ActivityIndicator color={colors.accent} size="large" />
     </View>
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      <Suspense fallback={<LoadingFallback />}>
+        <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded} useSuspense>
+          <ExercisesScreen />
+        </SQLiteProvider>
+      </Suspense>
+    </SafeAreaProvider>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  loading: {
     flex: 1,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.background,
   },
 });
