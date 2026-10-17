@@ -21,12 +21,22 @@ CREATE TABLE IF NOT EXISTS EXERCISES (
     instructions_fr TEXT            -- instructions détaillées en français
 );
 
+CREATE TABLE IF NOT EXISTS SESSION_GROUPS (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
+    nom TEXT NOT NULL,              -- nom du groupe/split (ex. « PPL », « Maison », « Upper/Lower »)
+    ordre INTEGER,
+    FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id)
+);
+
 CREATE TABLE IF NOT EXISTS PROGRAMS (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER,
     nom_seance TEXT NOT NULL,
     ordre INTEGER,
-    FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id)
+    group_id INTEGER,               -- groupe/split d'appartenance (null = sans groupe)
+    FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id),
+    FOREIGN KEY(group_id) REFERENCES SESSION_GROUPS(id)
 );
 
 CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
@@ -34,9 +44,11 @@ CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
     program_id INTEGER,
     exercise_id INTEGER,
     series INTEGER,
-    reps INTEGER,
+    reps_min INTEGER,       -- reps minimum (début de la double progression)
+    reps_max INTEGER,       -- reps maximum : au-delà, on monte le poids et on repart au min
     rest_time INTEGER, -- en secondes
-    target_weight REAL,
+    target_weight REAL,     -- poids de base (kg)
+    set_weights TEXT,       -- poids par série en JSON (dégressif), ex. '[100,90,80]' ; null = uniforme
     FOREIGN KEY(program_id) REFERENCES PROGRAMS(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)
 );
@@ -44,6 +56,7 @@ CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
 CREATE TABLE IF NOT EXISTS LOGS_SESSION (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER,
+    program_id INTEGER,           -- séance (PROGRAMS) réellement effectuée
     date TEXT NOT NULL,
     duration_sec INTEGER,
     total_volume REAL,
