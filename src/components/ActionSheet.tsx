@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, neutrals } from '../theme/colors';
+import { spacing, text } from '../theme/tokens';
+import Appear from './ui/Appear';
+import PressableScale from './ui/PressableScale';
+import Sheet from './ui/Sheet';
 
 export interface ActionSheetItem {
   label: string;
@@ -12,7 +16,7 @@ export interface ActionSheetItem {
 
 interface Props {
   visible: boolean;
-  /** Titre affiché en haut de la feuille (ex. le nom du groupe). */
+  /** Titre affiché sous la poignée (ex. le nom du groupe). */
   title?: string;
   items: ActionSheetItem[];
   onClose: () => void;
@@ -20,107 +24,77 @@ interface Props {
 
 /**
  * Menu d'actions en feuille basse. Remplace `Alert.alert` quand il y a plus de
- * trois actions (Android n'en affiche que trois) et se ferme de la même façon
- * partout : appui **à côté** de la feuille, bouton « Annuler », ou bouton
- * retour d'Android.
+ * trois actions (Android n'en affiche que trois). L'action choisie est rejouée
+ * une fois la feuille refermée, pour ne pas présenter deux modales en même temps.
  */
 export default function ActionSheet({ visible, title, items, onClose }: Props) {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  /**
-   * Une action peut ouvrir un autre écran/modal. Sur iOS il faut attendre que
-   * la feuille soit vraiment refermée (sinon la présentation est ignorée) : on
-   * conserve l'action et on la rejoue dans `onDismiss`. Android n'appelle pas
-   * `onDismiss` : on exécute directement.
-   */
   const selectItem = (item: ActionSheetItem) => {
     onClose();
-    if (Platform.OS === 'ios') {
-      setPendingAction(() => item.onPress);
-    } else {
-      item.onPress();
-    }
+    setPendingAction(() => item.onPress);
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      onDismiss={() => {
+      title={title}
+      onClose={onClose}
+      onDismissed={() => {
         const action = pendingAction;
         setPendingAction(null);
         action?.();
       }}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        {/* Capture l'appui : toucher la feuille ne doit pas la refermer. */}
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
-          {items.map((item) => (
-            <Pressable key={item.label} style={styles.item} onPress={() => selectItem(item)}>
-              <Text style={[styles.itemText, item.destructive === true && styles.itemTextDanger]}>
+      <View style={styles.items}>
+        {items.map((item, index) => (
+          <Appear key={item.label} delay={index * 40} offset={8}>
+            <PressableScale
+              style={styles.item}
+              onPress={() => selectItem(item)}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.itemText, item.destructive === true && styles.itemDanger]}>
                 {item.label}
               </Text>
-            </Pressable>
-          ))}
-          <Pressable style={[styles.item, styles.cancelItem]} onPress={onClose}>
-            <Text style={styles.cancelText}>Annuler</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            </PressableScale>
+          </Appear>
+        ))}
+      </View>
+
+      <PressableScale style={styles.cancel} onPress={onClose} accessibilityRole="button">
+        <Text style={styles.cancelText}>Annuler</Text>
+      </PressableScale>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: neutrals.surface,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    paddingTop: 8,
-    paddingBottom: 20,
-    paddingHorizontal: 12,
-  },
-  title: {
-    color: neutrals.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  items: {
+    paddingHorizontal: spacing.md,
   },
   item: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    borderRadius: spacing.md,
   },
   itemText: {
+    ...text.subtitle,
     color: neutrals.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
-  itemTextDanger: {
+  itemDanger: {
     color: colors.alert,
   },
-  cancelItem: {
-    marginTop: 6,
+  cancel: {
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: neutrals.border,
     alignItems: 'center',
   },
   cancelText: {
+    ...text.subtitle,
     color: neutrals.textMuted,
-    fontSize: 16,
-    fontWeight: '800',
   },
 });
