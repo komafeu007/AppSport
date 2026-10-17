@@ -45,7 +45,7 @@ npx expo install --fix       # fix incompatible package versions
 ## Rules
 
 - **Every screen goes through the design system**: `src/theme/tokens.ts` (spacing, radius, typography, durations, spring) and `src/components/ui/` primitives. No hard-coded colors, radii or font sizes in screens; only the official palette from `src/theme/colors.ts`.
-- Content modals are bottom sheets built on `src/components/ui/Sheet.tsx` (slide-in + spring, close on outside tap, close button, Android back). Animate with `Animated` (`Appear` for entrances, `PressableScale` for presses) — no animation library is installed.
+- Content modals are bottom sheets built on `src/components/ui/Sheet.tsx` (slide-in + spring, close on outside tap, close button, Android back). Confirmations and info dialogs use `src/components/ui/ConfirmSheet.tsx`, not `Alert.alert`. Animate with `Animated` (`Appear` for entrances, `PressableScale` for presses) — no animation library is installed.
 - `ios/` and `android/` are gitignored and generated (Continuous Native Generation). Never create or hand-edit them — configure native behavior in `app.json` and config plugins.
 - After adding any library with native code, the app needs a development build (`npx expo run:ios|android`, or `eas build --profile development`). EAS is not configured yet (no `eas.json`); run the CLI as `npx eas-cli@latest <command>`, not bare `eas`.
 - Prefer recommended Expo modules over third-party libraries before adding dependencies.

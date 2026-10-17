@@ -62,7 +62,7 @@ src/
     ExerciseDetailModal.tsx # fiche exercice (image + tuto) en feuille basse
     ExerciseSearchList.tsx  # liste + recherche d'exercices (picker de séance)
     PlateCalculatorModal.tsx # calculateur de chargement (barre + disques)
-    ui/                     # Design system : Button, Card, Chip, Sheet, StateView…
+    ui/                     # Design system : Button, Card, Chip, Sheet, ConfirmSheet…
   data/
     exercises.seed.json     # catalogue (généré depuis le dataset)
     exerciseImages.ts       # map fichier -> require() des vignettes (généré)
@@ -93,6 +93,7 @@ docs/                       # specs, schéma, guide de test
 
 - **Un seul vocabulaire visuel** : tout passe par `src/theme/tokens.ts` (espacements, rayons, échelle typographique, durées) et par les briques de `src/components/ui/` (`Button`, `Card`, `Chip`, `IconButton`, `Input`, `Badge`, `Thumb`, `SectionTitle`, `ScreenHeader`, `StateView`, `Sheet`, `Appear`, `PressableScale`). Pas de nombres ou de couleurs en dur dans les écrans.
 - **Feuilles** : toutes les modales de contenu sont des feuilles basses (`Sheet`) qui apparaissent en glissé + ressort et se ferment en touchant à côté, avec le bouton de fermeture, ou avec le retour Android.
+- **Confirmations** : les cartes de validation et les messages d'erreur passent par `ConfirmSheet` (titre, détail, gros bouton rouge si destructif, « Annuler ») — plus aucune `Alert.alert` native.
 - **Animations** : glissé/fondu entre les onglets Main ↔ Séance, pastille d'onglet animée, écrans empilés en glissé (séance en cours depuis le bas), apparitions en escalier (`Appear`), appui avec enfoncement (`PressableScale`), coche de série remplie au ressort.
 
 ## Données
