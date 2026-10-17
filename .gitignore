@@ -38,6 +38,14 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# Base de données locale : elle vit sur l'appareil, jamais dans le dépôt
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
 # Éditeurs / OS
 .DS_Store
 Thumbs.db
