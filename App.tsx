@@ -1,19 +1,16 @@
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { Suspense } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { StateView } from './src/components/ui';
 import RootNavigator from './src/navigation/RootNavigator';
 import { DATABASE_NAME, migrateDbIfNeeded } from './src/services/database';
 import { colors } from './src/theme/colors';
 
 function LoadingFallback() {
-  return (
-    <View style={styles.loading}>
-      <ActivityIndicator color={colors.accent} size="large" />
-    </View>
-  );
+  return <StateView kind="loading" style={styles.loading} />;
 }
 
 export default function App() {
@@ -31,9 +28,6 @@ export default function App() {
 
 const styles = StyleSheet.create({
   loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.background,
   },
 });

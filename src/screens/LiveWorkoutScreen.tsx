@@ -1,28 +1,15 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Animated, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ExerciseDetailModal from '../components/ExerciseDetailModal';
+import PlateCalculatorModal from '../components/PlateCalculatorModal';
+import { Appear, Button, Card, PressableScale, StateView, Thumb } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
-import {
-  clamp,
-  fitWeights,
-  parseWeights,
-  REPS_RANGE,
-  WEIGHT_RANGE,
-} from '../domain/workoutRules';
 import { DEFAULT_BAR_WEIGHT, DEFAULT_PLATES, formatWeight, sortWeightsDesc } from '../domain/plates';
+import { clamp, fitWeights, parseWeights, REPS_RANGE, WEIGHT_RANGE } from '../domain/workoutRules';
 import type { RootStackParamList } from '../navigation/types';
 import {
   getLastSetsForExercise,
@@ -45,9 +32,8 @@ import {
   setCustomPlates,
   setEnabledPlates,
 } from '../services/preferences';
-import PlateCalculatorModal from '../components/PlateCalculatorModal';
-import ExerciseDetailModal from '../components/ExerciseDetailModal';
 import { colors, neutrals } from '../theme/colors';
+import { radius, spring, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -118,41 +104,97 @@ function WeightField({
   onChange: (value: number) => void;
   onOpenCalculator: () => void;
 }) {
-  const [text, setText] = useState(() => formatWeight(value));
+  const [draft, setDraft] = useState(() => formatWeight(value));
 
   useEffect(() => {
-    setText(formatWeight(value));
+    setDraft(formatWeight(value));
   }, [value]);
 
   const commit = () => {
-    const parsed = Number(text.replace(',', '.'));
+    const parsed = Number(draft.replace(',', '.'));
     // Poids conservé tel quel (jamais arrondi), seulement borné.
     const next = Number.isFinite(parsed) ? clamp(parsed, WEIGHT_RANGE) : value;
     onChange(next);
-    setText(formatWeight(next));
+    setDraft(formatWeight(next));
   };
 
   return (
     <View style={styles.weightBox}>
       <TextInput
         style={styles.weightInput}
-        value={text}
-        onChangeText={setText}
+        value={draft}
+        onChangeText={setDraft}
         onBlur={commit}
         onSubmitEditing={commit}
         keyboardType="decimal-pad"
         selectTextOnFocus
         returnKeyType="done"
       />
-      <Pressable
+      <PressableScale
         style={styles.calcButton}
         onPress={onOpenCalculator}
-        hitSlop={6}
         accessibilityLabel="Chargement des disques"
+        scaleTo={0.88}
       >
         <BarbellIcon color={colors.secondary} />
-      </Pressable>
+      </PressableScale>
     </View>
+  );
+}
+
+/** Coche de série/exercice : le remplissage et la coche sont animés (ressort). */
+function CheckToggle({
+  checked,
+  onPress,
+  accessibilityLabel,
+  width = 36,
+}: {
+  checked: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+  width?: number;
+}) {
+  const progress = useRef(new Animated.Value(checked ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(progress, {
+      toValue: checked ? 1 : 0,
+      useNativeDriver: false,
+      ...spring,
+    }).start();
+  }, [checked, progress]);
+
+  const backgroundColor = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [neutrals.surfaceAlt, colors.accent],
+  });
+  const borderColor = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [neutrals.border, colors.accent],
+  });
+  const color = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [neutrals.textMuted, colors.background],
+  });
+  const scale = progress.interpolate({
+    inputRange: [0, 0.7, 1],
+    outputRange: [1, 1.12, 1],
+  });
+
+  return (
+    <PressableScale
+      onPress={onPress}
+      scaleTo={0.9}
+      accessibilityRole="button"
+      accessibilityState={{ checked }}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Animated.View
+        style={[styles.check, { width, backgroundColor, borderColor, transform: [{ scale }] }]}
+      >
+        <Animated.Text style={[styles.checkText, { color }]}>✓</Animated.Text>
+      </Animated.View>
+    </PressableScale>
   );
 }
 
@@ -284,8 +326,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     );
   };
 
-  const changeReps = (exIndex: number, setIndex: number, text: string) => {
-    const digits = text.replace(/[^0-9]/g, '');
+  const changeReps = (exIndex: number, setIndex: number, value: string) => {
+    const digits = value.replace(/[^0-9]/g, '');
     const reps = digits ? Math.min(REPS_RANGE.max, Number.parseInt(digits, 10)) : 0;
     setLiveExercises((prev) =>
       prev.map((exercise, i) =>
@@ -445,9 +487,12 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.', undefined, {
-        cancelable: true,
-      });
+      Alert.alert(
+        'Erreur',
+        cause instanceof Error ? cause.message : 'Enregistrement impossible.',
+        undefined,
+        { cancelable: true }
+      );
     }
   };
 
@@ -465,16 +510,16 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={colors.accent} size="large" />
+      <View style={styles.container}>
+        <StateView kind="loading" />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.container}>
+        <StateView kind="error" message={error} />
       </View>
     );
   }
@@ -488,13 +533,15 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{nom}</Text>
-          <View style={styles.headerMetrics}>
-            <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
-            <Text style={styles.headerTotal}>{formatKg(volume)}</Text>
-          </View>
-        </View>
+        <Appear>
+          <Card style={styles.header}>
+            <Text style={styles.headerTitle}>{nom}</Text>
+            <View style={styles.headerMetrics}>
+              <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
+              <Text style={styles.headerTotal}>{formatKg(volume)}</Text>
+            </View>
+          </Card>
+        </Appear>
 
         {liveExercises.length === 0 ? (
           <Text style={styles.emptyText}>
@@ -502,118 +549,122 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
           </Text>
         ) : (
           liveExercises.map((exercise, exIndex) => {
-            const allDone =
-              exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
-            const thumb = exercise.exercise.image
-              ? exerciseImages[exercise.exercise.image]
-              : undefined;
+            const allDone = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
             return (
-              <View key={exercise.workoutExoId} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Pressable
-                    style={styles.cardTitleBlock}
-                    onPress={() => setDetail(exercise.exercise)}
-                    accessibilityLabel="Voir l’exercice"
-                  >
-                    {thumb ? (
-                      <Image source={thumb} style={styles.cardThumb} />
-                    ) : (
-                      <View style={[styles.cardThumb, styles.cardThumbPlaceholder]} />
-                    )}
-                    <Text style={styles.cardTitle}>
-                      {exercise.exercise.nom_fr ?? exercise.exercise.nom}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.cardCheck, allDone && styles.cardCheckOn]}
-                    onPress={() => toggleAllSets(exIndex)}
-                    hitSlop={6}
-                  >
-                    <Text style={[styles.cardCheckText, allDone && styles.cardCheckTextOn]}>✓</Text>
-                  </Pressable>
-                </View>
-
-                {exercise.sets.map((set, setIndex) => {
-                  const previous = exercise.previous[setIndex];
-                  return (
-                    <View key={set.key} style={styles.setRow}>
-                      <Text style={styles.setLabel}>{setIndex + 1}</Text>
-                      <Text style={styles.previousText}>
-                        {previous ? `${formatWeight(previous.weight)}×${previous.reps}` : '—'}
+              <Appear key={exercise.workoutExoId} delay={Math.min(exIndex * 60, 240)} offset={10}>
+                <Card style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <PressableScale
+                      style={styles.cardTitleBlock}
+                      onPress={() => setDetail(exercise.exercise)}
+                      accessibilityLabel="Voir l’exercice"
+                    >
+                      <Thumb
+                        source={
+                          exercise.exercise.image
+                            ? exerciseImages[exercise.exercise.image]
+                            : undefined
+                        }
+                        size={44}
+                      />
+                      <Text style={styles.cardTitle}>
+                        {exercise.exercise.nom_fr ?? exercise.exercise.nom}
                       </Text>
+                    </PressableScale>
+                    <CheckToggle
+                      checked={allDone}
+                      width={40}
+                      accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom_fr ?? exercise.exercise.nom}`}
+                      onPress={() => toggleAllSets(exIndex)}
+                    />
+                  </View>
 
-                      <WeightField
-                        value={set.weight}
-                        onChange={(value) => changeWeight(exIndex, setIndex, value)}
-                        onOpenCalculator={() => setCalc({ exIndex, setIndex })}
-                      />
+                  {exercise.sets.map((set, setIndex) => {
+                    const previous = exercise.previous[setIndex];
+                    return (
+                      <View key={set.key} style={styles.setRow}>
+                        <Text style={styles.setLabel}>{setIndex + 1}</Text>
+                        <Text style={styles.previousText}>
+                          {previous ? `${formatWeight(previous.weight)}×${previous.reps}` : '—'}
+                        </Text>
 
-                      <TextInput
-                        style={styles.repsInput}
-                        value={set.reps > 0 ? String(set.reps) : ''}
-                        onChangeText={(text) => changeReps(exIndex, setIndex, text)}
-                        placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
-                        placeholderTextColor={neutrals.textMuted}
-                        keyboardType="number-pad"
-                        returnKeyType="done"
-                      />
+                        <WeightField
+                          value={set.weight}
+                          onChange={(value) => changeWeight(exIndex, setIndex, value)}
+                          onOpenCalculator={() => setCalc({ exIndex, setIndex })}
+                        />
 
-                      <Pressable
-                        style={[styles.check, set.completed && styles.checkOn]}
-                        onPress={() => toggleSet(exIndex, setIndex)}
-                      >
-                        <Text style={[styles.checkText, set.completed && styles.checkTextOn]}>✓</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
+                        <TextInput
+                          style={styles.repsInput}
+                          value={set.reps > 0 ? String(set.reps) : ''}
+                          onChangeText={(value) => changeReps(exIndex, setIndex, value)}
+                          placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
+                          placeholderTextColor={neutrals.textMuted}
+                          keyboardType="number-pad"
+                          returnKeyType="done"
+                        />
 
-                <View style={styles.setActions}>
-                  <Pressable style={styles.setActionButton} onPress={() => removeSet(exIndex)}>
-                    <Text style={styles.setActionText}>− Série</Text>
-                  </Pressable>
-                  <Pressable style={styles.setActionButton} onPress={() => addSet(exIndex)}>
-                    <Text style={styles.setActionText}>+ Série</Text>
-                  </Pressable>
-                </View>
-              </View>
+                        <CheckToggle
+                          checked={set.completed}
+                          accessibilityLabel={`Valider la série ${setIndex + 1}`}
+                          onPress={() => toggleSet(exIndex, setIndex)}
+                        />
+                      </View>
+                    );
+                  })}
+
+                  <View style={styles.setActions}>
+                    <Button
+                      label="− Série"
+                      variant="secondary"
+                      size="sm"
+                      style={styles.setActionButton}
+                      onPress={() => removeSet(exIndex)}
+                    />
+                    <Button
+                      label="+ Série"
+                      variant="secondary"
+                      size="sm"
+                      style={styles.setActionButton}
+                      onPress={() => addSet(exIndex)}
+                    />
+                  </View>
+                </Card>
+              </Appear>
             );
           })
         )}
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          style={[styles.stopButton, saving && styles.stopButtonDisabled]}
+        <Button
+          label="Arrêter la séance"
+          variant="danger"
+          size="lg"
+          loading={saving}
           onPress={onStop}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.stopButtonText}>Arrêter la séance</Text>
-          )}
-        </Pressable>
+        />
       </View>
 
-      {calc ? (
-        <PlateCalculatorModal
-          visible
-          weight={liveExercises[calc.exIndex]?.sets[calc.setIndex]?.weight ?? 0}
-          barWeight={barWeight}
-          customBars={customBars}
-          plates={plates}
-          customPlates={customPlates}
-          onChangeWeight={(value) => changeWeight(calc.exIndex, calc.setIndex, value)}
-          onSelectBar={selectBar}
-          onAddBar={addBar}
-          onRemoveBar={removeBar}
-          onTogglePlate={togglePlate}
-          onAddPlate={addPlate}
-          onRemovePlate={removePlate}
-          onClose={() => setCalc(null)}
-        />
-      ) : null}
+      {/* Toujours monté : la feuille garde son animation de fermeture. */}
+      <PlateCalculatorModal
+        visible={calc !== null}
+        weight={calc ? (liveExercises[calc.exIndex]?.sets[calc.setIndex]?.weight ?? 0) : 0}
+        barWeight={barWeight}
+        customBars={customBars}
+        plates={plates}
+        customPlates={customPlates}
+        onChangeWeight={(value) => {
+          if (calc) changeWeight(calc.exIndex, calc.setIndex, value);
+        }}
+        onSelectBar={selectBar}
+        onAddBar={addBar}
+        onRemoveBar={removeBar}
+        onTogglePlate={togglePlate}
+        onAddPlate={addPlate}
+        onRemovePlate={removePlate}
+        onClose={() => setCalc(null)}
+      />
 
       <ExerciseDetailModal
         exercise={detail}
@@ -629,125 +680,77 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   content: {
-    padding: 20,
-    paddingBottom: 8,
+    padding: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   header: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    columnGap: 12,
+    columnGap: spacing.md,
     rowGap: 2,
-    backgroundColor: neutrals.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    marginBottom: 18,
+    marginBottom: spacing.lg,
   },
   headerTitle: {
+    ...text.title,
     color: neutrals.text,
-    fontSize: 18,
-    fontWeight: '800',
     maxWidth: '100%',
   },
   headerMetrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 14,
+    columnGap: spacing.lg - 2,
   },
   headerTime: {
+    ...text.title,
     color: colors.secondary,
-    fontSize: 18,
-    fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   headerTotal: {
+    ...text.subtitle,
     color: colors.accent,
-    fontSize: 16,
     fontWeight: '800',
   },
   card: {
-    backgroundColor: neutrals.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    padding: 14,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   cardTitleBlock: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingRight: 8,
-  },
-  cardThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: neutrals.surfaceAlt,
-  },
-  cardThumbPlaceholder: {
-    borderWidth: 1,
-    borderColor: neutrals.border,
+    gap: spacing.sm + 2,
+    paddingRight: spacing.sm,
   },
   cardTitle: {
+    ...text.subtitle,
     flex: 1,
     color: neutrals.text,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  cardCheck: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: neutrals.border,
-  },
-  cardCheckOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  cardCheckText: {
-    color: neutrals.textMuted,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  cardCheckTextOn: {
-    color: colors.background,
   },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    columnGap: 8,
+    marginBottom: spacing.sm,
+    columnGap: spacing.sm,
   },
   setLabel: {
+    ...text.label,
     color: colors.accent,
-    fontSize: 13,
     fontWeight: '800',
     width: 16,
     textAlign: 'center',
   },
   previousText: {
+    ...text.micro,
     color: neutrals.textMuted,
-    fontSize: 11,
     minWidth: 40,
   },
   weightBox: {
@@ -755,21 +758,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: neutrals.surfaceAlt,
-    borderRadius: 10,
-    height: 40,
+    borderRadius: radius.control,
+    height: 44,
     paddingLeft: 2,
   },
   weightInput: {
     flex: 1,
     textAlign: 'center',
+    ...text.bodyStrong,
     color: neutrals.text,
-    fontSize: 15,
     fontWeight: '800',
     paddingVertical: 0,
   },
   calcButton: {
-    width: 38,
-    height: 40,
+    width: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -789,84 +792,43 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
   repsInput: {
-    width: 46,
-    height: 40,
+    width: 50,
+    height: 44,
     textAlign: 'center',
+    ...text.bodyStrong,
     color: neutrals.text,
-    fontSize: 15,
-    fontWeight: '700',
     backgroundColor: neutrals.surfaceAlt,
-    borderRadius: 10,
+    borderRadius: radius.control,
   },
   check: {
-    width: 36,
-    height: 40,
-    borderRadius: 10,
+    height: 44,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: neutrals.border,
-  },
-  checkOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
   },
   checkText: {
-    color: neutrals.textMuted,
     fontSize: 18,
     fontWeight: '800',
   },
-  checkTextOn: {
-    color: colors.background,
-  },
   setActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
+    gap: spacing.sm + 2,
+    marginTop: spacing.xs,
   },
   setActionButton: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  setActionText: {
-    color: colors.secondary,
-    fontSize: 13,
-    fontWeight: '800',
   },
   emptyText: {
+    ...text.meta,
     color: neutrals.textMuted,
-    fontSize: 14,
     lineHeight: 20,
   },
-  errorText: {
-    color: colors.alert,
-    fontSize: 15,
-    paddingHorizontal: 24,
-    textAlign: 'center',
-  },
   footer: {
-    padding: 20,
-    paddingTop: 12,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: neutrals.border,
     backgroundColor: colors.background,
-  },
-  stopButton: {
-    backgroundColor: colors.alert,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  stopButtonDisabled: {
-    opacity: 0.6,
-  },
-  stopButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '800',
   },
 });

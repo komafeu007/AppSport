@@ -1,11 +1,8 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Image,
-  Pressable,
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type StyleProp,
   type ViewStyle,
@@ -15,7 +12,17 @@ import { exerciseImages } from '../data/exerciseImages';
 import { buildExerciseSections, type ExerciseSection } from '../lib/exerciseSearch';
 import type { Exercise } from '../services/database';
 import { colors, neutrals } from '../theme/colors';
+import { spacing, text } from '../theme/tokens';
 import ExerciseDetailModal from './ExerciseDetailModal';
+import Appear from './ui/Appear';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import Card from './ui/Card';
+import Input from './ui/Input';
+import PressableScale from './ui/PressableScale';
+import SectionTitle from './ui/SectionTitle';
+import StateView from './ui/StateView';
+import Thumb from './ui/Thumb';
 
 export interface ExerciseListHeaderInfo {
   /** Nombre de résultats pour la recherche courante. */
@@ -52,34 +59,32 @@ function ExerciseRow({
 }) {
   const source = exercise.image ? exerciseImages[exercise.image] : undefined;
   return (
-    <Pressable
+    <Card
       style={[styles.row, selected && styles.rowSelected]}
       onPress={onPress}
       disabled={selected}
+      accessibilityLabel={
+        selected ? `${exercise.nom_fr ?? exercise.nom} (déjà ajouté)` : (exercise.nom_fr ?? exercise.nom)
+      }
     >
-      <Pressable onPress={onOpenDetail} hitSlop={6} accessibilityLabel="Voir l’exercice">
-        {source ? (
-          <Image source={source} style={styles.thumb} />
-        ) : (
-          <View style={[styles.thumb, styles.thumbPlaceholder]} />
-        )}
-      </Pressable>
+      <PressableScale onPress={onOpenDetail} accessibilityLabel="Voir l’exercice" scaleTo={0.92}>
+        <Thumb source={source} size={56} />
+      </PressableScale>
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
           <Text style={styles.rowTitle}>{exercise.nom_fr ?? exercise.nom}</Text>
-          <View
-            style={[styles.badge, exercise.is_poly === 1 ? styles.badgePoly : styles.badgeMono]}
-          >
-            <Text style={styles.badgeText}>{exercise.is_poly === 1 ? 'Poly' : 'Mono'}</Text>
-          </View>
+          <Badge
+            label={exercise.is_poly === 1 ? 'Poly' : 'Mono'}
+            tone={exercise.is_poly === 1 ? 'accent' : 'secondary'}
+          />
         </View>
         <Text style={styles.rowEn}>{exercise.nom}</Text>
         <Text style={styles.rowMeta}>
           {[exercise.target, exercise.category, exercise.equipment].filter(Boolean).join(' · ')}
         </Text>
       </View>
-      {selected && <Text style={styles.added}>Ajouté</Text>}
-    </Pressable>
+      {selected ? <Text style={styles.added}>Ajouté</Text> : null}
+    </Card>
   );
 }
 
@@ -97,7 +102,10 @@ export default function ExerciseSearchList({
   const [detail, setDetail] = useState<Exercise | null>(null);
   const listRef = useRef<SectionList<Exercise, ExerciseSection>>(null);
 
-  const sections = useMemo(() => buildExerciseSections(exercises, searchTerm), [exercises, searchTerm]);
+  const sections = useMemo(
+    () => buildExerciseSections(exercises, searchTerm),
+    [exercises, searchTerm]
+  );
 
   const resultCount = useMemo(
     () => sections.reduce((total, section) => total + section.data.length, 0),
@@ -122,11 +130,10 @@ export default function ExerciseSearchList({
     <>
       {renderHeader?.({ resultCount, total: exercises.length, searchTerm })}
 
-      <View style={styles.searchRow}>
-        <TextInput
+      <Appear style={styles.searchRow} offset={0}>
+        <Input
           style={styles.search}
           placeholder={placeholder}
-          placeholderTextColor={neutrals.textMuted}
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={submitSearch}
@@ -135,17 +142,16 @@ export default function ExerciseSearchList({
           clearButtonMode="while-editing"
           returnKeyType="search"
         />
-        <Pressable style={styles.searchButton} onPress={submitSearch}>
-          <Text style={styles.searchButtonText}>Rechercher</Text>
-        </Pressable>
-      </View>
+        <Button label="Rechercher" onPress={submitSearch} />
+      </Appear>
 
       {resultCount === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>
-            {searchTerm.trim() ? `Aucun résultat pour « ${searchTerm.trim()} »` : emptyText}
-          </Text>
-        </View>
+        <StateView
+          kind="empty"
+          message={
+            searchTerm.trim() ? `Aucun résultat pour « ${searchTerm.trim()} »` : emptyText
+          }
+        />
       ) : (
         <SectionList
           ref={listRef}
@@ -160,10 +166,11 @@ export default function ExerciseSearchList({
             />
           )}
           renderSectionHeader={({ section }) =>
-            section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
+            section.title ? (
+              <SectionTitle style={styles.sectionHeader}>{section.title}</SectionTitle>
+            ) : null
           }
           contentContainerStyle={[styles.listContent, contentContainerStyle]}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
           keyboardShouldPersistTaps="handled"
           stickySectionHeadersEnabled={false}
         />
@@ -179,135 +186,64 @@ export default function ExerciseSearchList({
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 12,
-    gap: 8,
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   search: {
     flex: 1,
-    backgroundColor: neutrals.surface,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: neutrals.text,
-    fontSize: 15,
-  },
-  searchButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: '800',
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
   },
   sectionHeader: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: spacing.lg,
   },
   row: {
     flexDirection: 'row',
-    backgroundColor: neutrals.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    padding: 12,
     alignItems: 'center',
+    padding: spacing.md,
+    marginBottom: spacing.sm + 2,
   },
   rowSelected: {
     borderColor: colors.accent,
     opacity: 0.75,
   },
-  thumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: neutrals.surfaceAlt,
-  },
-  thumbPlaceholder: {
-    borderWidth: 1,
-    borderColor: neutrals.border,
-  },
   rowBody: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   rowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   rowTitle: {
+    ...text.subtitle,
     color: neutrals.text,
-    fontSize: 16,
-    fontWeight: '700',
     flexShrink: 1,
-    paddingRight: 8,
   },
   rowEn: {
+    ...text.caption,
     color: neutrals.textMuted,
-    fontSize: 12,
     fontStyle: 'italic',
     marginTop: 2,
   },
   rowMeta: {
+    ...text.caption,
     color: colors.secondary,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  separator: {
-    height: 10,
-  },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  badgePoly: {
-    backgroundColor: colors.accent,
-  },
-  badgeMono: {
-    backgroundColor: colors.secondary,
-  },
-  badgeText: {
-    color: colors.background,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    marginTop: spacing.xs,
   },
   added: {
+    ...text.caption,
     color: colors.accent,
-    fontSize: 12,
     fontWeight: '800',
-    marginLeft: 8,
-  },
-  emptyText: {
-    color: neutrals.textMuted,
-    fontSize: 15,
-    paddingHorizontal: 24,
-    textAlign: 'center',
+    marginLeft: spacing.sm,
   },
 });

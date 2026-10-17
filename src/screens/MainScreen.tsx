@@ -1,9 +1,18 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  Appear,
+  Button,
+  Card,
+  Chip,
+  ScreenHeader,
+  SectionTitle,
+  StateView,
+} from '../components/ui';
 import type { MainScreenNavigation } from '../navigation/types';
 import {
   getNextProgramInGroup,
@@ -14,6 +23,7 @@ import {
 } from '../services/database';
 import { getActiveGroupId, getHiddenGroupIds, setActiveGroupId } from '../services/preferences';
 import { colors, neutrals } from '../theme/colors';
+import { spacing, text } from '../theme/tokens';
 
 export default function MainScreen() {
   const db = useSQLiteContext();
@@ -82,9 +92,24 @@ export default function MainScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={colors.accent} size="large" />
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Main" />
+        <StateView kind="loading" style={styles.flex} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Main" />
+        <StateView
+          kind="error"
+          title="Base de données indisponible"
+          message={error}
+          style={styles.flex}
+        />
+      </SafeAreaView>
     );
   }
 
@@ -93,85 +118,80 @@ export default function MainScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.screenTitle}>Main</Text>
+      <ScreenHeader title="Main" subtitle="Ta prochaine séance, prête à démarrer." />
 
-        <View style={styles.card}>
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : nextSession && activeGroup ? (
-            <>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Appear>
+          <Card tone="accent" style={styles.hero}>
+            {nextSession && activeGroup ? (
               <View style={shortName ? styles.shortRow : undefined}>
-                <Text style={[styles.cardTitle, shortName && styles.cardTitleShort]} numberOfLines={1}>
+                <Text
+                  style={[styles.heroTitle, shortName && styles.heroTitleShort]}
+                  numberOfLines={1}
+                >
                   {nextSession.nom_seance}
                 </Text>
-                <Pressable
-                  style={shortName ? styles.goButton : styles.startButton}
-                  onPress={() => navigation.navigate('LiveWorkout', { programId: nextSession.id })}
-                >
-                  <Text style={styles.startButtonText}>{shortName ? 'Go' : 'Démarrer'}</Text>
-                </Pressable>
+                <Button
+                  label={shortName ? 'Go' : 'Démarrer'}
+                  size="lg"
+                  style={shortName ? undefined : styles.heroButton}
+                  onPress={() =>
+                    navigation.navigate('LiveWorkout', { programId: nextSession.id })
+                  }
+                />
               </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.cardTitle}>
-                {groups.length === 0
-                  ? 'Aucun groupe'
-                  : visibleGroups.length === 0
-                    ? 'Aucun groupe affiché'
-                    : activeGroup
-                      ? 'Aucune séance dans ce groupe'
-                      : 'Choisis ton groupe'}
-              </Text>
-              <Text style={styles.cardMeta}>
-                {groups.length === 0
-                  ? 'Crée un groupe (PPL, Maison, Upper/Lower…) et ajoute-y tes séances.'
-                  : visibleGroups.length === 0
-                    ? 'Tous les groupes sont retirés de l’accueil. Réactive-en un depuis l’onglet Séance.'
-                    : activeGroup
-                      ? 'Ajoute une séance à ce groupe pour la voir apparaître ici.'
-                      : 'Sélectionne un groupe ci-dessous : sa prochaine séance s’affichera ici.'}
-              </Text>
-              <Pressable
-                style={styles.startButton}
-                onPress={() => navigation.navigate('Seance')}
-              >
-                <Text style={styles.startButtonText}>
+            ) : (
+              <>
+                <Text style={styles.heroTitle}>
                   {groups.length === 0
-                    ? 'Créer un groupe'
-                    : activeGroup
-                      ? 'Ajouter une séance'
-                      : 'Gérer mes séances'}
+                    ? 'Aucun groupe'
+                    : visibleGroups.length === 0
+                      ? 'Aucun groupe affiché'
+                      : activeGroup
+                        ? 'Aucune séance dans ce groupe'
+                        : 'Choisis ton groupe'}
                 </Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+                <Text style={styles.heroMeta}>
+                  {groups.length === 0
+                    ? 'Crée un groupe (PPL, Maison, Upper/Lower…) et ajoute-y tes séances.'
+                    : visibleGroups.length === 0
+                      ? 'Tous les groupes sont retirés de l’accueil. Réactive-en un depuis l’onglet Séance.'
+                      : activeGroup
+                        ? 'Ajoute une séance à ce groupe pour la voir apparaître ici.'
+                        : 'Sélectionne un groupe ci-dessous : sa prochaine séance s’affichera ici.'}
+                </Text>
+                <Button
+                  label={
+                    groups.length === 0
+                      ? 'Créer un groupe'
+                      : activeGroup
+                        ? 'Ajouter une séance'
+                        : 'Gérer mes séances'
+                  }
+                  size="lg"
+                  style={styles.heroButton}
+                  onPress={() => navigation.navigate('Seance')}
+                />
+              </>
+            )}
+          </Card>
+        </Appear>
 
-        {showChooser && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Choisir mon groupe</Text>
+        {showChooser ? (
+          <Appear delay={80} style={styles.section}>
+            <SectionTitle>Choisir mon groupe</SectionTitle>
             <View style={styles.chips}>
-              {visibleGroups.map((group) => {
-                const active = group.id === activeGroupId;
-                return (
-                  <Pressable
-                    key={group.id}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => chooseGroup(group.id)}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {group.nom}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {visibleGroups.map((group) => (
+                <Chip
+                  key={group.id}
+                  label={group.nom}
+                  selected={group.id === activeGroupId}
+                  onPress={() => chooseGroup(group.id)}
+                />
+              ))}
             </View>
-          </View>
-        )}
-
-        {/* Le reste de l'écran Main est volontairement vide pour l'instant. */}
+          </Appear>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -182,106 +202,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  flex: {
+    flex: 1,
   },
   content: {
-    padding: 20,
-    paddingBottom: 32,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
   },
-  screenTitle: {
+  hero: {
+    padding: spacing.xl,
+  },
+  heroTitle: {
+    ...text.cardTitle,
     color: neutrals.text,
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 16,
   },
-  card: {
-    backgroundColor: neutrals.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    padding: 20,
-  },
-  cardTitle: {
-    color: neutrals.text,
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  cardTitleShort: {
+  heroTitleShort: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: spacing.md,
   },
   shortRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: spacing.md,
   },
-  cardMeta: {
+  heroMeta: {
+    ...text.meta,
     color: neutrals.textMuted,
-    fontSize: 14,
-    marginTop: 6,
     lineHeight: 20,
+    marginTop: spacing.sm - 2,
   },
-  startButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 18,
-  },
-  goButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 28,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  errorText: {
-    color: colors.alert,
-    fontSize: 15,
-    marginTop: 12,
+  heroButton: {
+    marginTop: spacing.lg + 2,
   },
   section: {
-    marginTop: 28,
-  },
-  sectionTitle: {
-    color: neutrals.text,
-    fontSize: 15,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
+    marginTop: spacing.xxl,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-  },
-  chip: {
-    backgroundColor: neutrals.surface,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  chipActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  chipText: {
-    color: neutrals.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  chipTextActive: {
-    color: colors.background,
+    gap: spacing.sm + 2,
   },
 });

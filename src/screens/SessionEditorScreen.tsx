@@ -2,13 +2,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,8 +14,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import ExerciseSearchList from '../components/ExerciseSearchList';
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
+import ExerciseSearchList from '../components/ExerciseSearchList';
+import {
+  Appear,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  IconButton,
+  Input,
+  PressableScale,
+  SectionTitle,
+  StateView,
+  Thumb,
+} from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import {
   buildDegressiveWeights,
@@ -49,6 +59,7 @@ import {
   type SessionGroup,
 } from '../services/database';
 import { colors, neutrals } from '../theme/colors';
+import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionEditor'>;
 
@@ -64,6 +75,7 @@ interface DraftItem {
   set_weights: number[];
 }
 
+/** Champ numérique avec − / + (séries, reps, repos, poids d'une série). */
 function StepperField({
   label,
   value,
@@ -107,9 +119,13 @@ function StepperField({
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.fieldRow}>
-        <Pressable style={styles.stepButton} onPress={() => adjust(-1)} hitSlop={6}>
+        <PressableScale
+          style={styles.stepButton}
+          onPress={() => adjust(-1)}
+          accessibilityLabel={`Diminuer ${label}`}
+        >
           <Text style={styles.stepButtonText}>−</Text>
-        </Pressable>
+        </PressableScale>
         <TextInput
           style={styles.stepInput}
           value={text}
@@ -119,9 +135,13 @@ function StepperField({
           selectTextOnFocus
           returnKeyType="done"
         />
-        <Pressable style={styles.stepButton} onPress={() => adjust(1)} hitSlop={6}>
+        <PressableScale
+          style={styles.stepButton}
+          onPress={() => adjust(1)}
+          accessibilityLabel={`Augmenter ${label}`}
+        >
           <Text style={styles.stepButtonText}>+</Text>
-        </Pressable>
+        </PressableScale>
       </View>
       {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
     </View>
@@ -186,11 +206,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                 reps_min: bounds.reps_min,
                 reps_max: bounds.reps_max,
                 rest_time: row.rest_time ?? defaults.rest_time,
-                set_weights: fitWeights(
-                  parseWeights(row.set_weights) ?? [],
-                  series,
-                  baseWeight
-                ),
+                set_weights: fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight),
               };
             })
           );
@@ -209,9 +225,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
 
   const updateItem = (
     key: string,
-    patch: Partial<
-      Pick<DraftItem, 'series' | 'reps_min' | 'reps_max' | 'rest_time' | 'set_weights'>
-    >
+    patch: Partial<Pick<DraftItem, 'series' | 'reps_min' | 'reps_max' | 'rest_time' | 'set_weights'>>
   ) => {
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
   };
@@ -290,24 +304,27 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.', undefined, {
-        cancelable: true,
-      });
+      Alert.alert(
+        'Erreur',
+        cause instanceof Error ? cause.message : 'Enregistrement impossible.',
+        undefined,
+        { cancelable: true }
+      );
     }
   };
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} size="large" />
+      <View style={styles.container}>
+        <StateView kind="loading" />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.container}>
+        <StateView kind="error" message={error} />
       </View>
     );
   }
@@ -321,10 +338,9 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.label}>Nom de la séance</Text>
-        <TextInput
+        <Input
           style={styles.nameInput}
           placeholder="Ex. Séance Poitrine / Triceps"
-          placeholderTextColor={neutrals.textMuted}
           value={nom}
           onChangeText={setNom}
           returnKeyType="done"
@@ -342,34 +358,32 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
             contentContainerStyle={styles.chips}
             keyboardShouldPersistTaps="handled"
           >
-            <Pressable
-              style={[styles.chip, groupId === null && styles.chipActive]}
+            <Chip
+              label="Sans groupe"
+              selected={groupId === null}
               onPress={() => setGroupId(null)}
-            >
-              <Text style={[styles.chipText, groupId === null && styles.chipTextActive]}>
-                Sans groupe
-              </Text>
-            </Pressable>
+            />
             {groups.map((group) => (
-              <Pressable
+              <Chip
                 key={group.id}
-                style={[styles.chip, groupId === group.id && styles.chipActive]}
+                label={group.nom}
+                selected={groupId === group.id}
                 onPress={() => setGroupId(group.id)}
-              >
-                <Text style={[styles.chipText, groupId === group.id && styles.chipTextActive]}>
-                  {group.nom}
-                </Text>
-              </Pressable>
+              />
             ))}
           </ScrollView>
         )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Exercices</Text>
-          <Text style={styles.sectionCount}>
-            {items.length} exercice{items.length > 1 ? 's' : ''}
-          </Text>
-        </View>
+        <SectionTitle
+          style={styles.sectionHeader}
+          right={
+            <Text style={styles.sectionCount}>
+              {items.length} exercice{items.length > 1 ? 's' : ''}
+            </Text>
+          }
+        >
+          Exercices
+        </SectionTitle>
 
         <Text style={styles.progressionHint}>{PROGRESSION_HINT}</Text>
 
@@ -379,45 +393,38 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
             selon la règle polyarticulaire / monoarticulaire, puis restent modifiables.
           </Text>
         ) : (
-          items.map((item, index) => {
-            const image = item.exercise.image ? exerciseImages[item.exercise.image] : undefined;
-            return (
-              <View key={item.key} style={styles.card}>
+          items.map((item, index) => (
+            <Appear key={item.key} delay={Math.min(index * 60, 240)} offset={10}>
+              <Card style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardIndex}>{index + 1}</Text>
-                  <Pressable
+                  <PressableScale
                     onPress={() => setDetail(item.exercise)}
-                    hitSlop={6}
                     accessibilityLabel="Voir l’exercice"
+                    scaleTo={0.92}
                   >
-                    {image ? (
-                      <Image source={image} style={styles.thumb} />
-                    ) : (
-                      <View style={[styles.thumb, styles.thumbPlaceholder]} />
-                    )}
-                  </Pressable>
+                    <Thumb
+                      source={
+                        item.exercise.image ? exerciseImages[item.exercise.image] : undefined
+                      }
+                      size={44}
+                    />
+                  </PressableScale>
                   <View style={styles.cardTitleBlock}>
                     <Text style={styles.cardTitle}>
                       {item.exercise.nom_fr ?? item.exercise.nom}
                     </Text>
-                    <View
-                      style={[
-                        styles.badge,
-                        item.exercise.is_poly === 1 ? styles.badgePoly : styles.badgeMono,
-                      ]}
-                    >
-                      <Text style={styles.badgeText}>
-                        {item.exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-                      </Text>
-                    </View>
+                    <Badge
+                      label={item.exercise.is_poly === 1 ? 'Poly' : 'Mono'}
+                      tone={item.exercise.is_poly === 1 ? 'accent' : 'secondary'}
+                    />
                   </View>
-                  <Pressable
-                    style={styles.removeButton}
+                  <IconButton
+                    glyph="×"
+                    tone="danger"
+                    accessibilityLabel={`Retirer ${item.exercise.nom_fr ?? item.exercise.nom}`}
                     onPress={() => removeExercise(item.key)}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.removeButtonText}>×</Text>
-                  </Pressable>
+                  />
                 </View>
 
                 <Text style={styles.rules}>{describeRules(item.exercise.is_poly)}</Text>
@@ -483,32 +490,35 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                       />
                     ))}
                   </View>
-                  <Pressable style={styles.degressiveButton} onPress={() => applyDegressive(item)}>
-                    <Text style={styles.degressiveButtonText}>Dégressif auto (−10 %/série)</Text>
-                  </Pressable>
+                  <Button
+                    label="Dégressif auto (−10 %/série)"
+                    variant="secondary"
+                    size="sm"
+                    style={styles.degressive}
+                    onPress={() => applyDegressive(item)}
+                  />
                 </View>
-              </View>
-            );
-          })
+              </Card>
+            </Appear>
+          ))
         )}
 
-        <Pressable style={styles.addButton} onPress={() => setPickerVisible(true)}>
-          <Text style={styles.addButtonText}>+ Ajouter un exercice</Text>
-        </Pressable>
+        <Button
+          label="+ Ajouter un exercice"
+          variant="secondary"
+          size="lg"
+          style={styles.addButton}
+          onPress={() => setPickerVisible(true)}
+        />
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
+        <Button
+          label="Enregistrer la séance"
+          size="lg"
+          loading={saving}
           onPress={onSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Enregistrer la séance</Text>
-          )}
-        </Pressable>
+        />
       </View>
 
       <Modal
@@ -519,9 +529,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         <SafeAreaView style={styles.pickerContainer} edges={['top', 'bottom']}>
           <View style={styles.pickerHeader}>
             <Text style={styles.pickerTitle}>Ajouter un exercice</Text>
-            <Pressable style={styles.pickerDone} onPress={() => setPickerVisible(false)}>
-              <Text style={styles.pickerDoneText}>Terminé</Text>
-            </Pressable>
+            <Button label="Terminé" size="sm" onPress={() => setPickerVisible(false)} />
           </View>
           <ExerciseSearchList
             exercises={exercises}
@@ -545,196 +553,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
   content: {
-    padding: 20,
-    paddingBottom: 8,
+    padding: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   label: {
+    ...text.overline,
     color: neutrals.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   labelSpaced: {
-    marginTop: 20,
-  },
-  chips: {
-    gap: 8,
-    paddingTop: 8,
-    paddingRight: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    backgroundColor: neutrals.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  chipActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  chipText: {
-    color: neutrals.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  chipTextActive: {
-    color: colors.background,
-  },
-  groupEmptyText: {
-    color: neutrals.textMuted,
-    fontSize: 13,
-    fontStyle: 'italic',
-    marginTop: 8,
+    marginTop: spacing.xl,
   },
   nameInput: {
-    backgroundColor: neutrals.surface,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: neutrals.text,
-    fontSize: 16,
-    marginTop: 8,
+    marginTop: spacing.sm,
+  },
+  chips: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingRight: spacing.sm,
+  },
+  groupEmptyText: {
+    ...text.meta,
+    color: neutrals.textMuted,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    color: neutrals.text,
-    fontSize: 18,
-    fontWeight: '800',
+    marginTop: spacing.xxl,
+    marginBottom: spacing.sm,
   },
   sectionCount: {
+    ...text.caption,
     color: colors.secondary,
-    fontSize: 13,
     fontWeight: '700',
   },
   progressionHint: {
+    ...text.caption,
     color: neutrals.textMuted,
-    fontSize: 12,
     lineHeight: 18,
-    marginBottom: 14,
+    marginBottom: spacing.lg,
   },
   emptyText: {
+    ...text.meta,
     color: neutrals.textMuted,
-    fontSize: 14,
     lineHeight: 20,
   },
   card: {
-    backgroundColor: neutrals.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-    padding: 14,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
   },
   cardIndex: {
+    ...text.bodyStrong,
     color: colors.accent,
-    fontSize: 15,
     fontWeight: '800',
-    width: 20,
-  },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: neutrals.surfaceAlt,
-  },
-  thumbPlaceholder: {
-    borderWidth: 1,
-    borderColor: neutrals.border,
+    width: 18,
   },
   cardTitleBlock: {
     flex: 1,
-    marginLeft: 10,
   },
   cardTitle: {
+    ...text.subtitle,
     color: neutrals.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
-  },
-  badgePoly: {
-    backgroundColor: colors.accent,
-  },
-  badgeMono: {
-    backgroundColor: colors.secondary,
-  },
-  badgeText: {
-    color: colors.background,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  removeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: neutrals.surfaceAlt,
-  },
-  removeButtonText: {
-    color: colors.alert,
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 22,
   },
   rules: {
+    ...text.caption,
     color: neutrals.textMuted,
-    fontSize: 12,
-    marginTop: 10,
+    marginTop: spacing.md,
   },
   fields: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 12,
-    marginHorizontal: -4,
+    marginTop: spacing.md,
+    marginHorizontal: -spacing.xs,
   },
   field: {
     width: '50%',
-    paddingHorizontal: 4,
-    marginBottom: 10,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md,
   },
   fieldLabel: {
+    ...text.caption,
     color: neutrals.textMuted,
-    fontSize: 12,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs + 2,
   },
   stepButton: {
     width: 36,
     height: 40,
-    borderRadius: 10,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: neutrals.surfaceAlt,
@@ -748,108 +663,43 @@ const styles = StyleSheet.create({
   stepInput: {
     flex: 1,
     height: 40,
-    marginHorizontal: 6,
     textAlign: 'center',
+    ...text.subtitle,
     color: neutrals.text,
-    fontSize: 16,
-    fontWeight: '700',
     backgroundColor: neutrals.surfaceAlt,
-    borderRadius: 10,
+    borderRadius: radius.control,
   },
   fieldHint: {
+    ...text.micro,
     color: colors.secondary,
-    fontSize: 11,
-    marginTop: 4,
-  },
-  toggle: {
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: neutrals.surfaceAlt,
-    borderWidth: 1,
-    borderColor: neutrals.border,
-  },
-  toggleOn: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  toggleText: {
-    color: neutrals.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  toggleTextOn: {
-    color: colors.background,
+    marginTop: spacing.xs,
   },
   setWeights: {
-    marginTop: 4,
-    paddingTop: 10,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: neutrals.border,
   },
   setWeightsHint: {
+    ...text.micro,
     color: neutrals.textMuted,
-    fontSize: 11,
     lineHeight: 16,
-    marginTop: 2,
-    marginBottom: 4,
-    marginHorizontal: 4,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
   },
-  degressiveButton: {
+  degressive: {
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.secondary,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 2,
-    marginLeft: 4,
-  },
-  degressiveButtonText: {
-    color: colors.secondary,
-    fontSize: 12,
-    fontWeight: '800',
+    marginTop: spacing.xs,
   },
   addButton: {
-    borderWidth: 1,
-    borderColor: colors.secondary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  addButtonText: {
-    color: colors.secondary,
-    fontSize: 15,
-    fontWeight: '800',
+    marginTop: spacing.xs,
   },
   footer: {
-    padding: 20,
-    paddingTop: 12,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: neutrals.border,
     backgroundColor: colors.background,
-  },
-  primaryButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  errorText: {
-    color: colors.alert,
-    fontSize: 15,
-    paddingHorizontal: 24,
-    textAlign: 'center',
   },
   pickerContainer: {
     flex: 1,
@@ -859,23 +709,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
   },
   pickerTitle: {
+    ...text.cardTitle,
     color: neutrals.text,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  pickerDone: {
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  pickerDoneText: {
-    color: colors.background,
-    fontSize: 13,
-    fontWeight: '800',
   },
 });
