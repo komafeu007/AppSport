@@ -29,7 +29,7 @@ npx expo install --fix       # fix incompatible package versions
 
 - Entrypoint: `index.ts` calls `registerRootComponent(App)`; the app lives in `App.tsx` (`package.json` `"main": "index.ts"`).
 - Navigation is **React Navigation** (`@react-navigation/native` + `@react-navigation/native-stack` + `@react-navigation/bottom-tabs`), **not** Expo Router. Bottom tabs (`src/navigation/BubbleTabBar.tsx` + `RootNavigator.tsx`): `Main` (accueil) and `Seance` (séances, groupées par split). A root stack pushes `SessionEditor` (création/édition) and `LiveWorkout` (séance en cours). There is no `src/app/` route tree — do not add Expo Router or a file-based routes directory. There is **no standalone exercise-catalogue screen**: exercises are only browsed via the picker inside the session editor (`ExerciseSearchList`).
-- Folders live under `src/`: `components/` (shared UI: `ExerciseSearchList`, sheets/modals — all modals close on a tap outside, bottom sheets use `ActionSheet`), `domain/` (business rules, e.g. `workoutRules.ts`), `lib/` (pure helpers), `navigation/`, `screens/`, `services/`, `data/`, `theme/`. Light app preferences use `expo-sqlite/kv-store` via `src/services/preferences.ts` (no schema change): active group, and groups removed from the home page (`getHiddenGroupIds` / `setGroupHidden`, toggled from a group's « ⋯ » menu in the Séance tab — which also renames and deletes a group with `deleteSessionGroup`).
+- Folders live under `src/`: `components/` (shared UI: `ExerciseSearchList`, `ActionSheet`, the exercise/plate sheets, and the `ui/` design-system primitives — all modals close on a tap outside, bottom sheets use `Sheet`), `domain/` (business rules, e.g. `workoutRules.ts`), `lib/` (pure helpers), `navigation/`, `screens/`, `services/`, `data/`, `theme/` (`colors.ts` + `tokens.ts`). Light app preferences use `expo-sqlite/kv-store` via `src/services/preferences.ts` (no schema change): active group, and groups removed from the home page (`getHiddenGroupIds` / `setGroupHidden`, toggled from a group's « ⋯ » menu in the Séance tab — which also renames and deletes a group with `deleteSessionGroup`).
 
 ## Data & domain
 
@@ -44,6 +44,8 @@ npx expo install --fix       # fix incompatible package versions
 
 ## Rules
 
+- **Every screen goes through the design system**: `src/theme/tokens.ts` (spacing, radius, typography, durations, spring) and `src/components/ui/` primitives. No hard-coded colors, radii or font sizes in screens; only the official palette from `src/theme/colors.ts`.
+- Content modals are bottom sheets built on `src/components/ui/Sheet.tsx` (slide-in + spring, close on outside tap, close button, Android back). Animate with `Animated` (`Appear` for entrances, `PressableScale` for presses) — no animation library is installed.
 - `ios/` and `android/` are gitignored and generated (Continuous Native Generation). Never create or hand-edit them — configure native behavior in `app.json` and config plugins.
 - After adding any library with native code, the app needs a development build (`npx expo run:ios|android`, or `eas build --profile development`). EAS is not configured yet (no `eas.json`); run the CLI as `npx eas-cli@latest <command>`, not bare `eas`.
 - Prefer recommended Expo modules over third-party libraries before adding dependencies.
