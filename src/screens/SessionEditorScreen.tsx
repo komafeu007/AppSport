@@ -2,7 +2,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,12 +21,14 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmSheet,
   IconButton,
   Input,
   PressableScale,
   SectionTitle,
   StateView,
   Thumb,
+  type ConfirmRequest,
 } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import {
@@ -163,7 +164,13 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const keyRef = useRef(0);
+
+  /** Message d'information dans une carte de confirmation (un seul bouton). */
+  const notify = (title: string, message: string) => {
+    setConfirm({ title, message, confirmLabel: 'Compris', hideCancel: true });
+  };
 
   const nextKey = () => {
     keyRef.current += 1;
@@ -274,15 +281,11 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const onSave = async () => {
     const name = nom.trim();
     if (!name) {
-      Alert.alert('Nom requis', 'Donne un nom à la séance avant d’enregistrer.', undefined, {
-        cancelable: true,
-      });
+      notify('Nom requis', 'Donne un nom à la séance avant d’enregistrer.');
       return;
     }
     if (items.length === 0) {
-      Alert.alert('Aucun exercice', 'Ajoute au moins un exercice à la séance.', undefined, {
-        cancelable: true,
-      });
+      notify('Aucun exercice', 'Ajoute au moins un exercice à la séance.');
       return;
     }
     try {
@@ -304,12 +307,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert(
-        'Erreur',
-        cause instanceof Error ? cause.message : 'Enregistrement impossible.',
-        undefined,
-        { cancelable: true }
-      );
+      notify('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.');
     }
   };
 
@@ -544,6 +542,8 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         visible={detail !== null}
         onClose={() => setDetail(null)}
       />
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </KeyboardAvoidingView>
   );
 }

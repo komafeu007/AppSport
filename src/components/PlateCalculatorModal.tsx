@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   computePlates,
@@ -12,6 +12,7 @@ import { colors, neutrals } from '../theme/colors';
 import { radius, spacing, text } from '../theme/tokens';
 import Button from './ui/Button';
 import Chip from './ui/Chip';
+import ConfirmSheet, { type ConfirmRequest } from './ui/ConfirmSheet';
 import Input from './ui/Input';
 import Sheet from './ui/Sheet';
 
@@ -88,6 +89,8 @@ export default function PlateCalculatorModal({
   onClose,
 }: Props) {
   const [weightText, setWeightText] = useState(() => formatWeight(weight));
+  /** Demande de suppression d'une barre / d'un disque perso. */
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
   // À l'ouverture seulement, on repart du poids réel de la série (ne pas écraser
   // la saisie en cours quand `weight` change à chaque frappe).
@@ -119,21 +122,15 @@ export default function PlateCalculatorModal({
     [weight, barWeight, plates]
   );
 
-  const confirmRemove = (value: number, kind: 'bar' | 'plate') => {
+  const askRemove = (value: number, kind: 'bar' | 'plate') => {
     const label = kind === 'bar' ? 'cette barre' : 'ce disque';
-    Alert.alert(
-      'Supprimer',
-      `Retirer ${formatWeight(value)} kg de ${label} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => (kind === 'bar' ? onRemoveBar(value) : onRemovePlate(value)),
-        },
-      ],
-      { cancelable: true }
-    );
+    setConfirm({
+      title: 'Supprimer',
+      message: `Retirer ${formatWeight(value)} kg de ${label} ?`,
+      confirmLabel: 'Supprimer',
+      destructive: true,
+      onConfirm: () => (kind === 'bar' ? onRemoveBar(value) : onRemovePlate(value)),
+    });
   };
 
   return (
@@ -167,7 +164,7 @@ export default function PlateCalculatorModal({
               selected={value === barWeight}
               onPress={() => onSelectBar(value)}
               onLongPress={
-                customBars.includes(value) ? () => confirmRemove(value, 'bar') : undefined
+                customBars.includes(value) ? () => askRemove(value, 'bar') : undefined
               }
             />
           ))}
@@ -218,7 +215,7 @@ export default function PlateCalculatorModal({
               selected={plates.includes(value)}
               onPress={() => onTogglePlate(value)}
               onLongPress={
-                customPlates.includes(value) ? () => confirmRemove(value, 'plate') : undefined
+                customPlates.includes(value) ? () => askRemove(value, 'plate') : undefined
               }
             />
           ))}
@@ -229,6 +226,8 @@ export default function PlateCalculatorModal({
       <View style={styles.footer}>
         <Button label="Fermer" onPress={onClose} size="lg" />
       </View>
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </Sheet>
   );
 }

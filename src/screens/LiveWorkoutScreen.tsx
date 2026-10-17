@@ -1,12 +1,21 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
 import PlateCalculatorModal from '../components/PlateCalculatorModal';
-import { Appear, Button, Card, PressableScale, StateView, Thumb } from '../components/ui';
+import {
+  Appear,
+  Button,
+  Card,
+  ConfirmSheet,
+  PressableScale,
+  StateView,
+  Thumb,
+  type ConfirmRequest,
+} from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import { DEFAULT_BAR_WEIGHT, DEFAULT_PLATES, formatWeight, sortWeightsDesc } from '../domain/plates';
 import { clamp, fitWeights, parseWeights, REPS_RANGE, WEIGHT_RANGE } from '../domain/workoutRules';
@@ -219,6 +228,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const [calc, setCalc] = useState<{ exIndex: number; setIndex: number } | null>(null);
   /** Exercice affiché en grand (image + tuto). */
   const [detail, setDetail] = useState<Exercise | null>(null);
+  /** Carte de confirmation/erreur (remplace les `Alert.alert`). */
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
   const startRef = useRef(Date.now());
   const keySeq = useRef(0);
@@ -487,25 +498,24 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert(
-        'Erreur',
-        cause instanceof Error ? cause.message : 'Enregistrement impossible.',
-        undefined,
-        { cancelable: true }
-      );
+      setConfirm({
+        title: 'Erreur',
+        message: cause instanceof Error ? cause.message : 'Enregistrement impossible.',
+        confirmLabel: 'Compris',
+        hideCancel: true,
+      });
     }
   };
 
   const onStop = () => {
-    Alert.alert(
-      'Arrêter la séance',
-      'Enregistrer les séries réalisées et terminer la séance ?',
-      [
-        { text: 'Continuer', style: 'cancel' },
-        { text: 'Terminer', style: 'destructive', onPress: persist },
-      ],
-      { cancelable: true }
-    );
+    setConfirm({
+      title: 'Arrêter la séance',
+      message: 'Enregistrer les séries réalisées et terminer la séance ?',
+      confirmLabel: 'Terminer',
+      cancelLabel: 'Continuer',
+      destructive: true,
+      onConfirm: persist,
+    });
   };
 
   if (loading) {
@@ -671,6 +681,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         visible={detail !== null}
         onClose={() => setDetail(null)}
       />
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </SafeAreaView>
   );
 }

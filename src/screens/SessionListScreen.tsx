@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, SectionList, StyleSheet, Text, View } from 'react-native';
+import { SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ActionSheet from '../components/ActionSheet';
@@ -9,12 +9,14 @@ import {
   Appear,
   Button,
   Card,
+  ConfirmSheet,
   IconButton,
   Input,
   ScreenHeader,
   SectionTitle,
   Sheet,
   StateView,
+  type ConfirmRequest,
 } from '../components/ui';
 import type { SessionListNavigation } from '../navigation/types';
 import {
@@ -59,6 +61,7 @@ export default function SessionListScreen() {
   const [error, setError] = useState<string | null>(null);
   const [groupModal, setGroupModal] = useState<GroupModalState | null>(null);
   const [menuGroup, setMenuGroup] = useState<SessionGroup | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const loaded = useRef(false);
 
   const load = useCallback(() => {
@@ -105,22 +108,16 @@ export default function SessionListScreen() {
 
   const confirmDeleteProgram = useCallback(
     (program: ProgramSummary) => {
-      Alert.alert(
-        'Supprimer la séance',
-        `« ${program.nom_seance} » et ses exercices seront supprimés.`,
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Supprimer',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteProgram(db, program.id);
-              load();
-            },
-          },
-        ],
-        { cancelable: true }
-      );
+      setConfirm({
+        title: 'Supprimer la séance',
+        message: `« ${program.nom_seance} » et ses exercices seront supprimés.`,
+        confirmLabel: 'Supprimer',
+        destructive: true,
+        onConfirm: async () => {
+          await deleteProgram(db, program.id);
+          load();
+        },
+      });
     },
     [db, load]
   );
@@ -142,28 +139,23 @@ export default function SessionListScreen() {
   const confirmDeleteGroup = useCallback(
     (group: SessionGroup) => {
       const count = programs.filter((program) => program.group_id === group.id).length;
-      Alert.alert(
-        'Supprimer le groupe',
-        count > 0
-          ? `« ${group.nom} » et ses ${count} séance${count > 1 ? 's' : ''} seront supprimés.`
-          : `« ${group.nom} » sera supprimé.`,
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Supprimer',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteSessionGroup(db, group.id);
-              // Les préférences d'accueil ne doivent plus pointer vers ce groupe.
-              await setGroupHidden(group.id, false);
-              const active = await getActiveGroupId();
-              if (active === group.id) await setActiveGroupId(null);
-              load();
-            },
-          },
-        ],
-        { cancelable: true }
-      );
+      setConfirm({
+        title: 'Supprimer le groupe',
+        message:
+          count > 0
+            ? `« ${group.nom} » et ses ${count} séance${count > 1 ? 's' : ''} seront supprimés.`
+            : `« ${group.nom} » sera supprimé.`,
+        confirmLabel: 'Supprimer',
+        destructive: true,
+        onConfirm: async () => {
+          await deleteSessionGroup(db, group.id);
+          // Les préférences d'accueil ne doivent plus pointer vers ce groupe.
+          await setGroupHidden(group.id, false);
+          const active = await getActiveGroupId();
+          if (active === group.id) await setActiveGroupId(null);
+          load();
+        },
+      });
     },
     [db, load, programs]
   );
@@ -359,6 +351,8 @@ export default function SessionListScreen() {
           </View>
         </View>
       </Sheet>
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </SafeAreaView>
   );
 }
