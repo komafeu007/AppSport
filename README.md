@@ -10,7 +10,7 @@ Application mobile (Expo + React Native + TypeScript) de suivi d'entraînement :
 - [x] **Recherche** d'exercices par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*), dans le picker de séance
 - [x] Vignettes **embarquées** (hors-ligne) dans la liste d'exercices du picker
 - [ ] Module 1 — Onboarding (profil : prénom, âge, poids, taille, douleurs, matériel, fréquence, durée)
-- [x] Module 2 — **Création de séance** manuelle : séances rangées en **groupes/splits** (PPL, Maison, Upper/Lower…), nom, ajout d'exercices, séries / fourchette de reps / repos (à la seconde) / **poids par série** (la série 1 s'applique à toutes, les séries surchargées restent), renommage et retrait de l'accueil. *(Génération auto PPL / FullBody / Upper-Lower encore à faire.)*
+- [x] Module 2 — **Création de séance** manuelle : séances rangées en **groupes/splits** (PPL, Maison, Upper/Lower…), nom, ajout d'exercices, séries / fourchette de reps / repos (à la seconde) / **poids par série** (la série 1 s'applique à toutes, les séries surchargées restent), renommage, retrait de l'accueil et suppression — depuis le menu « ⋯ » du groupe, qui supprime aussi ses séances (confirmation demandée). *(Génération auto PPL / FullBody / Upper-Lower encore à faire.)*
 - [ ] Module 2 — Génération automatique de programme (PPL / FullBody / Upper-Lower, matériel) + substitution par groupe musculaire
 - [ ] Module 4 — Stats (volume total, 1RM estimé, répartition par muscle)
 - [x] Écran **Main** : carte de la séance à faire (nom + bouton **Démarrer** pleine largeur ; si le nom fait ≤ 20 caractères, bouton compact **Go** à côté ; rotation auto par groupe), choix du groupe. Un groupe peut être **retiré de la page principale** via son menu « ⋯ » dans l'onglet Séance.
@@ -58,6 +58,7 @@ App.tsx                     # point d'entrée : SQLiteProvider + RootNavigator
 index.ts                    # registerRootComponent(App)
 src/
   components/
+    ActionSheet.tsx         # menu d'actions en feuille basse (appui à côté = fermer)
     ExerciseSearchList.tsx  # liste + recherche d'exercices (picker de séance)
   data/
     exercises.seed.json     # catalogue (généré depuis le dataset)

@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ActionSheet from '../components/ActionSheet';
 import type { SessionListNavigation } from '../navigation/types';
 import {
   createSessionGroup,
   deleteProgram,
+  deleteSessionGroup,
   getPrograms,
   getSessionGroups,
   renameSessionGroup,
@@ -49,6 +51,7 @@ export default function SessionListScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [groupModal, setGroupModal] = useState<GroupModalState | null>(null);
+  const [menuGroup, setMenuGroup] = useState<SessionGroup | null>(null);
   const loaded = useRef(false);
 
   const load = useCallback(() => {
@@ -108,7 +111,8 @@ export default function SessionListScreen() {
               load();
             },
           },
-        ]
+        ],
+        { cancelable: true }
       );
     },
     [db, load]
@@ -128,26 +132,62 @@ export default function SessionListScreen() {
     [hiddenIds, load]
   );
 
-  const openGroupMenu = useCallback(
+  const confirmDeleteGroup = useCallback(
     (group: SessionGroup) => {
-      const hidden = hiddenIds.includes(group.id);
-      Alert.alert(group.nom, undefined, [
-        {
-          text: 'Ajouter une séance',
-          onPress: () => navigation.navigate('SessionEditor', { groupId: group.id }),
-        },
-        {
-          text: 'Renommer',
-          onPress: () => setGroupModal({ mode: 'rename', groupId: group.id, name: group.nom }),
-        },
-        {
-          text: hidden ? 'Afficher sur la page principale' : 'Retirer de la page principale',
-          onPress: () => toggleGroupHidden(group),
-        },
-        { text: 'Annuler', style: 'cancel' },
-      ]);
+      const count = programs.filter((program) => program.group_id === group.id).length;
+      Alert.alert(
+        'Supprimer le groupe',
+        count > 0
+          ? `« ${group.nom} » et ses ${count} séance${count > 1 ? 's' : ''} seront supprimés.`
+          : `« ${group.nom} » sera supprimé.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Supprimer',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteSessionGroup(db, group.id);
+              // Les préférences d'accueil ne doivent plus pointer vers ce groupe.
+              await setGroupHidden(group.id, false);
+              const active = await getActiveGroupId();
+              if (active === group.id) await setActiveGroupId(null);
+              load();
+            },
+          },
+        ],
+        { cancelable: true }
+      );
     },
-    [hiddenIds, navigation, toggleGroupHidden]
+    [db, load, programs]
+  );
+
+  const menuItems = useMemo(
+    () =>
+      menuGroup
+        ? [
+            {
+              label: 'Ajouter une séance',
+              onPress: () => navigation.navigate('SessionEditor', { groupId: menuGroup.id }),
+            },
+            {
+              label: 'Renommer',
+              onPress: () =>
+                setGroupModal({ mode: 'rename', groupId: menuGroup.id, name: menuGroup.nom }),
+            },
+            {
+              label: hiddenIds.includes(menuGroup.id)
+                ? 'Afficher sur la page principale'
+                : 'Retirer de la page principale',
+              onPress: () => toggleGroupHidden(menuGroup),
+            },
+            {
+              label: 'Supprimer le groupe',
+              destructive: true,
+              onPress: () => confirmDeleteGroup(menuGroup),
+            },
+          ]
+        : [],
+    [confirmDeleteGroup, hiddenIds, menuGroup, navigation, toggleGroupHidden]
   );
 
   const saveGroup = useCallback(async () => {
@@ -209,7 +249,7 @@ export default function SessionListScreen() {
                   >
                     <Text style={styles.sectionAdd}>+ Séance</Text>
                   </Pressable>
-                  <Pressable hitSlop={6} onPress={() => openGroupMenu(section.group!)}>
+                  <Pressable hitSlop={6} onPress={() => setMenuGroup(section.group)}>
                     <Text style={styles.sectionMenu}>⋯</Text>
                   </Pressable>
                 </View>
@@ -264,8 +304,17 @@ export default function SessionListScreen() {
             <Text style={styles.primaryButtonText}>Nouvelle séance</Text>
           </Pressable>
         </View>
-        <Text style={styles.footerHint}>Le × supprime une séance (confirmation demandée)</Text>
+        <Text style={styles.footerHint}>
+          × supprime une séance · ⋯ renomme ou supprime un groupe
+        </Text>
       </View>
+
+      <ActionSheet
+        visible={menuGroup !== null}
+        title={menuGroup?.nom}
+        items={menuItems}
+        onClose={() => setMenuGroup(null)}
+      />
 
       <Modal
         visible={groupModal !== null}
@@ -273,8 +322,9 @@ export default function SessionListScreen() {
         transparent
         onRequestClose={() => setGroupModal(null)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setGroupModal(null)}>
+          {/* Capture l'appui : toucher la carte ne doit pas la refermer. */}
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>
               {groupModal?.mode === 'rename' ? 'Renommer le groupe' : 'Nouveau groupe'}
             </Text>
@@ -296,8 +346,8 @@ export default function SessionListScreen() {
                 <Text style={styles.modalConfirmText}>Enregistrer</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
