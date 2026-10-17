@@ -23,6 +23,17 @@ export const neutrals = {
   border: '#33333D',
   text: '#F5F5F7',
   textMuted: '#A0A0AC',
+  /** Voile sombre derrière les feuilles/modales. */
+  overlay: 'rgba(0, 0, 0, 0.65)',
+} as const;
+
+/** Ombre portée des surfaces flottantes (barre d'onglets, feuilles). */
+export const shadow = {
+  shadowColor: '#000000',
+  shadowOpacity: 0.35,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 10,
 } as const;
 
 export const theme = { colors, neutrals } as const;
