@@ -40,7 +40,6 @@ Puis installe l'APK généré. (`eas.json` n'existe pas encore dans ce dépôt :
 
 ## Voir ce qui marche / ce qui casse
 
-- En haut de l'écran, un **diagnostic** s'affiche : version SQLite, version du schéma (`user_version`), nombre de lignes.
 - Une erreur de chargement de la base s'affiche en **orange** dans l'app.
 - Les logs `console.*` et les erreurs apparaissent dans le terminal Expo.
 - Vérification statique avant commit : `npx tsc --noEmit`.
@@ -48,5 +47,5 @@ Puis installe l'APK généré. (`eas.json` n'existe pas encore dans ce dépôt :
 
 ## Médias
 
-- Les **vignettes 180×180** sont embarquées dans `assets/exercises/` (~12 Mo) → affichage instantané, hors-ligne.
-- Les **GIF animés** (122 Mo au total) ne sont **pas** embarqués : ils sont chargés à la demande depuis GitHub. Sans réseau, la vignette reste visible mais le GIF ne s'affiche pas.
+- Les **vignettes 180×180** sont embarquées dans `assets/exercises/` (~12 Mo) → affichage instantané, hors-ligne (listes d'exercices du picker de séance).
+- Les **GIF animés** (122 Mo au total) ne sont **pas** embarqués et ne sont **plus affichés** dans l'app (l'ancienne vue détail d'exercice a été retirée).

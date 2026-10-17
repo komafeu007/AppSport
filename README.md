@@ -7,20 +7,24 @@ Application mobile (Expo + React Native + TypeScript) de suivi d'entraînement :
 ## État du projet
 
 - [x] Base SQLite locale (migrations versionnées) + catalogue de **1 324 exercices**
-- [x] **Recherche** par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*)
-- [x] Vignettes **embarquées** (hors-ligne) + **GIF** à la demande dans la vue détail
+- [x] **Recherche** d'exercices par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*), dans le picker de séance
+- [x] Vignettes **embarquées** (hors-ligne) dans la liste d'exercices du picker
 - [ ] Module 1 — Onboarding (profil : prénom, âge, poids, taille, douleurs, matériel, fréquence, durée)
-- [ ] Module 2 — Programme (PPL / FullBody / Upper-Lower, substitution par groupe musculaire)
-- [ ] Module 3 — Live Workout (minuteur auto, saisie poids/reps, exercices volatiles)
+- [x] Module 2 — **Création de séance** manuelle : séances rangées en **groupes/splits** (PPL, Maison, Upper/Lower…), nom, ajout d'exercices, séries / fourchette de reps / repos (à la seconde) / **poids par série** (la série 1 s'applique à toutes, les séries surchargées restent), renommage et retrait de l'accueil. *(Génération auto PPL / FullBody / Upper-Lower encore à faire.)*
+- [ ] Module 2 — Génération automatique de programme (PPL / FullBody / Upper-Lower, matériel) + substitution par groupe musculaire
 - [ ] Module 4 — Stats (volume total, 1RM estimé, répartition par muscle)
-- [ ] Navigation multi-écrans (React Navigation est installé mais pas encore câblé)
+- [x] Écran **Main** : carte de la séance à faire (nom + bouton **Démarrer** pleine largeur ; si le nom fait ≤ 20 caractères, bouton compact **Go** à côté ; rotation auto par groupe), choix du groupe. Un groupe peut être **retiré de la page principale** via son menu « ⋯ » dans l'onglet Séance.
+- [x] Navigation multi-écrans : **2 onglets en bas** (Main / Séance) + écrans empilés (Éditeur, Séance en cours)
+- [x] Module 3 — **Live Workout (base)** : lancer une séance depuis Main, voir les exos, modifier poids/nb de séries, coche « tout valider » par exercice, saisir les reps par série (sauvegardées), poids reporté d'une séance à l'autre, arrêter et enregistrer. *(À venir : minuteur de repos auto, exercices volatils.)*
+- [ ] Module 3 — Minuteur de repos + exercices volatils
 - [ ] Configuration EAS (`eas.json`) pour les builds
 
 ## Stack
 
 - **Expo SDK 57**, React Native 0.86, React 19, TypeScript strict
 - `expo-sqlite` (persistance), `expo-location`, `expo-status-bar`, `react-native-safe-area-context`
-- `@react-navigation/native` + `native-stack` (dépendances prêtes, pas encore utilisées)
+- `@react-navigation/native` + `native-stack` + `bottom-tabs` (onglets Main/Séance + écrans empilés)
+- `expo-sqlite/kv-store` (préférences clé/valeur, ex. groupe actif)
 - EAS (builds cloud, à configurer)
 
 ## Démarrage rapide
@@ -50,16 +54,30 @@ Le plus simple : **Expo Go** (aucun build natif — `expo-sqlite` est inclus). D
 ## Structure
 
 ```
-App.tsx                     # point d'entrée : fournit la base (SQLiteProvider) + écran
+App.tsx                     # point d'entrée : SQLiteProvider + RootNavigator
 index.ts                    # registerRootComponent(App)
 src/
+  components/
+    ExerciseSearchList.tsx  # liste + recherche d'exercices (picker de séance)
   data/
     exercises.seed.json     # catalogue (généré depuis le dataset)
     exerciseImages.ts       # map fichier -> require() des vignettes (généré)
+  domain/
+    workoutRules.ts         # règles repos/séries du CDC + bornes de saisie + formatage
+  lib/
+    exerciseSearch.ts       # logique de recherche / classement par pertinence
+  navigation/
+    RootNavigator.tsx       # onglets (Main, Séance) + stack (éditeur, séance en cours)
+    BubbleTabBar.tsx        # barre d'onglets « bulle »
+    types.ts                # RootStackParamList + MainTabParamList + types de navigation
   screens/
-    ExercisesScreen.tsx     # liste + recherche + vue détail
+    MainScreen.tsx          # accueil : séance à faire (nom + Démarrer) + choix du groupe
+    SessionListScreen.tsx   # onglet Séance : groupes/splits (PPL, Maison…) + liste des séances
+    SessionEditorScreen.tsx # création/édition de séance
+    LiveWorkoutScreen.tsx   # séance en cours : poids/séries/reps, arrêt & enregistrement
   services/
-    database.ts             # ouverture, migrations, seed, requêtes
+    database.ts             # ouverture, migrations, seed, requêtes (+ CRUD séances/groupes)
+    preferences.ts          # préférences clé/valeur (groupe actif, groupes retirés de l'accueil) via expo-sqlite/kv-store
   theme/
     colors.ts               # palette officielle + neutres
 assets/exercises/           # 1 324 vignettes 180x180 (© Gym visual)
