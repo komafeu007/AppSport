@@ -260,11 +260,15 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const onSave = async () => {
     const name = nom.trim();
     if (!name) {
-      Alert.alert('Nom requis', 'Donne un nom à la séance avant d’enregistrer.');
+      Alert.alert('Nom requis', 'Donne un nom à la séance avant d’enregistrer.', undefined, {
+        cancelable: true,
+      });
       return;
     }
     if (items.length === 0) {
-      Alert.alert('Aucun exercice', 'Ajoute au moins un exercice à la séance.');
+      Alert.alert('Aucun exercice', 'Ajoute au moins un exercice à la séance.', undefined, {
+        cancelable: true,
+      });
       return;
     }
     try {
@@ -286,7 +290,9 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.');
+      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.', undefined, {
+        cancelable: true,
+      });
     }
   };
 

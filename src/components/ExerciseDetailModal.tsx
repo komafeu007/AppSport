@@ -41,6 +41,13 @@ export default function ExerciseDetailModal({ exercise, visible, onClose }: Prop
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
+        {/* Espace vide au-dessus de la feuille : l'appui referme la fiche. */}
+        <Pressable
+          style={styles.backdropDismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fermer"
+        />
         <View style={styles.sheet}>
           {exercise ? (
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -108,6 +115,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    flex: 1,
   },
   sheet: {
     backgroundColor: colors.background,

@@ -445,15 +445,22 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (cause: unknown) {
       setSaving(false);
-      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.');
+      Alert.alert('Erreur', cause instanceof Error ? cause.message : 'Enregistrement impossible.', undefined, {
+        cancelable: true,
+      });
     }
   };
 
   const onStop = () => {
-    Alert.alert('Arrêter la séance', 'Enregistrer les séries réalisées et terminer la séance ?', [
-      { text: 'Continuer', style: 'cancel' },
-      { text: 'Terminer', style: 'destructive', onPress: persist },
-    ]);
+    Alert.alert(
+      'Arrêter la séance',
+      'Enregistrer les séries réalisées et terminer la séance ?',
+      [
+        { text: 'Continuer', style: 'cancel' },
+        { text: 'Terminer', style: 'destructive', onPress: persist },
+      ],
+      { cancelable: true }
+    );
   };
 
   if (loading) {

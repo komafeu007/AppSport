@@ -148,19 +148,31 @@ export default function PlateCalculatorModal({
 
   const confirmRemove = (value: number, kind: 'bar' | 'plate') => {
     const label = kind === 'bar' ? 'cette barre' : 'ce disque';
-    Alert.alert('Supprimer', `Retirer ${formatWeight(value)} kg de ${label} ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: () => (kind === 'bar' ? onRemoveBar(value) : onRemovePlate(value)),
-      },
-    ]);
+    Alert.alert(
+      'Supprimer',
+      `Retirer ${formatWeight(value)} kg de ${label} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => (kind === 'bar' ? onRemoveBar(value) : onRemovePlate(value)),
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
+        {/* Espace vide au-dessus de la feuille : l'appui referme le calculateur. */}
+        <Pressable
+          style={styles.backdropDismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fermer"
+        />
         <View style={styles.sheet}>
           <ScrollView
             style={styles.scroll}
@@ -265,6 +277,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    flex: 1,
   },
   sheet: {
     backgroundColor: colors.background,
