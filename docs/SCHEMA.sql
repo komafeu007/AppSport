@@ -4,7 +4,14 @@ CREATE TABLE IF NOT EXISTS ACCOUNTS (
     age INTEGER,
     poids REAL,
     taille REAL,
-    objectif TEXT
+    objectif TEXT,             -- objectif principal (masse, seche, force, forme, sante)
+    niveau TEXT,               -- niveau d'expérience (debutant, intermediaire, avance) — v10
+    douleurs_zones TEXT,       -- zones sensibles, tableau JSON de clés
+    douleurs_note TEXT,        -- précision libre sur les douleurs
+    sessions_per_week INTEGER, -- nb d'entraînements par semaine visé
+    materiel TEXT,             -- matériel dispo, tableau JSON de clés
+    format_seance TEXT,        -- format de séance choisi (clé)
+    duree_seance INTEGER       -- durée visée d'une séance, en minutes
 );
 
 CREATE TABLE IF NOT EXISTS EXERCISES (
@@ -26,6 +33,8 @@ CREATE TABLE IF NOT EXISTS SESSION_GROUPS (
     account_id INTEGER,
     nom TEXT NOT NULL,              -- nom du groupe/split (ex. « PPL », « Maison », « Upper/Lower »)
     ordre INTEGER,
+    bloc_debut TEXT,                -- date ISO du début du bloc d'entraînement (programme généré) — v10
+    bloc_semaines INTEGER,          -- durée du bloc en semaines (8 par défaut) — v10
     FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id)
 );
 
@@ -49,6 +58,7 @@ CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
     rest_time INTEGER, -- en secondes
     target_weight REAL,     -- poids de base (kg)
     set_weights TEXT,       -- poids par série en JSON (dégressif), ex. '[100,90,80]' ; null = uniforme
+    superset_group INTEGER, -- 2+ exos consécutifs du même groupe = superset (repos après le dernier)
     FOREIGN KEY(program_id) REFERENCES PROGRAMS(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)
 );

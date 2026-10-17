@@ -19,16 +19,19 @@ import {
   type ConfirmRequest,
 } from '../components/ui';
 import type { SessionListNavigation } from '../navigation/types';
+import { useAccount } from '../services/account';
 import {
   createSessionGroup,
   deleteProgram,
   deleteSessionGroup,
+  getAccount,
   getPrograms,
   getSessionGroups,
   renameSessionGroup,
   type ProgramSummary,
   type SessionGroup,
 } from '../services/database';
+import { getBlockStatus, type BlockStatus } from '../services/programGeneration';
 import {
   getActiveGroupId,
   getHiddenGroupIds,
@@ -54,6 +57,7 @@ interface GroupModalState {
 export default function SessionListScreen() {
   const navigation = useNavigation<SessionListNavigation>();
   const db = useSQLiteContext();
+  const { accountId } = useAccount();
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [hiddenIds, setHiddenIds] = useState<number[]>([]);
   const [programs, setPrograms] = useState<ProgramSummary[]>([]);
@@ -62,17 +66,25 @@ export default function SessionListScreen() {
   const [groupModal, setGroupModal] = useState<GroupModalState | null>(null);
   const [menuGroup, setMenuGroup] = useState<SessionGroup | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const [block, setBlock] = useState<BlockStatus | null>(null);
   const loaded = useRef(false);
 
   const load = useCallback(() => {
+    if (accountId === null) return;
     let mounted = true;
     if (!loaded.current) setLoading(true);
-    Promise.all([getSessionGroups(db), getPrograms(db), getHiddenGroupIds()])
-      .then(([groupRows, programRows, hidden]) => {
+    Promise.all([
+      getSessionGroups(db, accountId),
+      getPrograms(db, accountId),
+      getHiddenGroupIds(accountId),
+      getAccount(db, accountId).then((row) => (row ? getBlockStatus(db, row) : null)),
+    ])
+      .then(([groupRows, programRows, hidden, blockStatus]) => {
         if (!mounted) return;
         setGroups(groupRows);
         setPrograms(programRows);
         setHiddenIds(hidden);
+        setBlock(blockStatus);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -86,7 +98,7 @@ export default function SessionListScreen() {
     return () => {
       mounted = false;
     };
-  }, [db]);
+  }, [accountId, db]);
 
   useFocusEffect(load);
 
@@ -124,16 +136,17 @@ export default function SessionListScreen() {
 
   const toggleGroupHidden = useCallback(
     async (group: SessionGroup) => {
+      if (accountId === null) return;
       const hidden = hiddenIds.includes(group.id);
-      await setGroupHidden(group.id, !hidden);
+      await setGroupHidden(accountId, group.id, !hidden);
       if (!hidden) {
         // Le groupe est retiré : s'il était le groupe actif de l'accueil, on le désactive.
-        const active = await getActiveGroupId();
-        if (active === group.id) await setActiveGroupId(null);
+        const active = await getActiveGroupId(accountId);
+        if (active === group.id) await setActiveGroupId(accountId, null);
       }
       load();
     },
-    [hiddenIds, load]
+    [accountId, hiddenIds, load]
   );
 
   const confirmDeleteGroup = useCallback(
@@ -150,14 +163,15 @@ export default function SessionListScreen() {
         onConfirm: async () => {
           await deleteSessionGroup(db, group.id);
           // Les préférences d'accueil ne doivent plus pointer vers ce groupe.
-          await setGroupHidden(group.id, false);
-          const active = await getActiveGroupId();
-          if (active === group.id) await setActiveGroupId(null);
+          if (accountId === null) return;
+          await setGroupHidden(accountId, group.id, false);
+          const active = await getActiveGroupId(accountId);
+          if (active === group.id) await setActiveGroupId(accountId, null);
           load();
         },
       });
     },
-    [db, load, programs]
+    [accountId, db, load, programs]
   );
 
   const menuItems = useMemo(
@@ -191,18 +205,18 @@ export default function SessionListScreen() {
 
   const saveGroup = useCallback(async () => {
     const name = groupModal?.name.trim();
-    if (!groupModal || !name) {
+    if (!groupModal || !name || accountId === null) {
       setGroupModal(null);
       return;
     }
     if (groupModal.mode === 'create') {
-      await createSessionGroup(db, name);
+      await createSessionGroup(db, accountId, name);
     } else if (groupModal.groupId != null) {
       await renameSessionGroup(db, groupModal.groupId, name);
     }
     setGroupModal(null);
     load();
-  }, [db, groupModal, load]);
+  }, [accountId, db, groupModal, load]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -210,6 +224,42 @@ export default function SessionListScreen() {
         title="Séance"
         subtitle="Tes groupes (splits) et les séances qu'ils contiennent."
       />
+
+      <Appear delay={60} style={styles.generatorWrap}>
+        <Card
+          tone={block?.due ? 'accent' : 'default'}
+          accessibilityLabel={
+            block?.due ? 'Générer le nouveau programme' : 'Générer un programme'
+          }
+          onPress={() =>
+            navigation.navigate(
+              'ProgramGenerator',
+              block?.due ? { reason: 'bloc' } : undefined
+            )
+          }
+        >
+          <View style={styles.generatorRow}>
+            <View style={styles.generatorText}>
+              <Text style={styles.generatorTitle}>
+                {block?.due ? 'Bloc terminé — choisis le nouveau programme' : 'Générer un programme'}
+              </Text>
+              <Text style={styles.generatorMeta}>
+                {block
+                  ? `« ${block.group.nom} » · semaine ${Math.min(
+                      block.elapsedWeeks + 1,
+                      block.weeks
+                    )}/${block.weeks} · ${block.sessionsDone} séance${
+                      block.sessionsDone > 1 ? 's' : ''
+                    } faite${block.sessionsDone > 1 ? 's' : ''}${
+                      block.due ? ' → un nouveau bloc est proposé' : ''
+                    }`
+                  : 'Séances calculées à partir de ton profil (objectif, niveau, matériel, durée), avec aperçu et régénération avant enregistrement.'}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </View>
+        </Card>
+      </Appear>
 
       {loading ? (
         <StateView kind="loading" />
@@ -366,6 +416,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  generatorWrap: {
+    paddingHorizontal: spacing.xl,
+  },
+  generatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  generatorText: {
+    flex: 1,
+  },
+  generatorTitle: {
+    ...text.subtitle,
+    color: neutrals.text,
+  },
+  generatorMeta: {
+    ...text.caption,
+    color: neutrals.textMuted,
+    marginTop: spacing.xs,
   },
   sectionActions: {
     flexDirection: 'row',

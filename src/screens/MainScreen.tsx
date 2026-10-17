@@ -13,11 +13,15 @@ import {
   SectionTitle,
   StateView,
 } from '../components/ui';
+import { formatDuration, formatKg, formatShortDate } from '../lib/format';
 import type { MainScreenNavigation } from '../navigation/types';
+import { useAccount } from '../services/account';
 import {
+  getCompletedSessions,
   getNextProgramInGroup,
   getSessionGroups,
   hasCompletedSessions,
+  type CompletedSession,
   type ProgramSummary,
   type SessionGroup,
 } from '../services/database';
@@ -28,26 +32,30 @@ import { spacing, text } from '../theme/tokens';
 export default function MainScreen() {
   const db = useSQLiteContext();
   const navigation = useNavigation<MainScreenNavigation>();
+  const { accountId, account } = useAccount();
 
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [hiddenIds, setHiddenIds] = useState<number[]>([]);
   const [nextSession, setNextSession] = useState<ProgramSummary | null>(null);
   const [activeGroupId, setActive] = useState<number | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
 
   const load = useCallback(() => {
+    if (accountId === null) return;
     let mounted = true;
     if (!loaded.current) setLoading(true);
     Promise.all([
-      getSessionGroups(db),
-      getActiveGroupId(),
-      getHiddenGroupIds(),
-      hasCompletedSessions(db),
+      getSessionGroups(db, accountId),
+      getActiveGroupId(accountId),
+      getHiddenGroupIds(accountId),
+      hasCompletedSessions(db, accountId),
+      getCompletedSessions(db, accountId),
     ])
-      .then(async ([groupRows, storedActive, hidden, done]) => {
+      .then(async ([groupRows, storedActive, hidden, done, sessionRows]) => {
         // Un groupe « retiré » de l'accueil ne compte plus comme groupe actif.
         const activeId =
           storedActive !== null &&
@@ -62,6 +70,7 @@ export default function MainScreen() {
         setActive(activeId);
         setNextSession(next);
         setCompleted(done);
+        setSessions(sessionRows);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -75,7 +84,7 @@ export default function MainScreen() {
     return () => {
       mounted = false;
     };
-  }, [db]);
+  }, [accountId, db]);
 
   useFocusEffect(load);
 
@@ -84,10 +93,11 @@ export default function MainScreen() {
 
   const chooseGroup = useCallback(
     async (id: number) => {
-      await setActiveGroupId(id);
+      if (accountId === null) return;
+      await setActiveGroupId(accountId, id);
       load();
     },
-    [load]
+    [accountId, load]
   );
 
   if (loading) {
@@ -118,7 +128,18 @@ export default function MainScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Main" subtitle="Ta prochaine séance, prête à démarrer." />
+      <ScreenHeader
+        title="Main"
+        subtitle="Ta prochaine séance, prête à démarrer."
+        right={
+          <Button
+            label={account?.prenom ?? 'Compte'}
+            variant="secondary"
+            size="sm"
+            onPress={() => navigation.navigate('Accounts')}
+          />
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <Appear>
@@ -192,6 +213,51 @@ export default function MainScreen() {
             </View>
           </Appear>
         ) : null}
+
+        <Appear delay={showChooser ? 160 : 80} style={styles.section}>
+          <SectionTitle
+            hint={
+              sessions.length > 0
+                ? `${sessions.length} séance${sessions.length > 1 ? 's' : ''}`
+                : 'aucune'
+            }
+          >
+            Historique
+          </SectionTitle>
+        </Appear>
+
+        {sessions.length === 0 ? (
+          <Text style={styles.historyEmpty}>
+            Tes séances terminées s’afficheront ici, de la plus récente à la plus ancienne.
+          </Text>
+        ) : (
+          sessions.map((session, index) => (
+            <Appear key={session.id} delay={Math.min(index * 40, 240)} offset={8}>
+              <Card
+                style={styles.historyRow}
+                accessibilityLabel={`Récapitulatif de ${session.nom_seance ?? 'séance'}`}
+                onPress={() => navigation.navigate('SessionSummary', { sessionId: session.id })}
+              >
+                <View style={styles.historyBody}>
+                  <Text style={styles.historyTitle} numberOfLines={1}>
+                    {session.nom_seance ?? 'Séance'}
+                  </Text>
+                  <Text style={styles.historyMeta} numberOfLines={1}>
+                    {formatShortDate(session.date, true)} · {session.exercise_count} exercice
+                    {session.exercise_count > 1 ? 's' : ''} · {session.total_reps} reps
+                  </Text>
+                </View>
+                <View style={styles.historyStats}>
+                  <Text style={styles.historyVolume}>{formatKg(session.total_volume)}</Text>
+                  <Text style={styles.historyDuration}>
+                    {formatDuration(session.duration_sec ?? 0)}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </Card>
+            </Appear>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -242,5 +308,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm + 2,
+  },
+  historyEmpty: {
+    ...text.meta,
+    color: neutrals.textMuted,
+    lineHeight: 20,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm + 2,
+  },
+  historyBody: {
+    flex: 1,
+  },
+  historyTitle: {
+    ...text.bodyStrong,
+    color: neutrals.text,
+  },
+  historyMeta: {
+    ...text.caption,
+    color: neutrals.textMuted,
+    marginTop: spacing.xs,
+  },
+  historyStats: {
+    alignItems: 'flex-end',
+  },
+  historyVolume: {
+    ...text.bodyStrong,
+    color: colors.accent,
+    fontVariant: ['tabular-nums'],
+  },
+  historyDuration: {
+    ...text.caption,
+    color: colors.secondary,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  chevron: {
+    color: neutrals.textMuted,
+    fontSize: 26,
   },
 });

@@ -1,13 +1,24 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Animated,
+  AppState,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type AppStateStatus,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
 import PlateCalculatorModal from '../components/PlateCalculatorModal';
 import {
   Appear,
+  Badge,
   Button,
   Card,
   ConfirmSheet,
@@ -18,15 +29,19 @@ import {
 } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import { DEFAULT_BAR_WEIGHT, DEFAULT_PLATES, formatWeight, sortWeightsDesc } from '../domain/plates';
-import { clamp, fitWeights, parseWeights, REPS_RANGE, WEIGHT_RANGE } from '../domain/workoutRules';
+import { clamp, beatsSet, fitWeights, formatPerformance, parseWeights, REPS_RANGE, WEIGHT_RANGE } from '../domain/workoutRules';
+import { formatKg } from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
+import { useAccount } from '../services/account';
 import {
+  getExerciseBestSets,
   getLastSetsForExercise,
   getProgram,
   getProgramExercises,
   programExerciseToExercise,
   saveWorkoutPlan,
   saveWorkoutSession,
+  type ExerciseBestSet,
   type Exercise,
   type SaveWorkoutPlan,
   type SaveWorkoutSet,
@@ -41,6 +56,13 @@ import {
   setCustomPlates,
   setEnabledPlates,
 } from '../services/preferences';
+import {
+  cancelRestDone,
+  ensureRestNotifications,
+  logPendingRestNotifications,
+  presentRestDoneNow,
+  scheduleRestDone,
+} from '../services/restAlert';
 import { colors, neutrals } from '../theme/colors';
 import { radius, spring, spacing, text } from '../theme/tokens';
 
@@ -63,6 +85,12 @@ interface LiveExercise {
   exercise: Exercise;
   repsMin: number;
   repsMax: number;
+  /** Repos après une série, en secondes. */
+  restTime: number;
+  /** Bloc de superset : les exos consécutifs partageant la même valeur s'enchaînent. */
+  supersetGroup: number | null;
+  /** Record absolu à battre sur cet exercice (null = jamais fait). */
+  bestSet: ExerciseBestSet | null;
   baseWeight: number;
   /** Valeurs de la dernière séance, indexées par n° de série. */
   previous: Array<PreviousSet | undefined>;
@@ -75,18 +103,20 @@ function formatClock(totalSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-/** Volume lisible avec séparateur de milliers : 1250 → « 1 250 kg ». */
-function formatKg(value: number): string {
-  const rounded = Math.round(value);
-  return `${String(rounded).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kg`;
-}
-
 function buildPlans(exercises: LiveExercise[]): SaveWorkoutPlan[] {
   return exercises.map((exercise) => ({
     workout_exo_id: exercise.workoutExoId,
+    exercise_id: exercise.exercise.id,
     target_weight: exercise.sets[0]?.weight ?? exercise.baseWeight,
     set_weights: exercise.sets.map((set) => set.weight),
   }));
+}
+
+/** true si l'exercice est le dernier de son bloc de superset (ou hors superset). */
+function isLastOfSuperset(exercises: LiveExercise[], index: number): boolean {
+  const group = exercises[index]?.supersetGroup;
+  if (group == null) return true;
+  return exercises[index + 1]?.supersetGroup !== group;
 }
 
 /** Petit logo haltère dessiné (remplace les boutons − / +). */
@@ -209,6 +239,7 @@ function CheckToggle({
 
 export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const db = useSQLiteContext();
+  const { accountId } = useAccount();
   const programId = route.params.programId;
 
   const [nom, setNom] = useState('');
@@ -233,6 +264,28 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   const startRef = useRef(Date.now());
   const keySeq = useRef(0);
+  /** Fin du repos (horodatage ms) ; null = aucun repos en cours. */
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  /** Secondes restantes, recalculées depuis `restEndsAt` (juste même après un retour au premier plan). */
+  const [restRemaining, setRestRemaining] = useState(0);
+  /** Durée initiale du repos en cours (barre de progression). */
+  const restTotal = useRef(0);
+  /** Bref indicateur « repos terminé » après la fin du temps d'attente. */
+  const [restDone, setRestDone] = useState(false);
+  /** Identifiant de la notification de fin de repos programmée. */
+  const restNotifId = useRef<string | null>(null);
+  /** Identifie le cycle de repos courant : invalide une programmation « en vol ». */
+  const restSessionRef = useRef(0);
+  /** Bip de fin de repos (fichier local). */
+  const restBeep = useAudioPlayer(require('../../assets/sounds/rest-done.wav'));
+  /** Le poids a-t-il été modifié ? Évite d'écraser le plan (et les autres séances) au chargement. */
+  const planDirty = useRef(false);
+  /** Auto-défilement : position Y des cartes et dernier état « exercice terminé ». */
+  const scrollRef = useRef<ScrollView>(null);
+  const cardY = useRef<number[]>([]);
+  const allDoneRef = useRef<boolean[]>([]);
+  /** Dernier état des cases cochées (pour détecter les passages à « coché »). */
+  const completedRef = useRef<boolean[][]>([]);
 
   const nextKey = () => {
     keySeq.current += 1;
@@ -254,8 +307,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
           getCustomPlates(),
         ]);
         const previousSets = await Promise.all(
-          rows.map((row) => getLastSetsForExercise(db, programId, row.exercise_id ?? 0))
+          rows.map((row) => getLastSetsForExercise(db, accountId ?? -1, row.exercise_id ?? 0))
         );
+        const bestRows = await getExerciseBestSets(db, accountId ?? -1);
+        const bestByExercise = new Map(bestRows.map((row) => [row.exercise_id, row]));
         if (!mounted) return;
         setNom(program?.nom_seance ?? 'Séance');
         setBarWeightState(savedBar);
@@ -280,6 +335,9 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
               exercise,
               repsMin: row.reps_min ?? REPS_RANGE.min,
               repsMax: row.reps_max ?? REPS_RANGE.min,
+              restTime: row.rest_time ?? 0,
+              supersetGroup: row.superset_group,
+              bestSet: bestByExercise.get(row.exercise_id ?? -1) ?? null,
               baseWeight,
               previous,
               sets: Array.from({ length: series }, (_, index) => ({
@@ -302,7 +360,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     return () => {
       mounted = false;
     };
-  }, [db, programId]);
+  }, [db, programId, accountId]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -312,17 +370,203 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   }, []);
 
   // Sauvegarde « inter-séance » : le poids est écrit au fil de la séance
-  // (jamais le nombre de séries), pour se reporter même sans terminer.
+  // (jamais le nombre de séries), pour se reporter même sans terminer — et il est
+  // synchronisé sur toutes les séances du compte qui utilisent le même exercice.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !planDirty.current) return;
     const plans = buildPlans(liveExercises);
     const id = setTimeout(() => {
-      void saveWorkoutPlan(db, plans);
+      void saveWorkoutPlan(db, accountId ?? null, plans);
     }, 800);
     return () => clearTimeout(id);
-  }, [liveExercises, ready, db]);
+  }, [liveExercises, ready, db, accountId]);
+
+  /** Joue le bip de fin de repos (silencieux si indisponible). */
+  const playRestBeep = () => {
+    try {
+      restBeep.seekTo(0).catch(() => {});
+      restBeep.play();
+    } catch {
+      // Son indisponible : la notification reste le filet de sécurité.
+    }
+  };
+
+  /**
+   * Lance (ou relance) le repos après une série.
+   *
+   * Aucune notification n'est posée ici : au premier plan, la fin du repos est
+   * signalée par le bip et par une notification **immédiate** (chemins fiables
+   * en Expo Go). La notification **différée** n'est programmée que si l'app
+   * passe en arrière-plan — c'est le seul cas où elle est indispensable, le JS
+   * étant alors suspendu (cf. l'effet sur `AppState` ci-dessous).
+   */
+  const startRest = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    if (total <= 0) return;
+    const previous = restNotifId.current;
+    restNotifId.current = null;
+    restSessionRef.current += 1;
+    void cancelRestDone(previous);
+    restTotal.current = total;
+    setRestDone(false);
+    setRestRemaining(total);
+    setRestEndsAt(Date.now() + total * 1000);
+  };
+
+  /** Passe le temps d'attente : arrête le repos et annule la notification. */
+  const skipRest = () => {
+    const id = restNotifId.current;
+    restNotifId.current = null;
+    restSessionRef.current += 1;
+    void cancelRestDone(id);
+    setRestEndsAt(null);
+    setRestRemaining(0);
+  };
+
+  /** Ajoute (ou retire) du temps au repos en cours. */
+  const shiftRest = (deltaSeconds: number) => {
+    if (restEndsAt === null) return;
+    const next = restEndsAt + deltaSeconds * 1000;
+    if (next <= Date.now()) {
+      skipRest();
+      return;
+    }
+    setRestEndsAt(next);
+  };
+
+  // Décompte du repos, recalculé depuis l'horodatage (reste exact après un
+  // passage en arrière-plan, où les minuteurs JS sont suspendus).
+  useEffect(() => {
+    if (restEndsAt === null) return;
+    const tick = () => {
+      setRestRemaining(Math.max(0, Math.ceil((restEndsAt - Date.now()) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [restEndsAt]);
+
+  // Pendant un repos, on suit l'état de l'app : dès qu'elle quitte le premier
+  // plan, on programme une notification différée pour le temps restant (le JS
+  // sera suspendu, ni le bip ni la notification immédiate ne partiront) ; au
+  // retour au premier plan, on l'annule pour ne pas notifier deux fois.
+  useEffect(() => {
+    if (restEndsAt === null) return;
+
+    const syncWithAppState = (state: AppStateStatus) => {
+      const pending = restNotifId.current;
+      restNotifId.current = null;
+      // Le diagnostic se fait avant l'annulation : si la notification différée a
+      // sonné pendant l'absence, elle a déjà quitté la liste d'attente.
+      if (state === 'active') void logPendingRestNotifications();
+      void cancelRestDone(pending);
+
+      // Toute programmation encore en vol devient caduque.
+      restSessionRef.current += 1;
+      const session = restSessionRef.current;
+      if (state === 'active') return;
+
+      const remaining = Math.max(0, Math.ceil((restEndsAt - Date.now()) / 1000));
+      if (remaining <= 1) return;
+      scheduleRestDone(remaining)
+        .then((id) => {
+          if (restSessionRef.current !== session) {
+            // Revenu au premier plan entre-temps : on annule cette notification
+            // plutôt que de la laisser sonner pendant la séance.
+            void cancelRestDone(id);
+            return;
+          }
+          restNotifId.current = id;
+        })
+        .catch(() => {
+          // Notifications indisponibles (permission refusée…) : tant pis.
+        });
+    };
+
+    syncWithAppState(AppState.currentState);
+    const subscription = AppState.addEventListener('change', syncWithAppState);
+    return () => subscription.remove();
+  }, [restEndsAt]);
+
+  // Fin du repos : bip (si l'app est au premier plan) et indicateur « c'est parti ».
+  useEffect(() => {
+    if (restEndsAt === null || restRemaining > 0) return;
+    const endedAt = restEndsAt;
+    restNotifId.current = null;
+    restSessionRef.current += 1;
+    setRestEndsAt(null);
+    setRestDone(true);
+    // Au-delà de quelques secondes, on revient d'arrière-plan : la notification
+    // différée a déjà prévenu, inutile de bipper (ni de renotifier) après coup.
+    if (Date.now() - endedAt < 3000) {
+      playRestBeep();
+      void presentRestDoneNow();
+    }
+  }, [restEndsAt, restRemaining]);
+
+  // L'indicateur « repos terminé » s'efface tout seul.
+  useEffect(() => {
+    if (!restDone) return;
+    const id = setTimeout(() => setRestDone(false), 5000);
+    return () => clearTimeout(id);
+  }, [restDone]);
+
+  // Canal de notification + permission (une fois par séance) ; à la fermeture,
+  // on annule une éventuelle notification encore programmée.
+  useEffect(() => {
+    ensureRestNotifications().catch(() => {});
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    return () => {
+      const id = restNotifId.current;
+      restNotifId.current = null;
+      void cancelRestDone(id);
+    };
+  }, []);
+
+  // Déclenche le repos quand une série passe à « cochée », et défile vers
+  // l'exercice suivant dès que **toutes** ses séries sont cochées.
+  useEffect(() => {
+    if (!ready || liveExercises.length === 0) return;
+
+    const previousCompleted = completedRef.current;
+    let restFor: number | null = null;
+    let scrollTo = -1;
+
+    liveExercises.forEach((exercise, exIndex) => {
+      exercise.sets.forEach((set, setIndex) => {
+        if (set.completed && !previousCompleted[exIndex]?.[setIndex]) {
+          // Superset : pas de repos après un exercice intermédiaire.
+          if (isLastOfSuperset(liveExercises, exIndex)) restFor = exercise.restTime;
+        }
+      });
+    });
+
+    const nextAllDone = liveExercises.map(
+      (exercise) => exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)
+    );
+    nextAllDone.forEach((done, index) => {
+      if (done && !allDoneRef.current[index]) scrollTo = index + 1;
+    });
+
+    completedRef.current = liveExercises.map((exercise) => exercise.sets.map((set) => set.completed));
+    allDoneRef.current = nextAllDone;
+
+    if (restFor !== null) startRest(restFor);
+    if (scrollTo >= 0) {
+      const y = cardY.current[scrollTo];
+      if (y !== undefined) {
+        const timer = setTimeout(
+          () => scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true }),
+          260
+        );
+        return () => clearTimeout(timer);
+      }
+    }
+    return undefined;
+  }, [liveExercises, ready]);
 
   const changeWeight = (exIndex: number, setIndex: number, value: number) => {
+    planDirty.current = true;
     setLiveExercises((prev) =>
       prev.map((exercise, i) => {
         if (i !== exIndex) return exercise;
@@ -385,6 +629,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   };
 
   const addSet = (exIndex: number) => {
+    planDirty.current = true;
     setLiveExercises((prev) =>
       prev.map((exercise, i) => {
         if (i !== exIndex) return exercise;
@@ -406,6 +651,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   };
 
   const removeSet = (exIndex: number) => {
+    planDirty.current = true;
     setLiveExercises((prev) =>
       prev.map((exercise, i) =>
         i === exIndex && exercise.sets.length > 1
@@ -487,15 +733,17 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         });
       }
 
-      await saveWorkoutSession(db, {
+      const sessionId = await saveWorkoutSession(db, {
         program_id: programId,
+        account_id: accountId,
         date: new Date().toISOString(),
         duration_sec: elapsed,
         total_volume: Math.round(volume * 100) / 100,
         sets,
         plans: buildPlans(liveExercises),
       });
-      navigation.goBack();
+      // La séance en cours est remplacée par son récapitulatif (Stats).
+      navigation.replace('SessionSummary', { sessionId });
     } catch (cause: unknown) {
       setSaving(false);
       setConfirm({
@@ -542,7 +790,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Appear>
           <Card style={styles.header}>
             <Text style={styles.headerTitle}>{nom}</Text>
@@ -560,91 +812,162 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         ) : (
           liveExercises.map((exercise, exIndex) => {
             const allDone = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
+            const best = exercise.bestSet;
+            const recordBeaten =
+              best !== null && exercise.sets.some((set) => set.reps > 0 && beatsSet(set, best));
             return (
-              <Appear key={exercise.workoutExoId} delay={Math.min(exIndex * 60, 240)} offset={10}>
-                <Card style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <PressableScale
-                      style={styles.cardTitleBlock}
-                      onPress={() => setDetail(exercise.exercise)}
-                      accessibilityLabel="Voir l’exercice"
-                    >
-                      <Thumb
-                        source={
-                          exercise.exercise.image
-                            ? exerciseImages[exercise.exercise.image]
-                            : undefined
-                        }
-                        size={44}
-                      />
-                      <Text style={styles.cardTitle}>
-                        {exercise.exercise.nom_fr ?? exercise.exercise.nom}
-                      </Text>
-                    </PressableScale>
-                    <CheckToggle
-                      checked={allDone}
-                      width={40}
-                      accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom_fr ?? exercise.exercise.nom}`}
-                      onPress={() => toggleAllSets(exIndex)}
-                    />
-                  </View>
-
-                  {exercise.sets.map((set, setIndex) => {
-                    const previous = exercise.previous[setIndex];
-                    return (
-                      <View key={set.key} style={styles.setRow}>
-                        <Text style={styles.setLabel}>{setIndex + 1}</Text>
-                        <Text style={styles.previousText}>
-                          {previous ? `${formatWeight(previous.weight)}×${previous.reps}` : '—'}
+              <View
+                key={exercise.workoutExoId}
+                onLayout={(event) => {
+                  cardY.current[exIndex] = event.nativeEvent.layout.y;
+                }}
+              >
+                <Appear delay={Math.min(exIndex * 60, 240)} offset={10}>
+                  <Card
+                    style={[styles.card, exercise.supersetGroup != null && styles.cardSuperset]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <PressableScale
+                        style={styles.cardTitleBlock}
+                        onPress={() => setDetail(exercise.exercise)}
+                        accessibilityLabel="Voir l’exercice"
+                      >
+                        <Thumb
+                          source={
+                            exercise.exercise.image
+                              ? exerciseImages[exercise.exercise.image]
+                              : undefined
+                          }
+                          size={44}
+                        />
+                        <Text style={styles.cardTitle}>
+                          {exercise.exercise.nom_fr ?? exercise.exercise.nom}
                         </Text>
+                      </PressableScale>
+                      {recordBeaten ? <Badge label="Record" /> : null}
+                      <CheckToggle
+                        checked={allDone}
+                        width={40}
+                        accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom_fr ?? exercise.exercise.nom}`}
+                        onPress={() => toggleAllSets(exIndex)}
+                      />
+                    </View>
 
-                        <WeightField
-                          value={set.weight}
-                          onChange={(value) => changeWeight(exIndex, setIndex, value)}
-                          onOpenCalculator={() => setCalc({ exIndex, setIndex })}
-                        />
+                    {best !== null ? (
+                      <Text style={[styles.recordHint, recordBeaten && styles.recordHintNew]}>
+                        {recordBeaten
+                          ? 'Nouveau record'
+                          : `Record à battre : ${formatPerformance(best)}`}
+                      </Text>
+                    ) : null}
 
-                        <TextInput
-                          style={styles.repsInput}
-                          value={set.reps > 0 ? String(set.reps) : ''}
-                          onChangeText={(value) => changeReps(exIndex, setIndex, value)}
-                          placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
-                          placeholderTextColor={neutrals.textMuted}
-                          keyboardType="number-pad"
-                          returnKeyType="done"
-                        />
+                    {exercise.sets.map((set, setIndex) => {
+                      const previous = exercise.previous[setIndex];
+                      return (
+                        <View key={set.key} style={styles.setRow}>
+                          <Text style={styles.setLabel}>{setIndex + 1}</Text>
+                          <Text style={styles.previousText}>
+                            {previous ? `${formatWeight(previous.weight)}×${previous.reps}` : '—'}
+                          </Text>
 
-                        <CheckToggle
-                          checked={set.completed}
-                          accessibilityLabel={`Valider la série ${setIndex + 1}`}
-                          onPress={() => toggleSet(exIndex, setIndex)}
-                        />
-                      </View>
-                    );
-                  })}
+                          <WeightField
+                            value={set.weight}
+                            onChange={(value) => changeWeight(exIndex, setIndex, value)}
+                            onOpenCalculator={() => setCalc({ exIndex, setIndex })}
+                          />
 
-                  <View style={styles.setActions}>
-                    <Button
-                      label="− Série"
-                      variant="secondary"
-                      size="sm"
-                      style={styles.setActionButton}
-                      onPress={() => removeSet(exIndex)}
-                    />
-                    <Button
-                      label="+ Série"
-                      variant="secondary"
-                      size="sm"
-                      style={styles.setActionButton}
-                      onPress={() => addSet(exIndex)}
-                    />
-                  </View>
-                </Card>
-              </Appear>
+                          <TextInput
+                            style={styles.repsInput}
+                            value={set.reps > 0 ? String(set.reps) : ''}
+                            onChangeText={(value) => changeReps(exIndex, setIndex, value)}
+                            placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
+                            placeholderTextColor={neutrals.textMuted}
+                            keyboardType="number-pad"
+                            returnKeyType="done"
+                          />
+
+                          <CheckToggle
+                            checked={set.completed}
+                            accessibilityLabel={`Valider la série ${setIndex + 1}`}
+                            onPress={() => toggleSet(exIndex, setIndex)}
+                          />
+                        </View>
+                      );
+                    })}
+
+                    <View style={styles.setActions}>
+                      <Button
+                        label="− Série"
+                        variant="secondary"
+                        size="sm"
+                        style={styles.setActionButton}
+                        onPress={() => removeSet(exIndex)}
+                      />
+                      <Button
+                        label="+ Série"
+                        variant="secondary"
+                        size="sm"
+                        style={styles.setActionButton}
+                        onPress={() => addSet(exIndex)}
+                      />
+                    </View>
+                  </Card>
+                </Appear>
+              </View>
             );
           })
         )}
       </ScrollView>
+
+      {restRemaining > 0 ? (
+        <View style={styles.restBar}>
+          <View style={styles.restRow}>
+            <Text style={styles.restLabel}>
+              Repos <Text style={styles.restTime}>{formatClock(restRemaining)}</Text>
+            </Text>
+            <View style={styles.restActions}>
+              <Button
+                label="−15 s"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={() => shiftRest(-15)}
+              />
+              <Button
+                label="Passer"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={skipRest}
+              />
+              <Button
+                label="+15 s"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={() => shiftRest(15)}
+              />
+            </View>
+          </View>
+          <View style={styles.restTrack}>
+            <View
+              style={[
+                styles.restFill,
+                {
+                  width: `${Math.min(
+                    100,
+                    restTotal.current > 0 ? (restRemaining / restTotal.current) * 100 : 0
+                  )}%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      ) : restDone ? (
+        <View style={styles.restBar}>
+          <Text style={styles.restDoneText}>Repos terminé — enchaîne !</Text>
+        </View>
+      ) : null}
 
       <View style={styles.footer}>
         <Button
@@ -727,6 +1050,19 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.md,
+  },
+  cardSuperset: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary,
+  },
+  recordHint: {
+    ...text.caption,
+    color: neutrals.textMuted,
+    marginBottom: spacing.md,
+  },
+  recordHintNew: {
+    color: colors.accent,
+    fontWeight: '700',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -842,5 +1178,49 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: neutrals.border,
     backgroundColor: colors.background,
+  },
+  restBar: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  restRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  restActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  restButton: {
+    paddingHorizontal: 10,
+  },
+  restDoneText: {
+    ...text.bodyStrong,
+    color: colors.accent,
+  },
+  restLabel: {
+    ...text.meta,
+    color: neutrals.textMuted,
+  },
+  restTime: {
+    ...text.bodyStrong,
+    color: colors.secondary,
+    fontVariant: ['tabular-nums'],
+  },
+  restTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: neutrals.surfaceAlt,
+    overflow: 'hidden',
+  },
+  restFill: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.secondary,
   },
 });

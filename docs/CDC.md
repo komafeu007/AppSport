@@ -13,13 +13,19 @@
 1. **Règles de Repos & Séries** :
    - Exercices Polyarticulaires (`is_poly = 1`) : Repos par défaut = 150s (2 min 30s), 3 à 5 séries.
    - Exercices Monoarticulaires (`is_poly = 0`) : Repos par défaut = 60s à 90s (1 min à 1 min 30s), 3 à 4 séries.
-2. **Génération de Programme** :
-   - Exclure les exercices ciblant les zones de douleur/pathologies.
-   - Filtrer selon le matériel disponible (`equipment`).
-   - Découpage du programme (PPL, FullBody, Upper/Lower) selon la fréquence hebdomadaire choisie (1 à 6 séances).
+2. **Génération de Programme** (moteur de règles, sans IA — voir `src/domain/programGenerator.ts`) :
+   - Exclure les exercices ciblant les zones de douleur/pathologies (`ZONE_GUARDS`).
+   - Filtrer selon le matériel disponible (`equipment`) et le format de séance.
+   - Découpage du programme (PPL, FullBody, Upper/Lower, Split, Maison) selon la fréquence hebdomadaire choisie (1 à 6 séances).
+   - Volume (séries par muscle, exercices par séance) piloté par l'**objectif** et le **niveau d'expérience** ; intensité (reps) et repos par objectif, sur la base des règles §1.
+   - Sélection scorée dans le catalogue : mouvements attendus par groupe (`MUSCLE_PATTERNS`), priorité au polyarticulaire en exercice principal, variété (pas de doublon de mouvement dans la séance, exercices récents évités).
+   - Ajustement à la **durée de séance** visée : retrait des exercices de fin de séance, puis réduction des séries ; ajout d'exercices complémentaires s'il reste du temps.
+   - Charges de départ reprises de la dernière séance de l'exercice (`LOGS_SETS`).
+   - **Aperçu obligatoire** : le programme est présenté (pourquoi + séances) avec « Régénérer » avant « Enregistrer ». Rien n'est écrit avant validation.
+   - Un programme généré ouvre un **bloc de 8 semaines** (`SESSION_GROUPS.bloc_debut` / `bloc_semaines`) : à l'échéance, un nouveau programme est **proposé**, jamais appliqué sans validation.
 
 ## Modules Fonctionnels
-- **Module 1 - Onboarding** : Profiling (prénom, âge, poids, taille, douleurs, matériel, fréquence, durée).
-- **Module 2 - Programme** : Consultation et modification des séances/exercices, substitution d'exercices par groupe musculaire.
+- **Module 1 - Onboarding** : Profiling (prénom, âge, poids, taille, niveau, douleurs, matériel, fréquence, durée). À la fin du questionnaire : génération du programme (aperçu → validation).
+- **Module 2 - Programme** : Consultation et modification des séances/exercices, substitution d'exercices par groupe musculaire, génération/régénération d'un programme complet.
 - **Module 3 - Live Workout** : Minuteur dynamique auto-lancé à la validation d'une série, saisie des poids/reps, ajout/suppression d'exercices volatiles.
 - **Module 4 - Stats** : Calcul du volume total ($kg$), récapitulatif post-séance, suivi de progression du 1RM estimé et répartition du volume par muscle.

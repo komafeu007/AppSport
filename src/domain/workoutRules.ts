@@ -147,3 +147,23 @@ export function describeRules(isPoly: number | boolean): string {
 /** Rappel de la double progression, affiché dans l'éditeur. */
 export const PROGRESSION_HINT =
   'Double progression : démarre au min de reps, et dès que tu atteins le max, monte le poids et redescends au min.';
+
+/** Une série (poids + reps) pour la comparaison des records. */
+export interface SetPerformance {
+  weight: number;
+  reps: number;
+}
+
+/**
+ * Une série `a` bat-elle `b` ? Plus lourd d'abord, puis, à poids égal, plus de
+ * reps (ex. 15 kg × 6 bat 15 kg × 5).
+ */
+export function beatsSet(a: SetPerformance, b: SetPerformance): boolean {
+  if (a.weight !== b.weight) return a.weight > b.weight;
+  return a.reps > b.reps;
+}
+
+/** « 15 kg × 6 » — libellé court d'une série pour les records. */
+export function formatPerformance(set: SetPerformance): string {
+  return `${set.weight} kg × ${set.reps}`;
+}

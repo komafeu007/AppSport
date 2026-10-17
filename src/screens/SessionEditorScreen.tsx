@@ -49,6 +49,7 @@ import {
   type NumericRange,
 } from '../domain/workoutRules';
 import type { RootStackParamList } from '../navigation/types';
+import { useAccount } from '../services/account';
 import {
   getAllExercises,
   getProgram,
@@ -74,6 +75,23 @@ interface DraftItem {
   rest_time: number;
   /** Poids par série (kg) — toujours un poids par série ; la 1re série sert de référence. */
   set_weights: number[];
+  /** Superset : enchaîne sans repos avec l'exercice **suivant**. */
+  superset: boolean;
+}
+
+/**
+ * Id de groupe de superset par exercice : deux exercices consécutifs liés
+ * partagent la même valeur. Réattribué à chaque enregistrement.
+ */
+function computeSupersetGroups(items: DraftItem[]): Array<number | null> {
+  const groups: Array<number | null> = items.map(() => null);
+  let nextGroup = 0;
+  for (let index = 0; index < items.length - 1; index++) {
+    if (!items[index].superset) continue;
+    const group = groups[index] ?? (groups[index] = ++nextGroup);
+    groups[index + 1] = group;
+  }
+  return groups;
 }
 
 /** Champ numérique avec − / + (séries, reps, repos, poids d'une série). */
@@ -151,6 +169,7 @@ function StepperField({
 
 export default function SessionEditorScreen({ navigation, route }: Props) {
   const db = useSQLiteContext();
+  const { accountId } = useAccount();
   const programId = route.params?.programId;
   const initialGroupId = route.params?.groupId ?? null;
 
@@ -180,8 +199,15 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (accountId === null) {
+        setLoading(false);
+        return;
+      }
       try {
-        const [all, groupRows] = await Promise.all([getAllExercises(db), getSessionGroups(db)]);
+        const [all, groupRows] = await Promise.all([
+          getAllExercises(db),
+          getSessionGroups(db, accountId),
+        ]);
         if (!mounted) return;
         setExercises(all);
         setGroups(groupRows);
@@ -197,7 +223,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
             setGroupId(program.group_id);
           }
           setItems(
-            rows.map((row) => {
+            rows.map((row, index) => {
               const exercise = programExerciseToExercise(row);
               const defaults = defaultTargets(exercise.is_poly);
               const bounds = normalizeRepBounds(
@@ -214,6 +240,10 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                 reps_max: bounds.reps_max,
                 rest_time: row.rest_time ?? defaults.rest_time,
                 set_weights: fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight),
+                // Rattaché au suivant s'ils partagent le même groupe de superset.
+                superset:
+                  row.superset_group != null &&
+                  row.superset_group === (rows[index + 1]?.superset_group ?? null),
               };
             })
           );
@@ -228,11 +258,13 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
     return () => {
       mounted = false;
     };
-  }, [db, programId]);
+  }, [accountId, db, programId]);
 
   const updateItem = (
     key: string,
-    patch: Partial<Pick<DraftItem, 'series' | 'reps_min' | 'reps_max' | 'rest_time' | 'set_weights'>>
+    patch: Partial<
+      Pick<DraftItem, 'series' | 'reps_min' | 'reps_max' | 'rest_time' | 'set_weights' | 'superset'>
+    >
   ) => {
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
   };
@@ -251,6 +283,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           reps_max: defaults.reps_max,
           rest_time: defaults.rest_time,
           set_weights: Array.from({ length: defaults.series }, () => defaults.target_weight),
+          superset: false,
         },
       ];
     });
@@ -288,13 +321,19 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       notify('Aucun exercice', 'Ajoute au moins un exercice à la séance.');
       return;
     }
+    if (accountId === null) {
+      notify('Aucun profil', 'Choisis un profil avant de créer une séance.');
+      return;
+    }
     try {
       setSaving(true);
+      const supersetGroups = computeSupersetGroups(items);
       await saveProgram(db, {
         id: programId,
+        account_id: accountId,
         nom_seance: name,
         group_id: groupId,
-        exercises: items.map((item) => ({
+        exercises: items.map((item, index) => ({
           exercise_id: item.exercise.id,
           series: item.series,
           reps_min: item.reps_min,
@@ -302,6 +341,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           rest_time: item.rest_time,
           target_weight: item.set_weights[0] ?? 0,
           set_weights: item.set_weights,
+          superset_group: supersetGroups[index],
         })),
       });
       navigation.goBack();
@@ -393,7 +433,12 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         ) : (
           items.map((item, index) => (
             <Appear key={item.key} delay={Math.min(index * 60, 240)} offset={10}>
-              <Card style={styles.card}>
+              <Card
+                style={[
+                  styles.card,
+                  (item.superset || (index > 0 && items[index - 1].superset)) && styles.cardSuperset,
+                ]}
+              >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardIndex}>{index + 1}</Text>
                   <PressableScale
@@ -426,6 +471,12 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                 </View>
 
                 <Text style={styles.rules}>{describeRules(item.exercise.is_poly)}</Text>
+
+                {item.superset || (index > 0 && items[index - 1].superset) ? (
+                  <Text style={styles.supersetNote}>
+                    Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
+                  </Text>
+                ) : null}
 
                 <View style={styles.fields}>
                   <StepperField
@@ -496,6 +547,16 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                     onPress={() => applyDegressive(item)}
                   />
                 </View>
+
+                {index < items.length - 1 ? (
+                  <View style={styles.supersetRow}>
+                    <Chip
+                      label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
+                      selected={item.superset}
+                      onPress={() => updateItem(item.key, { superset: !item.superset })}
+                    />
+                  </View>
+                ) : null}
               </Card>
             </Appear>
           ))
@@ -622,6 +683,21 @@ const styles = StyleSheet.create({
   rules: {
     ...text.caption,
     color: neutrals.textMuted,
+    marginTop: spacing.md,
+  },
+  cardSuperset: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary,
+  },
+  supersetNote: {
+    ...text.caption,
+    color: colors.secondary,
+    marginTop: spacing.xs,
+  },
+  supersetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginTop: spacing.md,
   },
   fields: {
