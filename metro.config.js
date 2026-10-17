@@ -22,7 +22,13 @@ const config = getDefaultConfig(__dirname);
  *
  * Amont : expo/expo#49044 — même classe de bug, corrigée partiellement en
  * 57.0.23 (expo/expo#51476) mais pas pour ce module. À retirer quand Expo Go
- * l'embarquera (ou en développement build, où le module natif existe).
+ * l'embarquera.
+ *
+ * Note : Metro lit ce fichier aussi pour les bundles *release* (l'APK autonome
+ * embarque le même JS), donc la redirection s'applique là aussi. C'est sans
+ * conséquence : on ne touche jamais aux topics, et ce module de remplacement
+ * est un objet inerte (méthodes no-op). Le seul effet serait de rendre un
+ * futur `subscribeToTopicAsync` silencieusement inopérant.
  */
 const NOTIFICATIONS_DIR = path.dirname(require.resolve('expo-notifications/package.json'));
 const TOPIC_STANDIN = path.join(NOTIFICATIONS_DIR, 'build', 'TopicSubscriptionModule.js');

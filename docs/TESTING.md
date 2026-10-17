@@ -2,6 +2,8 @@
 
 ## Option A — Expo Go (le plus rapide, aucun build)
 
+⚠️ Expo Go **a toujours besoin de ce PC** : il retélécharge le bundle JS depuis le serveur Metro à chaque lancement (même en `--tunnel`, le tunnel ne fait que passer par Internet au lieu du Wi-Fi). Pour t'entraîner sans PC, voir l'option B.
+
 Expo Go embarque déjà `expo-sqlite`, `expo-status-bar`, `react-native-safe-area-context` et `react-native-svg` : l'app tourne sans build natif.
 
 1. Installe **Expo Go** ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) / [iOS](https://apps.apple.com/app/expo-go/id982107779)) et **mets-le à jour** (il faut la version supportant le SDK 57).
@@ -20,23 +22,32 @@ Expo Go embarque déjà `expo-sqlite`, `expo-status-bar`, `react-native-safe-are
 Pendant le dev :
 - Sauvegarde un fichier → **Fast Refresh** recharge tout seul.
 - Terminal : `r` = reload, `m` = menu dev, `j` = debugger.
-- Repartir d'une base propre : `npx expo start -c` (vide le cache) et/ou supprime Expo Go / l'app du téléphone.
+- Repartir d'une base propre : `npx expo start -c` (vide le cache), le bouton « Réinitialiser toutes les données » (section suivante), ou supprime Expo Go / l'app du téléphone.
 
-## Option B — Development build (si Expo Go ne suffit pas)
+## Option B — APK autonome Android (l'app seule, sans PC)
 
-Nécessaire dès qu'une lib avec du code natif **absent d'Expo Go** est ajoutée.
+Un *standalone build* embarque le code **dans** l'app : elle s'ouvre et fonctionne seule, **hors-ligne**, sans serveur de dev. C'est le profil `preview` de `eas.json` (`distribution: internal` + `android.buildType: apk`).
 
 ```bash
-npx eas-cli@latest login
-npx eas-cli@latest build --profile development --platform android
+npx eas-cli@latest login      # compte Expo gratuit (une fois) — ou `register`
+npx eas-cli@latest build --profile preview --platform android
 ```
 
-Puis installe l'APK généré. (`eas.json` n'existe pas encore dans ce dépôt : à configurer.)
+- Le premier build crée le projet Expo et génère le **keystore Android** (géré par EAS). Garde bien ce compte : c'est lui qui permettra de livrer des mises à jour de la même app.
+- À la fin, ouvre le lien (ou le QR) donné dans le terminal **sur le téléphone** → installe l'APK (autorise l'installation depuis cette source).
+- Le premier lancement part d'une base **vierge** : elle est séparée de celle d'Expo Go, on arrive donc sur la création de profil.
+
+À savoir :
+- Après un changement de code, il faut **relancer un build** et réinstaller. Pour pousser le JS sans rebuild, `expo-updates` (EAS Update) est la suite logique — non installé pour l'instant.
+- Pour des notifications fiables écran verrouillé : désactive l'**optimisation de batterie** pour l'app (Paramètres Android → Applications → AppSportLocal → Batterie → sans restriction).
+- Cette app installée n'a besoin ni du PC ni d'Expo Go : c'est elle qu'on utilise au gymnase. Le build de développement (dev client) n'est utile que pour itérer sur du code natif — il demanderait `npx expo install expo-dev-client`.
 
 ## Option C — Build local
 
-- Android : `npx expo run:android` (Android Studio + SDK requis).
+- Android : `npx expo run:android` (Android Studio + SDK requis) ; ajouter `--variant release` pour un APK autonome.
 - iOS : `npx expo run:ios` (macOS + Xcode requis).
+
+> Sur un **iPhone physique**, seul EAS Build fonctionne, avec un compte Apple Developer payant (distribution ad hoc) — ou un Mac + Xcode pour un sideload temporaire. Sans ça, Expo Go + PC reste la seule voie gratuite.
 
 ## Voir ce qui marche / ce qui casse
 
