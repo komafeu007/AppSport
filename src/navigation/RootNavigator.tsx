@@ -1,9 +1,16 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { DarkTheme, NavigationContainer, type Theme } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+  type Theme as NavigationTheme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useMemo } from 'react';
 import { Easing, StyleSheet, View } from 'react-native';
 
 import { StateView } from '../components/ui';
+import ActiveWorkoutBubble from '../components/ActiveWorkoutBubble';
 import AccountFormScreen from '../screens/AccountFormScreen';
 import AccountSelectScreen from '../screens/AccountSelectScreen';
 import LiveWorkoutScreen from '../screens/LiveWorkoutScreen';
@@ -13,70 +20,88 @@ import SessionEditorScreen from '../screens/SessionEditorScreen';
 import SessionListScreen from '../screens/SessionListScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
 import { useAccount } from '../services/account';
-import { colors, neutrals } from '../theme/colors';
+import { useTheme, type Theme } from '../theme';
 import { duration, text } from '../theme/tokens';
-import BubbleTabBar from './BubbleTabBar';
+import StartLineTabBar from './StartLineTabBar';
 import type { MainTabParamList, RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const navigationTheme: Theme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: colors.background,
-    card: neutrals.surface,
-    text: neutrals.text,
-    primary: colors.accent,
-    border: neutrals.border,
-    notification: colors.alert,
-  },
-};
+/** Thème de navigation aligné sur le thème actif (clair ou sombre, §14). */
+function toNavigationTheme(theme: Theme): NavigationTheme {
+  const base = theme.isDark ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    dark: theme.isDark,
+    colors: {
+      ...base.colors,
+      background: theme.colors.background,
+      card: theme.colors.surface,
+      text: theme.colors.text,
+      primary: theme.colors.action,
+      border: theme.colors.border,
+      notification: theme.colors.danger,
+    },
+  };
+}
 
-/** Fondu + glissement court quand on change d'onglet (Main ↔ Séance). */
+/** Fondu + glissement court quand on change d'onglet (Accueil ↔ Séances). */
 const tabTransition = {
   animation: 'shift',
   transitionSpec: {
     animation: 'timing',
-    config: { duration: duration.base, easing: Easing.out(Easing.cubic) },
+    config: { duration: duration.base, easing: Easing.bezier(0.2, 0, 0, 1) },
   },
 } as const;
 
 /** Onglets principaux (accueil + séances), affichés une fois un compte choisi. */
 function MainTabs() {
+  const theme = useTheme();
+
   return (
-    <Tab.Navigator
-      tabBar={(props) => <BubbleTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.background },
-        ...tabTransition,
-      }}
-    >
-      <Tab.Screen name="Main" component={MainScreen} options={{ title: 'Main' }} />
-      <Tab.Screen name="Seance" component={SessionListScreen} options={{ title: 'Séance' }} />
-    </Tab.Navigator>
+    <View style={styles.tabs}>
+      <Tab.Navigator
+        tabBar={(props) => <StartLineTabBar {...props} />}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: theme.colors.background },
+          ...tabTransition,
+        }}
+      >
+        <Tab.Screen name="Main" component={MainScreen} options={{ title: 'Accueil' }} />
+        <Tab.Screen name="Seance" component={SessionListScreen} options={{ title: 'Séances' }} />
+      </Tab.Navigator>
+      {/* Séance quittée en cours de route : accessible d'un appui depuis les onglets. */}
+      <ActiveWorkoutBubble />
+    </View>
   );
 }
 
-const stackScreenOptions = {
-  headerStyle: { backgroundColor: colors.background },
-  headerTintColor: colors.accent,
-  headerTitleStyle: { ...text.title, color: neutrals.text },
-  headerTitleAlign: 'center',
-  headerShadowVisible: false,
-  contentStyle: { backgroundColor: colors.background },
-  animation: 'slide_from_right',
-  animationDuration: duration.base,
-} as const;
-
 export default function RootNavigator() {
   const { ready, accountId } = useAccount();
+  const theme = useTheme();
+
+  const stackScreenOptions = useMemo(
+    () =>
+      ({
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTintColor: theme.colors.action,
+        headerTitleStyle: { ...text.title, color: theme.colors.text },
+        headerTitleAlign: 'left',
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: theme.colors.background },
+        animation: 'slide_from_right',
+        animationDuration: duration.base,
+      }) as const,
+    [theme]
+  );
+
+  const navigationTheme = useMemo(() => toNavigationTheme(theme), [theme]);
 
   if (!ready) {
     return (
-      <View style={styles.loading}>
+      <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
         <StateView kind="loading" />
       </View>
     );
@@ -165,8 +190,10 @@ export default function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
+  tabs: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
-    backgroundColor: colors.background,
   },
 });

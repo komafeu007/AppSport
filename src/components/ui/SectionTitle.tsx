@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, neutrals } from '../../theme/colors';
+import { useThemedStyles, type Theme } from '../../theme';
 import { spacing, text } from '../../theme/tokens';
 
 interface Props {
@@ -13,8 +13,13 @@ interface Props {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Titre de section (majuscules, accent) — même style dans tous les écrans. */
+/**
+ * Titre de section (§6.2 « titre-2 ») : Big Shoulders, casse de phrase, encre
+ * principale. Plus de majuscules espacées : la DA l'interdit (§3).
+ */
 export default function SectionTitle({ children, hint, right, style }: Props) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={[styles.row, style]}>
       <View style={styles.left}>
@@ -26,28 +31,28 @@ export default function SectionTitle({ children, hint, right, style }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  left: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    ...text.overline,
-    color: colors.accent,
-    flexShrink: 1,
-  },
-  hint: {
-    ...text.caption,
-    color: neutrals.textMuted,
-    fontStyle: 'italic',
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    left: {
+      flexShrink: 1,
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: spacing.sm,
+    },
+    title: {
+      ...text.sectionTitle,
+      color: theme.colors.text,
+      flexShrink: 1,
+    },
+    hint: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+    },
+  });

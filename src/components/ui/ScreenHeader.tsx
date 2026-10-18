@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { neutrals } from '../../theme/colors';
+import { useThemedStyles, type Theme } from '../../theme';
 import { spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 
@@ -13,8 +13,13 @@ interface Props {
   style?: StyleProp<ViewStyle>;
 }
 
-/** En-tête d'écran (grand titre) partagé par les écrans sans barre native. */
+/**
+ * En-tête d'écran (§6.2 « titre-1 ») : titre en Big Shoulders, aligné sur la
+ * marge de 20 px, sous-titre discret en dessous.
+ */
 export default function ScreenHeader({ title, subtitle, right, style }: Props) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Appear style={[styles.header, style]}>
       <View style={styles.row}>
@@ -26,25 +31,27 @@ export default function ScreenHeader({ title, subtitle, right, style }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  title: {
-    ...text.screenTitle,
-    color: neutrals.text,
-  },
-  subtitle: {
-    ...text.meta,
-    color: neutrals.textMuted,
-    marginTop: spacing.xs,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    title: {
+      ...text.screenTitle,
+      color: theme.colors.text,
+      flexShrink: 1,
+    },
+    subtitle: {
+      ...text.meta,
+      color: theme.colors.textMuted,
+      marginTop: spacing.xs,
+    },
+  });

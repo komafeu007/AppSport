@@ -34,6 +34,11 @@ import { formatKg } from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import {
+  abandonActiveWorkout,
+  loadActiveWorkout,
+  saveActiveWorkout,
+} from '../services/activeWorkout';
+import {
   getExerciseBestSets,
   getLastSetsForExercise,
   getProgram,
@@ -55,6 +60,7 @@ import {
   setCustomBars,
   setCustomPlates,
   setEnabledPlates,
+  type WorkoutDraft,
 } from '../services/preferences';
 import {
   cancelRestDone,
@@ -63,8 +69,8 @@ import {
   presentRestDoneNow,
   scheduleRestDone,
 } from '../services/restAlert';
-import { colors, neutrals } from '../theme/colors';
-import { radius, spring, spacing, text } from '../theme/tokens';
+import { useThemedStyles, useTheme, type Theme } from '../theme';
+import { fontFamily, radius, spacing, spring, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -121,6 +127,7 @@ function isLastOfSuperset(exercises: LiveExercise[], index: number): boolean {
 
 /** Petit logo haltère dessiné (remplace les boutons − / +). */
 function BarbellIcon({ color }: { color: string }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.barbell}>
       <View style={[styles.barbellPlate, { backgroundColor: color }]} />
@@ -143,6 +150,8 @@ function WeightField({
   onChange: (value: number) => void;
   onOpenCalculator: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const [draft, setDraft] = useState(() => formatWeight(value));
 
   useEffect(() => {
@@ -175,7 +184,7 @@ function WeightField({
         accessibilityLabel="Chargement des disques"
         scaleTo={0.88}
       >
-        <BarbellIcon color={colors.secondary} />
+        <BarbellIcon color={theme.colors.action} />
       </PressableScale>
     </View>
   );
@@ -193,6 +202,8 @@ function CheckToggle({
   accessibilityLabel: string;
   width?: number;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const progress = useRef(new Animated.Value(checked ? 1 : 0)).current;
 
   useEffect(() => {
@@ -205,15 +216,15 @@ function CheckToggle({
 
   const backgroundColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [neutrals.surfaceAlt, colors.accent],
+    outputRange: [theme.colors.surfaceAlt, theme.colors.action],
   });
   const borderColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [neutrals.border, colors.accent],
+    outputRange: [theme.colors.border, theme.colors.action],
   });
   const color = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [neutrals.textMuted, colors.background],
+    outputRange: [theme.colors.textMuted, theme.colors.background],
   });
   const scale = progress.interpolate({
     inputRange: [0, 0.7, 1],
@@ -238,6 +249,8 @@ function CheckToggle({
 }
 
 export default function LiveWorkoutScreen({ navigation, route }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const db = useSQLiteContext();
   const { accountId } = useAccount();
   const programId = route.params.programId;
@@ -262,7 +275,12 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   /** Carte de confirmation/erreur (remplace les `Alert.alert`). */
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
-  const startRef = useRef(Date.now());
+  /** Secondes cumulées avant le segment courant (reprise d'une séance quittée). */
+  const baseElapsedRef = useRef(0);
+  /** Début du segment courant (horodatage ms) : le chrono se met en pause en quittant. */
+  const segmentStartRef = useRef(Date.now());
+  /** Dernière valeur du chrono (pour le brouillon écrit en quittant). */
+  const elapsedRef = useRef(0);
   const keySeq = useRef(0);
   /** Fin du repos (horodatage ms) ; null = aucun repos en cours. */
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
@@ -286,6 +304,15 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const allDoneRef = useRef<boolean[]>([]);
   /** Dernier état des cases cochées (pour détecter les passages à « coché »). */
   const completedRef = useRef<boolean[][]>([]);
+  /**
+   * Séance en cours mise de côté, tenue à jour à chaque changement : c'est elle
+   * qui est écrite en quittant l'écran, pour pouvoir reprendre sans recommencer.
+   */
+  const draftRef = useRef<WorkoutDraft | null>(null);
+  /** Horodatage de la dernière écriture du brouillon (on écrit au plus toutes les 5 s). */
+  const draftSavedAt = useRef(0);
+  /** Séance restaurée au chargement : on défile alors jusqu'à l'exercice en cours. */
+  const resumedRef = useRef(false);
 
   const nextKey = () => {
     keySeq.current += 1;
@@ -311,6 +338,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         );
         const bestRows = await getExerciseBestSets(db, accountId ?? -1);
         const bestByExercise = new Map(bestRows.map((row) => [row.exercise_id, row]));
+        // Séance mise de côté : on la reprend au lieu de repartir de zéro.
+        const draft = accountId === null ? null : await loadActiveWorkout(accountId);
         if (!mounted) return;
         setNom(program?.nom_seance ?? 'Séance');
         setBarWeightState(savedBar);
@@ -318,39 +347,72 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         setPlatesState(savedPlates);
         setCustomPlatesState(savedCustomPlates);
 
-        setLiveExercises(
-          rows.map((row, rowIndex) => {
-            const exercise = programExerciseToExercise(row);
-            const baseWeight = row.target_weight ?? 0;
-            const series = Math.max(1, row.series ?? 3);
-            const weights = fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight);
+        // Le brouillon ne concerne que la séance qu'il a mise de côté : ouvrir une
+        // autre séance la démarre à zéro (le brouillon reste dans la bulle).
+        const restored = draft !== null && draft.program_id === programId ? draft : null;
+        if (restored !== null) {
+          baseElapsedRef.current = Math.max(0, Math.round(restored.elapsed_sec));
+          segmentStartRef.current = Date.now();
+          elapsedRef.current = baseElapsedRef.current;
+          setElapsed(baseElapsedRef.current);
+          resumedRef.current = restored.exercises.some((entry) =>
+            entry.sets.some((set) => set.completed)
+          );
+        }
 
-            const previous: Array<PreviousSet | undefined> = [];
-            for (const set of previousSets[rowIndex]) {
-              previous[set.set_num - 1] = { weight: set.weight, reps: set.reps };
-            }
+        const built = rows.map((row, rowIndex) => {
+          const exercise = programExerciseToExercise(row);
+          const baseWeight = row.target_weight ?? 0;
+          const series = Math.max(1, row.series ?? 3);
+          const weights = fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight);
 
-            return {
-              workoutExoId: row.id,
-              exercise,
-              repsMin: row.reps_min ?? REPS_RANGE.min,
-              repsMax: row.reps_max ?? REPS_RANGE.min,
-              restTime: row.rest_time ?? 0,
-              supersetGroup: row.superset_group,
-              bestSet: bestByExercise.get(row.exercise_id ?? -1) ?? null,
-              baseWeight,
-              previous,
-              sets: Array.from({ length: series }, (_, index) => ({
+          const previous: Array<PreviousSet | undefined> = [];
+          for (const set of previousSets[rowIndex]) {
+            previous[set.set_num - 1] = { weight: set.weight, reps: set.reps };
+          }
+
+          const saved = restored?.exercises.find((entry) => entry.workout_exo_id === row.id);
+
+          return {
+            workoutExoId: row.id,
+            exercise,
+            repsMin: row.reps_min ?? REPS_RANGE.min,
+            repsMax: row.reps_max ?? REPS_RANGE.min,
+            restTime: row.rest_time ?? 0,
+            supersetGroup: row.superset_group,
+            bestSet: bestByExercise.get(row.exercise_id ?? -1) ?? null,
+            baseWeight,
+            previous,
+            sets: Array.from({ length: series }, (_, index) => {
+              const kept = saved?.sets[index];
+              return {
                 key: nextKey(),
-                weight: weights[index] ?? baseWeight,
-                reps: 0,
-                completed: false,
-              })),
-            };
-          })
+                weight: kept ? kept.weight : weights[index] ?? baseWeight,
+                reps: kept?.reps ?? 0,
+                completed: kept?.completed ?? false,
+              };
+            }),
+          };
+        });
+
+        // L'état de départ est posé AVANT l'effet qui surveille les cases cochées,
+        // sinon les séries déjà validées seraient prises pour des validations
+        // fraîches (repos déclenché et défilement vers le haut au retour).
+        completedRef.current = built.map((exercise) => exercise.sets.map((set) => set.completed));
+        allDoneRef.current = built.map(
+          (exercise) => exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)
         );
+        setLiveExercises(built);
         setLoading(false);
         setReady(true);
+
+        if (built.length === 0 && restored !== null && accountId !== null) {
+          // La séance mise de côté n'existe plus (programme supprimé ou vidé) :
+          // on abandonne le brouillon plutôt que de laisser une bulle sans issue.
+          resumedRef.current = false;
+          draftRef.current = null;
+          void abandonActiveWorkout(accountId);
+        }
       } catch (cause: unknown) {
         if (!mounted) return;
         setError(cause instanceof Error ? cause.message : 'Erreur inconnue');
@@ -362,12 +424,68 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     };
   }, [db, programId, accountId]);
 
+  // Chrono de la séance : cumul des segments précédents + segment courant. Il se
+  // met en pause quand on quitte l'écran et reprend en revenant dessus.
   useEffect(() => {
-    const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
-    }, 1000);
+    const tick = () => {
+      const value =
+        baseElapsedRef.current + Math.floor((Date.now() - segmentStartRef.current) / 1000);
+      elapsedRef.current = value;
+      setElapsed(value);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  /**
+   * Met la séance de côté pour pouvoir la reprendre après l'avoir quittée.
+   * `force` écrit tout de suite (à la sortie de l'écran) ; sinon on limite les
+   * écritures à une toutes les 5 s, le brouillon restant à jour en mémoire.
+   */
+  const persistDraft = (force = false) => {
+    if (accountId === null || draftRef.current === null) return;
+    const now = Date.now();
+    if (!force && now - draftSavedAt.current < 5000) return;
+    draftSavedAt.current = now;
+    void saveActiveWorkout(accountId, {
+      ...draftRef.current,
+      elapsed_sec: elapsedRef.current,
+    }).catch(() => {
+      // Stockage indisponible : la séance reste utilisable, elle n'est juste pas reprenable.
+    });
+  };
+
+  // Le brouillon suit chaque changement de la séance (séries, poids, reps, nom).
+  useEffect(() => {
+    if (!ready || accountId === null || liveExercises.length === 0) return;
+    draftRef.current = {
+      program_id: programId,
+      nom,
+      elapsed_sec: elapsedRef.current,
+      exercises: liveExercises.map((exercise) => ({
+        workout_exo_id: exercise.workoutExoId,
+        sets: exercise.sets.map((set) => ({
+          weight: set.weight,
+          reps: set.reps,
+          completed: set.completed,
+        })),
+      })),
+    };
+    persistDraft();
+  }, [liveExercises, nom, ready, programId, accountId]);
+
+  // En quittant l'écran, on écrit la dernière version (le délai de 5 s n'a pas
+  // forcément couru) : la séance reste reprenable depuis la bulle.
+  useEffect(() => {
+    return () => {
+      if (draftRef.current === null) return;
+      const pending = { ...draftRef.current, elapsed_sec: elapsedRef.current };
+      draftRef.current = pending;
+      persistDraft(true);
+    };
+    // `accountId` et `persistDraft` ne changent pas pendant la séance.
+  }, [accountId]);
 
   // Sauvegarde « inter-séance » : le poids est écrit au fil de la séance
   // (jamais le nombre de séries), pour se reporter même sans terminer — et il est
@@ -565,6 +683,21 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     return undefined;
   }, [liveExercises, ready]);
 
+  // Séance reprise : on se replace directement sur l'exercice en cours.
+  useEffect(() => {
+    if (!ready || !resumedRef.current) return;
+    resumedRef.current = false;
+    const index = liveExercises.findIndex(
+      (exercise) => exercise.sets.length === 0 || exercise.sets.some((set) => !set.completed)
+    );
+    if (index <= 0) return;
+    const timer = setTimeout(() => {
+      const y = cardY.current[index];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: false });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [ready, liveExercises]);
+
   const changeWeight = (exIndex: number, setIndex: number, value: number) => {
     planDirty.current = true;
     setLiveExercises((prev) =>
@@ -599,18 +732,28 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     );
   };
 
+  /**
+   * Coche une série. Une série validée sans reps est remplie à la **borne basse**
+   * de la fourchette (valider = « j'ai fait le minimum prévu ») ; les reps
+   * saisies à la main ne sont jamais écrasées.
+   */
   const toggleSet = (exIndex: number, setIndex: number) => {
     setLiveExercises((prev) =>
-      prev.map((exercise, i) =>
-        i === exIndex
-          ? {
-              ...exercise,
-              sets: exercise.sets.map((set, j) =>
-                j === setIndex ? { ...set, completed: !set.completed } : set
-              ),
-            }
-          : exercise
-      )
+      prev.map((exercise, i) => {
+        if (i !== exIndex) return exercise;
+        return {
+          ...exercise,
+          sets: exercise.sets.map((set, j) => {
+            if (j !== setIndex) return set;
+            const completed = !set.completed;
+            return {
+              ...set,
+              completed,
+              reps: completed && set.reps === 0 ? exercise.repsMin : set.reps,
+            };
+          }),
+        };
+      })
     );
   };
 
@@ -622,7 +765,12 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         const allDone = exercise.sets.every((set) => set.completed);
         return {
           ...exercise,
-          sets: exercise.sets.map((set) => ({ ...set, completed: !allDone })),
+          sets: exercise.sets.map((set) => ({
+            ...set,
+            completed: !allDone,
+            // Même règle que série par série : une série vide est validée au minimum.
+            reps: !allDone && set.reps === 0 ? exercise.repsMin : set.reps,
+          })),
         };
       })
     );
@@ -737,11 +885,14 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         program_id: programId,
         account_id: accountId,
         date: new Date().toISOString(),
-        duration_sec: elapsed,
+        duration_sec: elapsedRef.current,
         total_volume: Math.round(volume * 100) / 100,
         sets,
         plans: buildPlans(liveExercises),
       });
+      // La séance est terminée : elle n'est plus « en cours » (plus de bulle).
+      draftRef.current = null;
+      if (accountId !== null) await abandonActiveWorkout(accountId);
       // La séance en cours est remplacée par son récapitulatif (Stats).
       navigation.replace('SessionSummary', { sessionId });
     } catch (cause: unknown) {
@@ -788,6 +939,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     0
   );
 
+  // Premier exercice dont toutes les séries ne sont pas encore validées.
+  const currentIndex = liveExercises.findIndex(
+    (exercise) => exercise.sets.length === 0 || exercise.sets.some((set) => !set.completed)
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
@@ -811,6 +967,9 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
           </Text>
         ) : (
           liveExercises.map((exercise, exIndex) => {
+            // L'exercice en cours est le seul mis en carte pleine, comme prévu par
+            // la DA : une carte maximum par écran, réservée à l'action principale.
+            const isCurrent = currentIndex === exIndex;
             const allDone = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
             const best = exercise.bestSet;
             const recordBeaten =
@@ -822,9 +981,14 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                   cardY.current[exIndex] = event.nativeEvent.layout.y;
                 }}
               >
-                <Appear delay={Math.min(exIndex * 60, 240)} offset={10}>
+                <Appear>
                   <Card
-                    style={[styles.card, exercise.supersetGroup != null && styles.cardSuperset]}
+                    tone={isCurrent ? 'accent' : 'default'}
+                    style={[
+                      styles.card,
+                      !isCurrent && styles.cardFlat,
+                      exercise.supersetGroup != null && styles.cardSuperset,
+                    ]}
                   >
                     <View style={styles.cardHeader}>
                       <PressableScale
@@ -840,15 +1004,13 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                           }
                           size={44}
                         />
-                        <Text style={styles.cardTitle}>
-                          {exercise.exercise.nom_fr ?? exercise.exercise.nom}
-                        </Text>
+                        <Text style={styles.cardTitle}>{exercise.exercise.nom}</Text>
                       </PressableScale>
-                      {recordBeaten ? <Badge label="Record" /> : null}
+                      {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
                       <CheckToggle
                         checked={allDone}
                         width={40}
-                        accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom_fr ?? exercise.exercise.nom}`}
+                        accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom}`}
                         onPress={() => toggleAllSets(exIndex)}
                       />
                     </View>
@@ -881,7 +1043,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                             value={set.reps > 0 ? String(set.reps) : ''}
                             onChangeText={(value) => changeReps(exIndex, setIndex, value)}
                             placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
-                            placeholderTextColor={neutrals.textMuted}
+                            placeholderTextColor={theme.colors.textMuted}
                             keyboardType="number-pad"
                             returnKeyType="done"
                           />
@@ -1010,10 +1172,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
     padding: spacing.xl,
@@ -1030,7 +1192,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...text.title,
-    color: neutrals.text,
+    color: theme.colors.text,
     maxWidth: '100%',
   },
   headerMetrics: {
@@ -1039,30 +1201,39 @@ const styles = StyleSheet.create({
     columnGap: spacing.lg - 2,
   },
   headerTime: {
-    ...text.title,
-    color: colors.secondary,
+    ...text.numL,
+    color: theme.colors.action,
     fontVariant: ['tabular-nums'],
   },
   headerTotal: {
     ...text.subtitle,
-    color: colors.accent,
-    fontWeight: '800',
+    color: theme.colors.action,
   },
   card: {
     marginBottom: spacing.md,
   },
+  // Un exercice déjà terminé passe à plat : seule la carte de l'exercice en
+  // cours reste pleine (une carte maximum par écran, §8.4).
+  cardFlat: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    borderRadius: 0,
+    paddingHorizontal: 0,
+  },
   cardSuperset: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.secondary,
+    borderLeftColor: theme.colors.action,
   },
   recordHint: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginBottom: spacing.md,
   },
   recordHintNew: {
-    color: colors.accent,
-    fontWeight: '700',
+    ...text.label,
+    color: theme.colors.text,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1081,7 +1252,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     ...text.subtitle,
     flex: 1,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   setRow: {
     flexDirection: 'row',
@@ -1091,31 +1262,31 @@ const styles = StyleSheet.create({
   },
   setLabel: {
     ...text.label,
-    color: colors.accent,
-    fontWeight: '800',
+    color: theme.colors.textMuted,
     width: 16,
     textAlign: 'center',
   },
   previousText: {
     ...text.micro,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     minWidth: 40,
   },
   weightBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: neutrals.surfaceAlt,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     borderRadius: radius.control,
-    height: 44,
+    height: 48,
     paddingLeft: 2,
   },
   weightInput: {
     flex: 1,
     textAlign: 'center',
-    ...text.bodyStrong,
-    color: neutrals.text,
-    fontWeight: '800',
+    ...text.title,
+    color: theme.colors.text,
     paddingVertical: 0,
   },
   calcButton: {
@@ -1140,24 +1311,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
   repsInput: {
-    width: 50,
-    height: 44,
+    width: 56,
+    height: 48,
     textAlign: 'center',
-    ...text.bodyStrong,
-    color: neutrals.text,
-    backgroundColor: neutrals.surfaceAlt,
+    ...text.title,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     borderRadius: radius.control,
   },
   check: {
-    height: 44,
+    height: 48,
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
   checkText: {
+    fontFamily: fontFamily.textBold,
     fontSize: 18,
-    fontWeight: '800',
   },
   setActions: {
     flexDirection: 'row',
@@ -1169,21 +1342,21 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     lineHeight: 20,
   },
   footer: {
     padding: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
-    backgroundColor: colors.background,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
   restBar: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     gap: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   restRow: {
     flexDirection: 'row',
@@ -1201,26 +1374,26 @@ const styles = StyleSheet.create({
   },
   restDoneText: {
     ...text.bodyStrong,
-    color: colors.accent,
+    color: theme.colors.success,
   },
   restLabel: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
   },
   restTime: {
-    ...text.bodyStrong,
-    color: colors.secondary,
+    ...text.title,
+    color: theme.colors.action,
     fontVariant: ['tabular-nums'],
   },
   restTrack: {
     height: 6,
     borderRadius: radius.pill,
-    backgroundColor: neutrals.surfaceAlt,
+    backgroundColor: theme.colors.surfaceAlt,
     overflow: 'hidden',
   },
   restFill: {
     height: 6,
     borderRadius: radius.pill,
-    backgroundColor: colors.secondary,
+    backgroundColor: theme.colors.marker,
   },
 });

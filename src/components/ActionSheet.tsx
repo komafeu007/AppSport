@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, neutrals } from '../theme/colors';
-import { spacing, text } from '../theme/tokens';
-import Appear from './ui/Appear';
+import { useThemedStyles, type Theme } from '../theme';
+import { spacing, text, touch } from '../theme/tokens';
 import PressableScale from './ui/PressableScale';
 import Sheet from './ui/Sheet';
 
@@ -23,11 +22,12 @@ interface Props {
 }
 
 /**
- * Menu d'actions en feuille basse. Remplace `Alert.alert` quand il y a plus de
- * trois actions (Android n'en affiche que trois). L'action choisie est rejouée
- * une fois la feuille refermée, pour ne pas présenter deux modales en même temps.
+ * Menu d'actions en feuille basse (§8.5 listes). Remplace `Alert.alert` quand il
+ * y a plus de trois actions (Android n'en affiche que trois). L'action choisie
+ * est rejouée une fois la feuille refermée, pour ne pas présenter deux modales.
  */
 export default function ActionSheet({ visible, title, items, onClose }: Props) {
+  const styles = useThemedStyles(createStyles);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const selectItem = (item: ActionSheetItem) => {
@@ -47,18 +47,17 @@ export default function ActionSheet({ visible, title, items, onClose }: Props) {
       }}
     >
       <View style={styles.items}>
-        {items.map((item, index) => (
-          <Appear key={item.label} delay={index * 40} offset={8}>
-            <PressableScale
-              style={styles.item}
-              onPress={() => selectItem(item)}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.itemText, item.destructive === true && styles.itemDanger]}>
-                {item.label}
-              </Text>
-            </PressableScale>
-          </Appear>
+        {items.map((item) => (
+          <PressableScale
+            key={item.label}
+            style={styles.item}
+            onPress={() => selectItem(item)}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.itemText, item.destructive === true && styles.itemDanger]}>
+              {item.label}
+            </Text>
+          </PressableScale>
         ))}
       </View>
 
@@ -69,32 +68,34 @@ export default function ActionSheet({ visible, title, items, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  items: {
-    paddingHorizontal: spacing.md,
-  },
-  item: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    borderRadius: spacing.md,
-  },
-  itemText: {
-    ...text.subtitle,
-    color: neutrals.text,
-  },
-  itemDanger: {
-    color: colors.alert,
-  },
-  cancel: {
-    marginTop: spacing.sm,
-    marginHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: neutrals.border,
-    alignItems: 'center',
-  },
-  cancelText: {
-    ...text.subtitle,
-    color: neutrals.textMuted,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    items: {
+      paddingHorizontal: spacing.md,
+    },
+    item: {
+      minHeight: touch.min,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    itemText: {
+      ...text.subtitle,
+      color: theme.colors.text,
+    },
+    itemDanger: {
+      color: theme.colors.danger,
+    },
+    cancel: {
+      marginTop: spacing.sm,
+      marginHorizontal: spacing.md,
+      paddingVertical: spacing.lg,
+      alignItems: 'center',
+    },
+    cancelText: {
+      ...text.subtitle,
+      color: theme.colors.textMuted,
+    },
+  });

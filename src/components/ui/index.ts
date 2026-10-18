@@ -7,6 +7,7 @@ export { default as ConfirmSheet, type ConfirmRequest } from './ConfirmSheet';
 export { default as IconButton } from './IconButton';
 export { default as Input } from './Input';
 export { default as PressableScale } from './PressableScale';
+export { default as Row } from './Row';
 export { default as ScreenHeader } from './ScreenHeader';
 export { default as SectionTitle } from './SectionTitle';
 export { default as Sheet } from './Sheet';

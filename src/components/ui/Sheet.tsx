@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
-  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -12,8 +11,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { neutrals, shadow } from '../../theme/colors';
-import { duration, radius, spacing, spring, text } from '../../theme/tokens';
+import { useThemedStyles, type Theme } from '../../theme';
+import { duration, easing, radius, spacing, text } from '../../theme/tokens';
 
 interface Props {
   visible: boolean;
@@ -27,12 +26,13 @@ interface Props {
 }
 
 /**
- * Feuille basse commune à toutes les modales de l'app : fond assombri, apparition
- * glissée + ressort, et fermeture en touchant **à côté** de la feuille (en plus du
- * bouton de fermeture propre à chaque contenu et du bouton retour Android).
+ * Feuille basse commune à toutes les modales de l'app (§8.10) : coins à 20,
+ * poignée 36 × 4, voile d'encre, **seule ombre autorisée** de l'app, et
+ * fermeture en touchant à côté de la feuille.
  */
 export default function Sheet({ visible, onClose, onDismissed, title, children, style }: Props) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   // Évite de relancer l'animation quand le parent repasse une nouvelle fonction.
@@ -42,10 +42,11 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      const opening = Animated.spring(progress, {
+      const opening = Animated.timing(progress, {
         toValue: 1,
+        duration: duration.slow,
+        easing: easing.enter,
         useNativeDriver: true,
-        ...spring,
       });
       opening.start();
       return () => opening.stop();
@@ -53,8 +54,8 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
 
     const closing = Animated.timing(progress, {
       toValue: 0,
-      duration: duration.base,
-      easing: Easing.in(Easing.cubic),
+      duration: duration.slow,
+      easing: easing.exit,
       useNativeDriver: true,
     });
     closing.start(({ finished }) => {
@@ -101,45 +102,46 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: neutrals.overlay,
-  },
-  backdropPress: {
-    flex: 1,
-  },
-  sheet: {
-    backgroundColor: neutrals.surface,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: neutrals.border,
-    maxHeight: '88%',
-    ...shadow,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: neutrals.border,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    ...text.overline,
-    color: neutrals.textMuted,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    backdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: theme.colors.overlay,
+    },
+    backdropPress: {
+      flex: 1,
+    },
+    sheet: {
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
+      borderWidth: 1,
+      borderBottomWidth: 0,
+      borderColor: theme.colors.border,
+      maxHeight: '88%',
+      ...theme.shadow,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: radius.pill,
+      backgroundColor: theme.colors.border,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    title: {
+      ...text.label,
+      color: theme.colors.textMuted,
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.sm,
+    },
+  });

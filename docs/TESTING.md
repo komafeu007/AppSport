@@ -4,7 +4,7 @@
 
 ⚠️ Expo Go **a toujours besoin de ce PC** : il retélécharge le bundle JS depuis le serveur Metro à chaque lancement (même en `--tunnel`, le tunnel ne fait que passer par Internet au lieu du Wi-Fi). Pour t'entraîner sans PC, voir l'option B.
 
-Expo Go embarque déjà `expo-sqlite`, `expo-status-bar`, `react-native-safe-area-context` et `react-native-svg` : l'app tourne sans build natif.
+Expo Go embarque déjà `expo-sqlite`, `expo-status-bar`, `expo-safe-area-context`, `react-native-svg`, `expo-image` et `expo-font` : l'app tourne sans build natif (les deux polices de la DA sont chargées au démarrage par `expo-font`).
 
 1. Installe **Expo Go** ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) / [iOS](https://apps.apple.com/app/expo-go/id982107779)) et **mets-le à jour** (il faut la version supportant le SDK 57).
 2. Depuis la racine du projet :
@@ -49,6 +49,24 @@ npx eas-cli@latest build --profile preview --platform android
 
 > Sur un **iPhone physique**, seul EAS Build fonctionne, avec un compte Apple Developer payant (distribution ad hoc) — ou un Mac + Xcode pour un sideload temporaire. Sans ça, Expo Go + PC reste la seule voie gratuite.
 
+## Vérifier la direction artistique
+
+La DA « Foulée » ([`DA_Foulee_app_sport.md`](DA_Foulee_app_sport.md)) se teste en quatre points :
+
+- **Clair / sombre** : bascule le mode du téléphone (Réglages → Affichage) → l'app doit suivre sans redémarrer (thème `automatic` dans `app.json`). Vérifie sur les deux : marges de 20 px, filets nets, aucune ombre ailleurs que sur les feuilles du bas.
+- **Polices** : les chiffres (chrono de la séance en cours, volumes du récapitulatif) et les titres doivent être en **Big Shoulders Display** (condensée), le reste en **Public Sans**. Si tout est dans la police système, `expo-font` n'a pas chargé (relance `npx expo start -c`).
+- **Une seule carte par écran** : accueil (une carte : la séance à démarrer, le reste en lignes), séance en cours (seul l'exercice en cours reste en carte, les autres passent à plat), récapitulatif (la carte jaune « Records » quand il y en a). Le reste : lignes séparées par un filet de 1 px qui démarre à 20 px du bord.
+- **Le jaune ne porte jamais de texte** : il apparaît en aplat derrière du marine (pastille « Record », barre de repos), jamais comme couleur de caractères. Le bleu reste réservé aux actions et aux chiffres de progression.
+- **Onglets** : « Accueil » / « Séances », fond surface, filet supérieur, trait bleu de 3 px en haut de l'onglet actif — plus de pastille flottante ni d'ombre.
+
+## Vérifier la séance en cours
+
+- **Cocher une série vide** (la case à droite, ou la coche de l'exercice) doit **remplir les reps avec le minimum de la fourchette** (ex. `8–12` → 8) et lancer le repos. Les reps déjà saisies ne sont jamais écrasées.
+- **Quitter la séance** (flèche retour ou geste) : le chrono se met en pause et une **bulle « Reprendre la séance »** apparaît en bas des onglets, avec le nom et l'avancement (`4/12 séries`). L'appui rouvre la séance exactement où elle en était (mêmes poids, reps, cases cochées), en se replaçant sur l'exercice en cours. Le bouton de la carte d'accueil affiche alors « Reprendre ».
+- **Fermer complètement l'app** pendant une séance : au relancement la bulle est toujours là (le brouillon est écrit au fil de la séance et à la sortie de l'écran).
+- **« × » de la bulle** : demande confirmation puis abandonne la séance (les séries validées ne sont pas enregistrées ; les poids restent dans le programme). **« Arrêter la séance »** en bas de la séance en cours reste le chemin qui enregistre et ouvre le récapitulatif.
+- Ouvrir une **autre** séance depuis l'accueil démarre celle-ci à zéro et remplace le brouillon (une seule séance en cours par profil).
+
 ## Voir ce qui marche / ce qui casse
 
 - Une erreur de chargement de la base s'affiche en **orange** dans l'app.
@@ -68,4 +86,4 @@ npx eas-cli@latest build --profile preview --platform android
 ## Médias
 
 - Les **vignettes 180×180** sont embarquées dans `assets/exercises/` (~12 Mo) → affichage instantané, hors-ligne (listes d'exercices du picker de séance).
-- Les **GIF animés** (122 Mo au total) ne sont **pas** embarqués et ne sont **plus affichés** dans l'app (l'ancienne vue détail d'exercice a été retirée).
+- Les **démonstrations animées (GIF, ~120 Mo au total)** ne sont **pas** embarquées : la fiche exercice les charge à la demande depuis le CDN du dataset (jsDelivr, secours GitHub) via `expo-image` (`src/lib/exerciseMedia.ts`). **Il faut du réseau** pour voir l'animation ; hors-ligne, la vignette statique s'affiche avec une mention discrète. Pour tester : ouvre un exercice depuis le picker de séance → le GIF doit s'animer (~1 s de chargement au premier affichage, puis mis en cache).

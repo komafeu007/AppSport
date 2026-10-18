@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ACTIVE_WORKOUT_BUBBLE_SPACE } from '../components/ActiveWorkoutBubble';
 import ActionSheet from '../components/ActionSheet';
 import {
   Appear,
@@ -12,6 +13,7 @@ import {
   ConfirmSheet,
   IconButton,
   Input,
+  Row,
   ScreenHeader,
   SectionTitle,
   Sheet,
@@ -20,6 +22,7 @@ import {
 } from '../components/ui';
 import type { SessionListNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
+import { useActiveWorkout } from '../services/activeWorkout';
 import {
   createSessionGroup,
   deleteProgram,
@@ -38,7 +41,7 @@ import {
   setActiveGroupId,
   setGroupHidden,
 } from '../services/preferences';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 
 interface SessionSection {
@@ -55,6 +58,9 @@ interface GroupModalState {
 }
 
 export default function SessionListScreen() {
+  const styles = useThemedStyles(createStyles);
+  // Séance mise de côté : on réserve la hauteur de la bulle de reprise.
+  const hasActiveWorkout = useActiveWorkout() !== null;
   const navigation = useNavigation<SessionListNavigation>();
   const db = useSQLiteContext();
   const { accountId } = useAccount();
@@ -225,7 +231,7 @@ export default function SessionListScreen() {
         subtitle="Tes groupes (splits) et les séances qu'ils contiennent."
       />
 
-      <Appear delay={60} style={styles.generatorWrap}>
+      <Appear style={styles.generatorWrap}>
         <Card
           tone={block?.due ? 'accent' : 'default'}
           accessibilityLabel={
@@ -275,7 +281,7 @@ export default function SessionListScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, hasActiveWorkout && styles.listContentReserved]}
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => (
             <Appear>
@@ -291,7 +297,7 @@ export default function SessionListScreen() {
                     <View style={styles.sectionActions}>
                       <Button
                         label="+ Séance"
-                        variant="ghost"
+                        variant="tertiary"
                         size="sm"
                         onPress={() =>
                           navigation.navigate('SessionEditor', { groupId: section.group!.id })
@@ -310,14 +316,14 @@ export default function SessionListScreen() {
               </SectionTitle>
             </Appear>
           )}
-          renderItem={({ item, index }) => (
-            <Appear delay={Math.min(index * 50, 200)} offset={8}>
-              <Card
-                style={styles.row}
-                accessibilityLabel={item.nom_seance}
-                onPress={() => navigation.navigate('SessionEditor', { programId: item.id })}
-                onLongPress={() => confirmDeleteProgram(item)}
-              >
+          renderItem={({ item, index, section }) => (
+            <Row
+              inset={false}
+              last={index === section.data.length - 1}
+              accessibilityLabel={item.nom_seance}
+              onPress={() => navigation.navigate('SessionEditor', { programId: item.id })}
+              onLongPress={() => confirmDeleteProgram(item)}
+            >
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle}>{item.nom_seance}</Text>
                   <Text style={styles.rowMeta}>
@@ -330,9 +336,8 @@ export default function SessionListScreen() {
                   accessibilityLabel={`Supprimer ${item.nom_seance}`}
                   onPress={() => confirmDeleteProgram(item)}
                 />
-                <Text style={styles.chevron}>›</Text>
-              </Card>
-            </Appear>
+              <Text style={styles.chevron}>›</Text>
+            </Row>
           )}
           renderSectionFooter={({ section }) =>
             section.group && section.data.length === 0 ? (
@@ -389,7 +394,7 @@ export default function SessionListScreen() {
           <View style={styles.modalActions}>
             <Button
               label="Annuler"
-              variant="ghost"
+              variant="tertiary"
               style={styles.footerButton}
               onPress={() => setGroupModal(null)}
             />
@@ -407,15 +412,19 @@ export default function SessionListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   listContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  /** Place libre pour la bulle de reprise, qui flotte en bas de l'écran. */
+  listContentReserved: {
+    paddingBottom: spacing.sm + ACTIVE_WORKOUT_BUBBLE_SPACE,
   },
   generatorWrap: {
     paddingHorizontal: spacing.xl,
@@ -430,11 +439,11 @@ const styles = StyleSheet.create({
   },
   generatorTitle: {
     ...text.subtitle,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   generatorMeta: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   sectionActions: {
@@ -447,31 +456,25 @@ const styles = StyleSheet.create({
   },
   groupEmptyText: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     fontStyle: 'italic',
     marginBottom: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm + 2,
   },
   rowBody: {
     flex: 1,
   },
   rowTitle: {
     ...text.subtitle,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   rowMeta: {
     ...text.caption,
-    color: colors.secondary,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   chevron: {
-    color: neutrals.textMuted,
-    fontSize: 26,
+    ...text.title,
+    color: theme.colors.textMuted,
   },
   footer: {
     paddingHorizontal: spacing.xl,
@@ -488,7 +491,7 @@ const styles = StyleSheet.create({
   },
   footerHint: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     textAlign: 'center',
   },
   modalContent: {

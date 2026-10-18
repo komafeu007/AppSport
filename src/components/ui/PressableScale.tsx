@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { spring } from '../../theme/tokens';
+import { duration, easing } from '../../theme/tokens';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -20,12 +20,13 @@ interface Props extends Omit<PressableProps, 'style' | 'children'> {
 }
 
 /**
- * Pressable avec un léger effet d'enfoncement (ressort) — retour tactile commun
- * à tous les éléments cliquables de l'app.
+ * Retour tactile commun à tous les éléments cliquables : léger enfoncement de
+ * 100 ms (§11.2 « appui »). Pas de rebond : la DA veut un mouvement qui répond
+ * au geste, pas un effet décoratif.
  */
 export default function PressableScale({
   style,
-  scaleTo = 0.96,
+  scaleTo = 0.97,
   onPressIn,
   onPressOut,
   children,
@@ -34,7 +35,12 @@ export default function PressableScale({
   const scale = useRef(new Animated.Value(1)).current;
 
   const animate = (toValue: number) => {
-    Animated.spring(scale, { toValue, useNativeDriver: true, ...spring }).start();
+    Animated.timing(scale, {
+      toValue,
+      duration: duration.pressed,
+      easing: easing.enter,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (

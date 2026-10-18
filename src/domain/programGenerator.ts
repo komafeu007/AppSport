@@ -991,7 +991,7 @@ function zoneLabel(zone: string): string {
   return labels[zone] ?? zone;
 }
 
-/** Libellé affichable du nom d'un exercice (réexporté pour l'UI). */
+/** Nom affichable d'un exercice (réexporté pour l'UI) : toujours en anglais. */
 export { displayName as exerciseDisplayName };
 
 /** Résumé « 4 × 8–10 reps · repos 2 min 30 » d'un exercice planifié. */

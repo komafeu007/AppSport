@@ -1,6 +1,6 @@
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
-import { neutrals } from '../../theme/colors';
+import { useThemedStyles, type Theme } from '../../theme';
 import { radius } from '../../theme/tokens';
 
 interface Props {
@@ -15,7 +15,8 @@ interface Props {
  * n'a pas d'image. Utilisée partout où un exercice est listé.
  */
 export default function Thumb({ source, size = 56, accessibilityLabel }: Props) {
-  const style = { width: size, height: size, borderRadius: radius.sm + 2 };
+  const styles = useThemedStyles(createStyles);
+  const style = { width: size, height: size };
 
   if (!source) {
     return <View style={[styles.thumb, styles.placeholder, style]} />;
@@ -30,12 +31,14 @@ export default function Thumb({ source, size = 56, accessibilityLabel }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
-  thumb: {
-    backgroundColor: neutrals.surfaceAlt,
-  },
-  placeholder: {
-    borderWidth: 1,
-    borderColor: neutrals.border,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    thumb: {
+      backgroundColor: theme.colors.surfaceAlt,
+      borderRadius: radius.sm,
+    },
+    placeholder: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+  });

@@ -35,7 +35,7 @@ import {
   type ExerciseBestSet,
   type SessionSetDetail,
 } from '../services/database';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionSummary'>;
@@ -75,7 +75,7 @@ function groupByExercise(
       indexById.set(row.exercise_id, index);
       blocks.push({
         id: row.exercise_id,
-        name: row.nom_fr ?? row.nom,
+        name: row.nom,
         image: row.image,
         isPoly: row.is_poly,
         sets: [],
@@ -99,6 +99,7 @@ function groupByExercise(
 }
 
 export default function SessionSummaryScreen({ navigation, route }: Props) {
+  const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const { sessionId } = route.params;
   const { width } = useWindowDimensions();
@@ -203,7 +204,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Appear>
-          <Card tone="accent" style={styles.hero}>
+          <View style={styles.hero}>
             <Text style={styles.heroTitle}>{sessionName}</Text>
             <Text style={styles.heroSub}>
               Séance terminée{date ? ` · ${formatShortDate(date)}` : ''}
@@ -229,11 +230,11 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                 <Text style={styles.statLabel}>répétitions</Text>
               </View>
             </View>
-          </Card>
+          </View>
         </Appear>
 
-        <Appear delay={70} style={styles.section}>
-          <Card>
+        <Appear style={styles.section}>
+          <View style={styles.flat}>
             <SectionTitle>Répartition par muscle</SectionTitle>
             {muscles.length === 0 ? (
               <Text style={styles.emptyText}>
@@ -273,11 +274,11 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                 </View>
               </>
             )}
-          </Card>
+          </View>
         </Appear>
 
-        <Appear delay={140} style={styles.section}>
-          <Card>
+        <Appear style={styles.section}>
+          <View style={styles.flat}>
             <SectionTitle hint="cette séance">Évolution du volume</SectionTitle>
             {history.length === 0 ? (
               <Text style={styles.emptyText}>Pas encore d’historique pour cette séance.</Text>
@@ -291,12 +292,12 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                 </Text>
               </>
             )}
-          </Card>
+          </View>
         </Appear>
 
         {records.length > 0 ? (
-          <Appear delay={180} style={styles.section}>
-            <Card tone="accent">
+          <Appear style={styles.section}>
+            <Card tone="marker">
               <SectionTitle hint="cette séance">Records</SectionTitle>
               {records.map((block) => {
                 if (block.bestSet === null || block.previousBest === null) return null;
@@ -311,7 +312,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                         {formatPerformance(block.previousBest)})
                       </Text>
                     </View>
-                    <Badge label="Record" />
+                    <Badge label="Record" tone="marker" />
                   </View>
                 );
               })}
@@ -319,8 +320,8 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
           </Appear>
         ) : null}
 
-        <Appear delay={210} style={styles.section}>
-          <Card>
+        <Appear style={styles.section}>
+          <View style={styles.flat}>
             <SectionTitle hint={`${blocks.length} exercice${blocks.length > 1 ? 's' : ''}`}>
               Détail des exercices
             </SectionTitle>
@@ -342,8 +343,8 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                       <Text style={styles.exerciseName} numberOfLines={1}>
                         {block.name}
                       </Text>
-                      <Badge label={block.isPoly ? 'Poly' : 'Mono'} tone="secondary" />
-                      {isRecord(block) ? <Badge label="Record" /> : null}
+                      <Badge label={block.isPoly ? 'Poly' : 'Mono'} tone="neutral" />
+                      {isRecord(block) ? <Badge label="Record" tone="marker" /> : null}
                     </View>
                     <Text style={styles.exerciseMeta}>
                       {block.sets.length} série{block.sets.length > 1 ? 's' : ''} · {block.reps}{' '}
@@ -358,7 +359,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                 </View>
               ))
             )}
-          </Card>
+          </View>
         </Appear>
       </ScrollView>
 
@@ -369,10 +370,10 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
     padding: spacing.xl,
@@ -382,15 +383,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   hero: {
-    padding: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  flat: {
+    paddingVertical: spacing.xs,
   },
   heroTitle: {
-    ...text.cardTitle,
-    color: neutrals.text,
+    ...text.title,
+    color: theme.colors.text,
   },
   heroSub: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   stats: {
@@ -403,26 +409,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    ...text.cardTitle,
-    color: neutrals.text,
+    ...text.numM,
+    color: theme.colors.text,
     fontVariant: ['tabular-nums'],
   },
   statVolume: {
-    color: colors.accent,
+    color: theme.colors.action,
   },
   statTime: {
-    color: colors.secondary,
+    color: theme.colors.action,
   },
   statLabel: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
     textAlign: 'center',
   },
   statDivider: {
     width: 1,
     alignSelf: 'stretch',
-    backgroundColor: neutrals.border,
+    backgroundColor: theme.colors.border,
   },
   radarWrap: {
     alignItems: 'center',
@@ -438,31 +444,31 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     ...text.label,
-    color: neutrals.text,
+    color: theme.colors.text,
     width: 88,
   },
   legendTrack: {
     flex: 1,
     height: 8,
     borderRadius: radius.pill,
-    backgroundColor: neutrals.surfaceAlt,
+    backgroundColor: theme.colors.surfaceAlt,
     overflow: 'hidden',
   },
   legendFill: {
     height: 8,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    backgroundColor: theme.colors.action,
   },
   legendValue: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     minWidth: 64,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
   chartHint: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.sm,
   },
   recordRow: {
@@ -471,24 +477,24 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
+    borderTopColor: theme.colors.border,
   },
   recordBody: {
     flex: 1,
   },
   recordName: {
     ...text.bodyStrong,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   recordMeta: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
   emptyText: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     lineHeight: 20,
   },
   exercise: {
@@ -499,7 +505,7 @@ const styles = StyleSheet.create({
   },
   exerciseDivider: {
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
+    borderTopColor: theme.colors.border,
   },
   exerciseBody: {
     flex: 1,
@@ -511,17 +517,17 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...text.bodyStrong,
-    color: neutrals.text,
+    color: theme.colors.text,
     flexShrink: 1,
   },
   exerciseMeta: {
     ...text.caption,
-    color: colors.secondary,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   exerciseSets: {
     ...text.micro,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
@@ -529,7 +535,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
-    backgroundColor: colors.background,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
 });

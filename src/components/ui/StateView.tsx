@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, neutrals } from '../../theme/colors';
+import { useThemedStyles, useTheme, type Theme } from '../../theme';
 import { spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 
@@ -17,15 +17,17 @@ interface Props {
 }
 
 /**
- * États pleine page (chargement / erreur / vide) : mêmes marges, mêmes textes et
- * même apparition en fondu dans tous les écrans.
+ * États pleine page (§8.12) : chargement sans effet de balayage, erreur qui dit
+ * ce qui s'est passé et quoi faire, état vide qui nomme ce qui manque.
  */
 export default function StateView({ kind, title, message, action, style }: Props) {
+  const theme = useTheme();
+  const styles = useThemedStyles(createStyles);
   const heading = title ?? (kind === 'error' ? 'Erreur' : kind === 'empty' ? 'Rien à afficher' : null);
 
   return (
     <Appear style={[styles.center, style]}>
-      {kind === 'loading' ? <ActivityIndicator color={colors.accent} size="large" /> : null}
+      {kind === 'loading' ? <ActivityIndicator color={theme.colors.action} size="large" /> : null}
       {heading ? (
         <Text style={[styles.title, kind === 'error' && styles.titleError]}>{heading}</Text>
       ) : null}
@@ -35,31 +37,31 @@ export default function StateView({ kind, title, message, action, style }: Props
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-  },
-  title: {
-    ...text.title,
-    color: neutrals.text,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
-  titleError: {
-    color: colors.alert,
-  },
-  message: {
-    ...text.meta,
-    color: neutrals.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginTop: spacing.sm,
-  },
-  action: {
-    marginTop: spacing.lg,
-    alignSelf: 'stretch',
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.xxxl,
+    },
+    title: {
+      ...text.title,
+      color: theme.colors.text,
+      textAlign: 'center',
+      marginTop: spacing.md,
+    },
+    titleError: {
+      color: theme.colors.danger,
+    },
+    message: {
+      ...text.meta,
+      color: theme.colors.textMuted,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+    },
+    action: {
+      marginTop: spacing.lg,
+      alignSelf: 'stretch',
+    },
+  });

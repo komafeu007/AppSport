@@ -441,6 +441,21 @@ export function movementFamily(exercise: CatalogExercise, muscle: string): strin
   return PATTERN_FAMILY[dominant] ?? dominant;
 }
 
+/**
+ * Familles de mouvement d'un exercice, **indépendamment du groupe musculaire** :
+ * union de toutes les familles dont un motif apparaît dans le nom. Sert à
+ * repérer les variantes d'un même mouvement pour la substitution (ex. « push-up »
+ * ≈ « diamond push-up », même si le dataset classe la seconde sur les triceps).
+ */
+export function movementFamilies(exercise: CatalogExercise): string[] {
+  const name = exercise.nom.toLowerCase();
+  const families = new Set<string>();
+  for (const [pattern, family] of Object.entries(PATTERN_FAMILY)) {
+    if (name.includes(pattern)) families.add(family);
+  }
+  return [...families];
+}
+
 /** Bonus de « bon mouvement » : le meilleur motif reconnu pour ce groupe. */
 export function movementScore(exercise: CatalogExercise, muscle: string): number {
   const patterns = MUSCLE_PATTERNS[muscle];
@@ -620,7 +635,7 @@ export function rawPrimary(exercise: CatalogExercise): string {
   return (exercise.target ?? exercise.muscle_group ?? '').trim().toLowerCase();
 }
 
-/** Nom affiché dans l'app (français si dispo, sinon anglais). */
+/** Nom affiché dans l'app : les noms d'exercices restent en anglais (langue d'usage). */
 export function displayName(exercise: CatalogExercise): string {
-  return exercise.nom_fr?.trim() || exercise.nom;
+  return exercise.nom.trim() || exercise.nom_fr?.trim() || exercise.nom;
 }

@@ -8,7 +8,7 @@ import {
   formatWeight,
   sortWeightsDesc,
 } from '../domain/plates';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { radius, spacing, text } from '../theme/tokens';
 import Button from './ui/Button';
 import Chip from './ui/Chip';
@@ -45,6 +45,7 @@ function parseAmount(value: string): number | null {
 }
 
 function CustomAdder({ placeholder, onAdd }: { placeholder: string; onAdd: (value: number) => void }) {
+  const styles = useThemedStyles(createStyles);
   const [draft, setDraft] = useState('');
 
   const submit = () => {
@@ -88,6 +89,7 @@ export default function PlateCalculatorModal({
   onRemovePlate,
   onClose,
 }: Props) {
+  const styles = useThemedStyles(createStyles);
   const [weightText, setWeightText] = useState(() => formatWeight(weight));
   /** Demande de suppression d'une barre / d'un disque perso. */
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
@@ -232,74 +234,71 @@ export default function PlateCalculatorModal({
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    flexShrink: 1,
-  },
-  content: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
-  },
-  hint: {
-    ...text.caption,
-    color: neutrals.textMuted,
-    lineHeight: 17,
-    marginBottom: spacing.md,
-  },
-  label: {
-    ...text.overline,
-    color: neutrals.textMuted,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  adderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm + 2,
-  },
-  adderInput: {
-    flex: 1,
-  },
-  plateList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  platePill: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg - 2,
-    paddingVertical: spacing.sm,
-  },
-  platePillText: {
-    ...text.label,
-    color: colors.background,
-    fontWeight: '800',
-  },
-  resultLine: {
-    ...text.label,
-    color: neutrals.text,
-  },
-  resultMuted: {
-    ...text.meta,
-    color: neutrals.textMuted,
-    lineHeight: 20,
-  },
-  resultWarn: {
-    ...text.caption,
-    color: colors.alert,
-    lineHeight: 18,
-    marginTop: spacing.sm,
-  },
-  footer: {
-    padding: spacing.xl,
-    paddingTop: spacing.sm,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    scroll: {
+      flexShrink: 1,
+    },
+    content: {
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.md,
+    },
+    hint: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+      marginBottom: spacing.md,
+    },
+    label: {
+      ...text.label,
+      color: theme.colors.text,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    adderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    adderInput: {
+      flex: 1,
+    },
+    plateList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    platePill: {
+      backgroundColor: theme.colors.action,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    platePillText: {
+      ...text.label,
+      color: theme.colors.onAction,
+    },
+    resultLine: {
+      ...text.label,
+      color: theme.colors.text,
+    },
+    resultMuted: {
+      ...text.meta,
+      color: theme.colors.textMuted,
+    },
+    resultWarn: {
+      ...text.caption,
+      color: theme.colors.danger,
+      marginTop: spacing.sm,
+    },
+    footer: {
+      padding: spacing.xl,
+      paddingTop: spacing.sm,
+    },
+  });

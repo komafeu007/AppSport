@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 
-import { colors, neutrals } from '../theme/colors';
+import { useTheme } from '../theme';
+import { fontFamily } from '../theme/tokens';
 
 export interface VolumeLinePoint {
   label: string;
@@ -23,10 +24,12 @@ function formatCompact(value: number): string {
 }
 
 /**
- * Courbe d'évolution du volume total d'une séance à l'autre. La largeur est
- * mesurée au rendu pour rester responsive ; rendu en SVG pur.
+ * Courbe d'évolution du volume total d'une séance à l'autre (§10.3) : trait de
+ * 2,5 px en bleu d'action, lignes de repère en Craie, axes en légende Ardoise.
+ * La largeur est mesurée au rendu pour rester responsive ; SVG pur.
  */
 export default function VolumeLineChart({ points, height = 170 }: Props) {
+  const theme = useTheme();
   const [width, setWidth] = useState(0);
 
   const onLayout = (event: LayoutChangeEvent) => {
@@ -70,7 +73,7 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
                 y1={lineY}
                 x2={width - PAD.right}
                 y2={lineY}
-                stroke={neutrals.border}
+                stroke={theme.colors.border}
                 strokeWidth={1}
               />
             );
@@ -83,7 +86,8 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
                 key={`label-${ratio}`}
                 x={PAD.left - 6}
                 y={lineY + 3.5}
-                fill={neutrals.textMuted}
+                fill={theme.colors.textMuted}
+                fontFamily={fontFamily.textMedium}
                 fontSize={10}
                 textAnchor="end"
               >
@@ -92,9 +96,9 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
             );
           })}
 
-          {count > 1 ? <Path d={area} fill={colors.accent} fillOpacity={0.12} /> : null}
+          {count > 1 ? <Path d={area} fill={theme.colors.action} fillOpacity={0.12} /> : null}
           {count > 1 ? (
-            <Path d={path} fill="none" stroke={colors.accent} strokeWidth={2.5} />
+            <Path d={path} fill="none" stroke={theme.colors.action} strokeWidth={2.5} />
           ) : null}
 
           {points.map((point, index) => (
@@ -103,8 +107,8 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
               cx={x(index)}
               cy={y(point.value)}
               r={index === count - 1 ? 5 : 3.5}
-              fill={index === count - 1 ? colors.accent : colors.background}
-              stroke={colors.accent}
+              fill={index === count - 1 ? theme.colors.action : theme.colors.surface}
+              stroke={theme.colors.action}
               strokeWidth={2}
             />
           ))}
@@ -117,7 +121,8 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
                 key={`date-${index}`}
                 x={x(index)}
                 y={height - 8}
-                fill={neutrals.textMuted}
+                fill={theme.colors.textMuted}
+                fontFamily={fontFamily.textMedium}
                 fontSize={10}
                 textAnchor="middle"
               >

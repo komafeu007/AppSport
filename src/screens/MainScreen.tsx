@@ -9,13 +9,16 @@ import {
   Button,
   Card,
   Chip,
+  Row,
   ScreenHeader,
   SectionTitle,
   StateView,
 } from '../components/ui';
+import { ACTIVE_WORKOUT_BUBBLE_SPACE } from '../components/ActiveWorkoutBubble';
 import { formatDuration, formatKg, formatShortDate } from '../lib/format';
 import type { MainScreenNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
+import { useActiveWorkout } from '../services/activeWorkout';
 import {
   getCompletedSessions,
   getNextProgramInGroup,
@@ -26,13 +29,16 @@ import {
   type SessionGroup,
 } from '../services/database';
 import { getActiveGroupId, getHiddenGroupIds, setActiveGroupId } from '../services/preferences';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 
 export default function MainScreen() {
+  const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const navigation = useNavigation<MainScreenNavigation>();
   const { accountId, account } = useAccount();
+  // Séance mise de côté : le bouton principal la reprend au lieu de la redémarrer.
+  const activeWorkout = useActiveWorkout();
 
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [hiddenIds, setHiddenIds] = useState<number[]>([]);
@@ -103,7 +109,7 @@ export default function MainScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Main" />
+        <ScreenHeader title="Accueil" />
         <StateView kind="loading" style={styles.flex} />
       </SafeAreaView>
     );
@@ -112,7 +118,7 @@ export default function MainScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Main" />
+        <ScreenHeader title="Accueil" />
         <StateView
           kind="error"
           title="Base de données indisponible"
@@ -129,7 +135,7 @@ export default function MainScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title="Main"
+        title="Accueil"
         subtitle="Ta prochaine séance, prête à démarrer."
         right={
           <Button
@@ -141,7 +147,9 @@ export default function MainScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[styles.content, activeWorkout !== null && styles.contentReserved]}
+      >
         <Appear>
           <Card tone="accent" style={styles.hero}>
             {nextSession && activeGroup ? (
@@ -153,7 +161,7 @@ export default function MainScreen() {
                   {nextSession.nom_seance}
                 </Text>
                 <Button
-                  label={shortName ? 'Go' : 'Démarrer'}
+                  label={activeWorkout?.program_id === nextSession.id ? 'Reprendre' : 'Démarrer'}
                   size="lg"
                   style={shortName ? undefined : styles.heroButton}
                   onPress={() =>
@@ -199,7 +207,7 @@ export default function MainScreen() {
         </Appear>
 
         {showChooser ? (
-          <Appear delay={80} style={styles.section}>
+          <Appear style={styles.section}>
             <SectionTitle>Choisir mon groupe</SectionTitle>
             <View style={styles.chips}>
               {visibleGroups.map((group) => (
@@ -214,7 +222,7 @@ export default function MainScreen() {
           </Appear>
         ) : null}
 
-        <Appear delay={showChooser ? 160 : 80} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle
             hint={
               sessions.length > 0
@@ -232,30 +240,30 @@ export default function MainScreen() {
           </Text>
         ) : (
           sessions.map((session, index) => (
-            <Appear key={session.id} delay={Math.min(index * 40, 240)} offset={8}>
-              <Card
-                style={styles.historyRow}
-                accessibilityLabel={`Récapitulatif de ${session.nom_seance ?? 'séance'}`}
-                onPress={() => navigation.navigate('SessionSummary', { sessionId: session.id })}
-              >
-                <View style={styles.historyBody}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>
-                    {session.nom_seance ?? 'Séance'}
-                  </Text>
-                  <Text style={styles.historyMeta} numberOfLines={1}>
-                    {formatShortDate(session.date, true)} · {session.exercise_count} exercice
-                    {session.exercise_count > 1 ? 's' : ''} · {session.total_reps} reps
-                  </Text>
-                </View>
-                <View style={styles.historyStats}>
-                  <Text style={styles.historyVolume}>{formatKg(session.total_volume)}</Text>
-                  <Text style={styles.historyDuration}>
-                    {formatDuration(session.duration_sec ?? 0)}
-                  </Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Card>
-            </Appear>
+            <Row
+              key={session.id}
+              inset={false}
+              last={index === sessions.length - 1}
+              accessibilityLabel={`Récapitulatif de ${session.nom_seance ?? 'séance'}`}
+              onPress={() => navigation.navigate('SessionSummary', { sessionId: session.id })}
+            >
+              <View style={styles.historyBody}>
+                <Text style={styles.historyTitle} numberOfLines={1}>
+                  {session.nom_seance ?? 'Séance'}
+                </Text>
+                <Text style={styles.historyMeta} numberOfLines={1}>
+                  {formatShortDate(session.date, true)} · {session.exercise_count} exercice
+                  {session.exercise_count > 1 ? 's' : ''} · {session.total_reps} reps
+                </Text>
+              </View>
+              <View style={styles.historyStats}>
+                <Text style={styles.historyVolume}>{formatKg(session.total_volume)}</Text>
+                <Text style={styles.historyDuration}>
+                  {formatDuration(session.duration_sec ?? 0)}
+                </Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Row>
           ))
         )}
       </ScrollView>
@@ -263,10 +271,10 @@ export default function MainScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
@@ -275,12 +283,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
   },
+  /** Place libre pour la bulle de reprise, qui flotte en bas de l'écran. */
+  contentReserved: {
+    paddingBottom: spacing.xxxl + ACTIVE_WORKOUT_BUBBLE_SPACE,
+  },
   hero: {
     padding: spacing.xl,
   },
   heroTitle: {
     ...text.cardTitle,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   heroTitleShort: {
     flex: 1,
@@ -294,7 +306,7 @@ const styles = StyleSheet.create({
   },
   heroMeta: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     lineHeight: 20,
     marginTop: spacing.sm - 2,
   },
@@ -311,25 +323,19 @@ const styles = StyleSheet.create({
   },
   historyEmpty: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     lineHeight: 20,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm + 2,
   },
   historyBody: {
     flex: 1,
   },
   historyTitle: {
     ...text.bodyStrong,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   historyMeta: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   historyStats: {
@@ -337,17 +343,17 @@ const styles = StyleSheet.create({
   },
   historyVolume: {
     ...text.bodyStrong,
-    color: colors.accent,
+    color: theme.colors.action,
     fontVariant: ['tabular-nums'],
   },
   historyDuration: {
     ...text.caption,
-    color: colors.secondary,
+    color: theme.colors.action,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
   chevron: {
-    color: neutrals.textMuted,
-    fontSize: 26,
+    ...text.title,
+    color: theme.colors.textMuted,
   },
 });

@@ -9,17 +9,17 @@ import {
 } from 'react-native';
 
 import { exerciseImages } from '../data/exerciseImages';
+import { exerciseTermLabel } from '../domain/exerciseLabels';
 import { buildExerciseSections, type ExerciseSection } from '../lib/exerciseSearch';
 import type { Exercise } from '../services/database';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 import ExerciseDetailModal from './ExerciseDetailModal';
-import Appear from './ui/Appear';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import Card from './ui/Card';
 import Input from './ui/Input';
 import PressableScale from './ui/PressableScale';
+import Row from './ui/Row';
 import SectionTitle from './ui/SectionTitle';
 import StateView from './ui/StateView';
 import Thumb from './ui/Thumb';
@@ -57,34 +57,36 @@ function ExerciseRow({
   onPress: () => void;
   onOpenDetail: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const source = exercise.image ? exerciseImages[exercise.image] : undefined;
+
   return (
-    <Card
-      style={[styles.row, selected && styles.rowSelected]}
+    <Row
+      style={selected ? styles.rowSelected : undefined}
       onPress={onPress}
       disabled={selected}
-      accessibilityLabel={
-        selected ? `${exercise.nom_fr ?? exercise.nom} (déjà ajouté)` : (exercise.nom_fr ?? exercise.nom)
-      }
+      accessibilityLabel={selected ? `${exercise.nom} (déjà ajouté)` : exercise.nom}
     >
       <PressableScale onPress={onOpenDetail} accessibilityLabel="Voir l’exercice" scaleTo={0.92}>
         <Thumb source={source} size={56} />
       </PressableScale>
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
-          <Text style={styles.rowTitle}>{exercise.nom_fr ?? exercise.nom}</Text>
+          <Text style={styles.rowTitle}>{exercise.nom}</Text>
           <Badge
             label={exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-            tone={exercise.is_poly === 1 ? 'accent' : 'secondary'}
+            tone={exercise.is_poly === 1 ? 'action' : 'neutral'}
           />
         </View>
-        <Text style={styles.rowEn}>{exercise.nom}</Text>
         <Text style={styles.rowMeta}>
-          {[exercise.target, exercise.category, exercise.equipment].filter(Boolean).join(' · ')}
+          {[exercise.target, exercise.category, exercise.equipment]
+            .filter((value): value is string => Boolean(value))
+            .map(exerciseTermLabel)
+            .join(' · ')}
         </Text>
       </View>
       {selected ? <Text style={styles.added}>Ajouté</Text> : null}
-    </Card>
+    </Row>
   );
 }
 
@@ -97,6 +99,7 @@ export default function ExerciseSearchList({
   emptyText = 'Aucun résultat',
   contentContainerStyle,
 }: ExerciseSearchListProps) {
+  const styles = useThemedStyles(createStyles);
   const [query, setQuery] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [detail, setDetail] = useState<Exercise | null>(null);
@@ -130,7 +133,7 @@ export default function ExerciseSearchList({
     <>
       {renderHeader?.({ resultCount, total: exercises.length, searchTerm })}
 
-      <Appear style={styles.searchRow} offset={0}>
+      <View style={styles.searchRow}>
         <Input
           style={styles.search}
           placeholder={placeholder}
@@ -143,7 +146,7 @@ export default function ExerciseSearchList({
           returnKeyType="search"
         />
         <Button label="Rechercher" onPress={submitSearch} />
-      </Appear>
+      </View>
 
       {resultCount === 0 ? (
         <StateView
@@ -167,7 +170,9 @@ export default function ExerciseSearchList({
           )}
           renderSectionHeader={({ section }) =>
             section.title ? (
-              <SectionTitle style={styles.sectionHeader}>{section.title}</SectionTitle>
+              <View style={styles.sectionHeader}>
+                <SectionTitle>{section.title}</SectionTitle>
+              </View>
             ) : null
           }
           contentContainerStyle={[styles.listContent, contentContainerStyle]}
@@ -185,65 +190,53 @@ export default function ExerciseSearchList({
   );
 }
 
-const styles = StyleSheet.create({
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  search: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  sectionHeader: {
-    marginTop: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    marginBottom: spacing.sm + 2,
-  },
-  rowSelected: {
-    borderColor: colors.accent,
-    opacity: 0.75,
-  },
-  rowBody: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  rowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  rowTitle: {
-    ...text.subtitle,
-    color: neutrals.text,
-    flexShrink: 1,
-  },
-  rowEn: {
-    ...text.caption,
-    color: neutrals.textMuted,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  rowMeta: {
-    ...text.caption,
-    color: colors.secondary,
-    marginTop: spacing.xs,
-  },
-  added: {
-    ...text.caption,
-    color: colors.accent,
-    fontWeight: '800',
-    marginLeft: spacing.sm,
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.xl,
+      marginTop: spacing.md,
+      marginBottom: spacing.md,
+      gap: spacing.sm,
+    },
+    search: {
+      flex: 1,
+    },
+    listContent: {
+      paddingBottom: spacing.xxl,
+    },
+    sectionHeader: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.xs,
+      backgroundColor: theme.colors.background,
+    },
+    rowSelected: {
+      opacity: 0.6,
+    },
+    rowBody: {
+      flex: 1,
+    },
+    rowHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    rowTitle: {
+      ...text.cardTitle,
+      color: theme.colors.text,
+      flexShrink: 1,
+    },
+    rowMeta: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+      marginTop: spacing.xs,
+    },
+    added: {
+      ...text.caption,
+      color: theme.colors.success,
+      marginLeft: spacing.sm,
+    },
+  });

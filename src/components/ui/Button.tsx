@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -7,11 +7,11 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { colors } from '../../theme/colors';
-import { radius, spacing } from '../../theme/tokens';
+import { useThemedStyles, useTheme, type Theme } from '../../theme';
+import { radius, spacing, text, touch } from '../../theme/tokens';
 import PressableScale from './PressableScale';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -21,15 +21,15 @@ interface Props {
   size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
-  /** Icône/glyphe affiché avant le libellé (ex. « ＋ »). */
+  /** Glyphe affiché avant le libellé (ex. « + »). */
   leading?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
- * Bouton unique de l'app : « primary » (validation, gros boutons du CDC),
- * « secondary » (action neutre), « danger » (arrêt/suppression) et « ghost »
- * (lien discret).
+ * Bouton unique de l'app (§8.1) : « primary » (une seule action principale par
+ * écran), « secondary » (contour bleu), « tertiary » (lien) et « danger »
+ * (suppression, toujours confirmée). Hauteur 56 en séance, 48 sinon.
  */
 export default function Button({
   label,
@@ -41,66 +41,90 @@ export default function Button({
   leading,
   style,
 }: Props) {
-  const spinnerColor =
-    variant === 'primary' || variant === 'danger' ? colors.background : colors.secondary;
+  const theme = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const [pressed, setPressed] = useState(false);
+
+  const inactive = disabled || loading;
+  const isPressed = pressed && !inactive && variant === 'primary';
+
+  const labelColor = inactive
+    ? theme.colors.textMuted
+    : variant === 'primary'
+      ? theme.colors.onAction
+      : variant === 'danger'
+        ? theme.colors.onDanger
+        : theme.colors.action;
 
   return (
     <PressableScale
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={inactive}
       accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || loading }}
-      style={[styles.base, sizes[size], variants[variant], (disabled || loading) && styles.disabled, style]}
+      accessibilityState={{ disabled: inactive }}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[
+        styles.base,
+        styles[size],
+        styles[variant],
+        isPressed ? styles.pressed : null,
+        inactive ? styles.disabled : null,
+        style,
+      ]}
     >
       {loading ? (
-        <ActivityIndicator color={spinnerColor} />
+        <ActivityIndicator color={labelColor} />
       ) : (
         <>
           {leading}
-          <Text style={[styles.label, labelSizes[size], labelVariants[variant]]}>{label}</Text>
+          <Text style={[styles.label, styles[`label_${size}`], { color: labelColor }]} numberOfLines={1}>
+            {label}
+          </Text>
         </>
       )}
     </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  label: {
-    fontWeight: '800',
-  },
-  disabled: {
-    opacity: 0.6,
-  },
-});
-
-const sizes = StyleSheet.create({
-  sm: { paddingVertical: spacing.sm, paddingHorizontal: 14, borderRadius: radius.control },
-  md: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.control },
-  lg: { paddingVertical: spacing.lg, paddingHorizontal: spacing.lg, borderRadius: radius.button },
-});
-
-const labelSizes = StyleSheet.create({
-  sm: { fontSize: 13 },
-  md: { fontSize: 15 },
-  lg: { fontSize: 16 },
-});
-
-const variants = StyleSheet.create({
-  primary: { backgroundColor: colors.accent },
-  secondary: { borderWidth: 1, borderColor: colors.secondary },
-  danger: { backgroundColor: colors.alert },
-  ghost: {},
-});
-
-const labelVariants = StyleSheet.create({
-  primary: { color: colors.background },
-  secondary: { color: colors.secondary },
-  danger: { color: colors.background },
-  ghost: { color: colors.secondary },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    base: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      borderWidth: 1.5,
+      borderRadius: radius.button,
+    },
+    label: text.button,
+    sm: { minHeight: 44, paddingHorizontal: spacing.xl },
+    md: { minHeight: touch.min, paddingHorizontal: spacing.xxl },
+    lg: { minHeight: touch.session, paddingHorizontal: spacing.xxl },
+    label_sm: { fontSize: 14 },
+    label_md: { fontSize: 16 },
+    label_lg: { fontSize: 16 },
+    primary: {
+      borderWidth: 0,
+      backgroundColor: theme.colors.action,
+    },
+    secondary: {
+      borderColor: theme.colors.action,
+    },
+    tertiary: {
+      borderWidth: 0,
+      paddingHorizontal: spacing.sm,
+    },
+    danger: {
+      borderWidth: 0,
+      backgroundColor: theme.colors.danger,
+    },
+    pressed: {
+      borderWidth: 0,
+      backgroundColor: theme.colors.actionPressed,
+    },
+    disabled: {
+      backgroundColor: theme.colors.surfaceAlt,
+      borderColor: theme.colors.border,
+    },
+  });

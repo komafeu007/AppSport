@@ -9,9 +9,9 @@ import ActionSheet from '../components/ActionSheet';
 import {
   Appear,
   Button,
-  Card,
   ConfirmSheet,
   IconButton,
+  Row,
   ScreenHeader,
   SectionTitle,
   StateView,
@@ -22,8 +22,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { deleteAccount, getAccounts, resetAppData, type Account } from '../services/database';
 import { clearAllPreferences } from '../services/preferences';
-import { colors, neutrals } from '../theme/colors';
-import { spacing, text } from '../theme/tokens';
+import { useThemedStyles, type Theme } from '../theme';
+import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Accounts' | 'Welcome'>;
 
@@ -43,6 +43,7 @@ function accountMeta(account: Account): string {
  * lequel s'entraîner. Chaque compte a ses propres séances et son historique.
  */
 export default function AccountSelectScreen({ navigation }: Props) {
+  const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const { accountId, select, clear } = useAccount();
   const onboarding = accountId === null;
@@ -173,7 +174,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
               <Button label="Créer mon profil" size="lg" onPress={() => openForm()} />
               <Button
                 label="Réinitialiser toutes les données"
-                variant="ghost"
+                variant="tertiary"
                 onPress={resetAll}
               />
             </View>
@@ -184,13 +185,14 @@ export default function AccountSelectScreen({ navigation }: Props) {
           {accounts.map((account, index) => {
             const active = account.id === accountId;
             return (
-              <Appear key={account.id} delay={Math.min(index * 50, 200)} offset={8}>
-                <Card
-                  tone={active ? 'accent' : 'default'}
-                  style={styles.row}
-                  onPress={() => choose(account.id)}
-                  accessibilityLabel={`Choisir ${account.prenom}`}
-                >
+              <Row
+                key={account.id}
+                inset={false}
+                last={index === accounts.length - 1}
+                style={active ? styles.rowActive : undefined}
+                onPress={() => choose(account.id)}
+                accessibilityLabel={`Choisir ${account.prenom}`}
+              >
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>
                       {account.prenom.trim().charAt(0).toUpperCase() || '?'}
@@ -212,12 +214,11 @@ export default function AccountSelectScreen({ navigation }: Props) {
                     accessibilityLabel={`Options de ${account.prenom}`}
                     onPress={() => setMenuAccount(account)}
                   />
-                </Card>
-              </Appear>
+              </Row>
             );
           })}
 
-          <Appear delay={Math.min(accounts.length * 50, 200)} style={styles.danger}>
+          <Appear style={styles.danger}>
             <SectionTitle>Zone sensible</SectionTitle>
             <Text style={styles.dangerText}>
               Efface tous les profils et leur historique sur cet appareil (les exercices du
@@ -225,7 +226,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
             </Text>
             <Button
               label="Réinitialiser toutes les données"
-              variant="ghost"
+              variant="tertiary"
               onPress={resetAll}
             />
           </Appear>
@@ -255,20 +256,18 @@ export default function AccountSelectScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,
-    gap: spacing.sm + 2,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  rowActive: {
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.action,
   },
   danger: {
     marginTop: spacing.xl,
@@ -279,19 +278,19 @@ const styles = StyleSheet.create({
   },
   dangerText: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
   },
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: theme.colors.action,
   },
   avatarText: {
     ...text.title,
-    color: colors.background,
+    color: theme.colors.onAction,
   },
   body: {
     flex: 1,
@@ -303,23 +302,22 @@ const styles = StyleSheet.create({
   },
   name: {
     ...text.subtitle,
-    color: neutrals.text,
+    color: theme.colors.text,
     flexShrink: 1,
   },
   activeTag: {
-    ...text.overline,
-    fontSize: 10,
-    color: colors.accent,
+    ...text.caption,
+    color: theme.colors.success,
   },
   meta: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
   footer: {
     padding: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
+    borderTopColor: theme.colors.border,
   },
 });

@@ -14,7 +14,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { getAccount, type Account } from '../services/database';
 import { BLOCK_WEEKS, buildPlan, newSeed, savePlan, sessionSummary } from '../services/programGeneration';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { radius, spacing, text } from '../theme/tokens';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -22,6 +22,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ProgramGenerator' | 'We
 
 /** Une ligne d'exercice planifié : vignette, nom, séries × reps et repos. */
 function ExerciseRow({ planned }: { planned: PlannedExercise }) {
+  const styles = useThemedStyles(createStyles);
   const { exercise } = planned;
   const source = exercise.image ? exerciseImages[exercise.image] : undefined;
 
@@ -44,6 +45,7 @@ function ExerciseRow({ planned }: { planned: PlannedExercise }) {
  * relance simplement le moteur avec une nouvelle graine.
  */
 export default function ProgramGeneratorScreen({ navigation, route }: Props) {
+  const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const { accountId: activeAccountId, account: activeAccount, select } = useAccount();
 
@@ -176,16 +178,16 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
             </Appear>
 
             {plan.warnings.length > 0 ? (
-              <Appear delay={60} style={styles.section}>
+              <Appear style={styles.section}>
                 {plan.warnings.map((warning) => (
-                  <Card key={warning} tone="danger" style={styles.warning}>
+                  <View key={warning} style={styles.warning}>
                     <Text style={styles.warningText}>{warning}</Text>
-                  </Card>
+                  </View>
                 ))}
               </Appear>
             ) : null}
 
-            <Appear delay={100} style={styles.section}>
+            <Appear style={styles.section}>
               <SectionTitle hint="séries / semaine">Volume par muscle</SectionTitle>
               <View style={styles.volumeWrap}>
                 {plan.weeklySets.map((item) => (
@@ -197,12 +199,12 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
               </View>
             </Appear>
 
-            <Appear delay={140} style={styles.section}>
+            <Appear style={styles.section}>
               <SectionTitle>{`Séances (${plan.sessions.length})`}</SectionTitle>
               {plan.sessions.map((session) => {
                 const summary = sessionSummary(session);
                 return (
-                  <Card key={session.nom} style={styles.sessionCard}>
+                  <View key={session.nom} style={styles.sessionCard}>
                     <Text style={styles.sessionName}>{session.nom}</Text>
                     <Text style={styles.sessionMeta}>
                       {summary.exercises} exercices · {summary.sets} séries · ≈ {summary.minutes} min
@@ -210,7 +212,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
                     {session.exercises.map((planned) => (
                       <ExerciseRow key={`${session.nom}-${planned.exercise.id}`} planned={planned} />
                     ))}
-                  </Card>
+                  </View>
                 );
               })}
             </Appear>
@@ -246,7 +248,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
       {fromOnboarding ? (
         <Button
           label="Plus tard — je crée mes séances moi-même"
-          variant="ghost"
+          variant="tertiary"
           onPress={handleSkip}
           disabled={saving}
           style={styles.skip}
@@ -256,10 +258,10 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
     padding: spacing.xl,
@@ -275,19 +277,23 @@ const styles = StyleSheet.create({
   },
   bulletDot: {
     ...text.body,
-    color: colors.accent,
+    color: theme.colors.action,
   },
   bullet: {
     ...text.body,
-    color: neutrals.text,
+    color: theme.colors.text,
     flex: 1,
   },
   warning: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.danger,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.xs,
   },
   warningText: {
     ...text.meta,
-    color: colors.alert,
+    color: theme.colors.danger,
   },
   volumeWrap: {
     flexDirection: 'row',
@@ -300,29 +306,32 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
-    backgroundColor: neutrals.surface,
+    borderRadius: radius.sm,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: neutrals.border,
+    borderColor: theme.colors.border,
   },
   volumeLabel: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
   },
   volumeValue: {
     ...text.label,
-    color: colors.accent,
+    color: theme.colors.action,
   },
   sessionCard: {
-    marginBottom: spacing.md,
+    paddingTop: spacing.lg,
+    marginTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
   },
   sessionName: {
     ...text.cardTitle,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   sessionMeta: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
@@ -337,21 +346,21 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...text.bodyStrong,
-    color: neutrals.text,
+    color: theme.colors.text,
   },
   exerciseMeta: {
     ...text.caption,
-    color: colors.secondary,
+    color: theme.colors.textMuted,
     marginTop: 2,
   },
   note: {
     ...text.meta,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     marginTop: spacing.xl,
   },
   error: {
     ...text.meta,
-    color: colors.alert,
+    color: theme.colors.danger,
     marginTop: spacing.md,
   },
   footer: {
@@ -360,8 +369,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
-    backgroundColor: colors.background,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
   footerButton: {
     flex: 1,

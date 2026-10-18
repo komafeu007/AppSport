@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   Appear,
@@ -43,7 +42,7 @@ import {
   updateAccount,
   type AccountInput,
 } from '../services/database';
-import { colors, neutrals } from '../theme/colors';
+import { useThemedStyles, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountForm' | 'WelcomeForm'>;
@@ -76,6 +75,7 @@ function ChipGroup({
   values: string[];
   onToggle: (key: string) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.chips}>
       {options.map((option) => (
@@ -91,6 +91,7 @@ function ChipGroup({
 }
 
 export default function AccountFormScreen({ navigation, route }: Props) {
+  const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const { accountId, select, reload } = useAccount();
   const editingId = route.params?.accountId ?? null;
@@ -274,7 +275,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           </View>
         </Appear>
 
-        <Appear delay={60} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>Objectif</SectionTitle>
           <ChipGroup
             options={OBJECTIFS}
@@ -283,7 +284,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
         </Appear>
 
-        <Appear delay={80} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>Niveau</SectionTitle>
           <ChipGroup options={NIVEAUX} values={[niveau]} onToggle={(key) => setNiveau(key)} />
           <Text style={styles.rulesHint}>
@@ -292,7 +293,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           </Text>
         </Appear>
 
-        <Appear delay={100} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>Fréquence & durée</SectionTitle>
           <Text style={styles.subLabel}>Entraînements par semaine</Text>
           <ChipGroup
@@ -310,7 +311,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
         </Appear>
 
-        <Appear delay={140} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>Format de séance</SectionTitle>
           <ChipGroup
             options={SESSION_FORMATS}
@@ -319,7 +320,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
         </Appear>
 
-        <Appear delay={180} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>Matériel disponible</SectionTitle>
           <ChipGroup
             options={EQUIPMENTS}
@@ -328,7 +329,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
         </Appear>
 
-        <Appear delay={220} style={styles.section}>
+        <Appear style={styles.section}>
           <SectionTitle>État de santé</SectionTitle>
           <Text style={styles.subLabel}>Zones sensibles / douloureuses</Text>
           <ChipGroup options={HEALTH_ZONES} values={zones} onToggle={toggleMulti(setZones)} />
@@ -342,7 +343,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
         </Appear>
 
-        <Appear delay={260} style={styles.section}>
+        <Appear style={styles.section}>
           <Card>
             <SectionTitle>Règles de séries & repos</SectionTitle>
             <Text style={styles.rules}>
@@ -376,23 +377,22 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: theme.colors.background,
   },
   content: {
     padding: spacing.xl,
     paddingBottom: spacing.sm,
   },
   label: {
-    ...text.overline,
-    color: neutrals.textMuted,
+    ...text.label,
+    color: theme.colors.textMuted,
   },
   subLabel: {
     ...text.caption,
-    color: neutrals.textMuted,
-    fontWeight: '700',
+    color: theme.colors.textMuted,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -422,13 +422,13 @@ const styles = StyleSheet.create({
   },
   rules: {
     ...text.meta,
-    color: neutrals.text,
+    color: theme.colors.text,
     lineHeight: 20,
     marginBottom: spacing.sm,
   },
   rulesHint: {
     ...text.caption,
-    color: neutrals.textMuted,
+    color: theme.colors.textMuted,
     lineHeight: 18,
     marginTop: spacing.xs,
   },
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: neutrals.border,
-    backgroundColor: colors.background,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
 });

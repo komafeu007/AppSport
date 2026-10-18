@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg';
 
-import { colors, neutrals } from '../theme/colors';
+import { useTheme } from '../theme';
+import { fontFamily } from '../theme/tokens';
 
 export interface RadarPoint {
   label: string;
@@ -21,9 +22,10 @@ const LABEL_PAD = 74;
 /**
  * Graphique « araignée » (radar) des muscles travaillés : un axe par muscle,
  * la distance au centre est proportionnelle au volume. Rendu en SVG pur, sans
- * dépendance de charting.
+ * dépendance de charting. Repère en Craie, série en bleu d'action (§10.3).
  */
 export default function MuscleRadarChart({ data, size }: Props) {
+  const theme = useTheme();
   const count = data.length;
   if (count < 3) return null;
 
@@ -62,7 +64,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
               key={ratio}
               points={ring(ratio)}
               fill="none"
-              stroke={neutrals.border}
+              stroke={theme.colors.border}
               strokeWidth={1}
             />
           ))}
@@ -75,7 +77,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
                 y1={center}
                 x2={at.x}
                 y2={at.y}
-                stroke={neutrals.border}
+                stroke={theme.colors.border}
                 strokeWidth={1}
               />
             );
@@ -84,15 +86,15 @@ export default function MuscleRadarChart({ data, size }: Props) {
 
         <Polygon
           points={shape}
-          fill={colors.accent}
+          fill={theme.colors.action}
           fillOpacity={0.22}
-          stroke={colors.accent}
+          stroke={theme.colors.action}
           strokeWidth={2}
         />
 
         {data.map((point, index) => {
           const at = pointAt(index, point.value / max);
-          return <Circle key={point.label} cx={at.x} cy={at.y} r={3.5} fill={colors.accent} />;
+          return <Circle key={point.label} cx={at.x} cy={at.y} r={3.5} fill={theme.colors.action} />;
         })}
 
         {data.map((point, index) => {
@@ -104,9 +106,9 @@ export default function MuscleRadarChart({ data, size }: Props) {
               key={point.label}
               x={at.x}
               y={at.y + 4}
-              fill={neutrals.text}
+              fill={theme.colors.text}
+              fontFamily={fontFamily.textSemiBold}
               fontSize={11}
-              fontWeight="700"
               textAnchor={anchor}
             >
               {point.label}

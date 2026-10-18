@@ -1,41 +1,60 @@
 /**
- * Palette officielle — Design System (voir docs/CDC.md).
- * Dark mode à haut contraste.
+ * Palette officielle — direction artistique « Foulée » (docs/DA_Foulee_app_sport.md §5).
+ *
+ * Règle de la DA : **une couleur, un rôle**, et des jetons opaques (jamais de
+ * dégradé ni de transparence pour fabriquer une teinte). Ce fichier ne contient
+ * que les couleurs brutes ; les rôles (fond, surface, action, marqueur…) sont
+ * exposés par `theme.ts` sous forme de thème clair / sombre.
  */
-export const colors = {
-  /** Fond principal */
-  background: '#121218',
-  /** Accent / Validation (Néon Green) */
-  accent: '#00E676',
-  /** Secondaire / Liens (Electric Blue) */
-  secondary: '#00B0FF',
-  /** Alerte / Timer (Intense Orange) */
-  alert: '#FF3D00',
+
+/** Couleurs de base du mode clair (§5.1). */
+export const palette = {
+  /** Bleu court — action principale, liens, onglet actif. */
+  bleuCourt: '#2347D6',
+  /** Bleu appui — état pressé du bleu court. */
+  bleuAppui: '#1A38B0',
+  /** Marine — texte principal, icônes, remplace le noir. */
+  marine: '#0D1B4C',
+  /** Jaune balise — marqueur : série en cours, record, ligne de départ. */
+  jauneBalise: '#FFD60A',
+  /** Dalle — fond d'écran. */
+  dalle: '#EEF1F6',
+  /** Blanc ligne — surface surélevée, champs. */
+  blanc: '#FFFFFF',
+  /** Craie — filets, rails vides, bordures de champs. */
+  craie: '#D5DAE5',
+  /** Ardoise — texte secondaire, axes de graphiques. */
+  ardoise: '#5B6478',
+  /** Rouge piste — erreur, suppression, alerte. */
+  rougePiste: '#D1273B',
+  /** Vert gazon — succès, objectif atteint. */
+  vertGazon: '#187A41',
 } as const;
 
-/**
- * Nuances neutres dérivées du fond, pour surfaces, textes et bordures.
- * Le CDC ne définit que les 4 couleurs officielles ci-dessus.
- */
-export const neutrals = {
-  surface: '#1C1C24',
-  surfaceAlt: '#26262F',
-  border: '#33333D',
-  text: '#F5F5F7',
-  textMuted: '#A0A0AC',
-  /** Voile sombre derrière les feuilles/modales. */
-  overlay: 'rgba(0, 0, 0, 0.65)',
+/** Jetons du mode sombre (§14). */
+export const darkPalette = {
+  fond: '#0B1433',
+  surface: '#141E45',
+  surfaceHaute: '#1D2A5C',
+  filet: '#2B3A75',
+  texte: '#F2F5FF',
+  texteSecondaire: '#A6B0D0',
+  action: '#7C95FF',
+  actionAppui: '#6A83F0',
+  erreur: '#FF6B7D',
+  succes: '#4FD18B',
+  /** Le jaune balise ne change pas en mode sombre. */
+  marqueur: palette.jauneBalise,
+  /** Marine : jamais noir, sert aussi d'encre sur le jaune et l'action sombre. */
+  encre: palette.marine,
 } as const;
 
-/** Ombre portée des surfaces flottantes (barre d'onglets, feuilles). */
-export const shadow = {
-  shadowColor: '#000000',
-  shadowOpacity: 0.35,
-  shadowRadius: 18,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 10,
-} as const;
+/** Rampe des zones d'effort, mode clair (§5.2) : Z1 → Z5. */
+export const zonesLight = ['#C9D5F7', '#93A9EF', '#5B7BE6', '#2347D6', '#0D1B4C'] as const;
 
-export const theme = { colors, neutrals } as const;
+/** Rampe des zones d'effort, mode sombre (§5.2). */
+export const zonesDark = ['#34478F', '#4F69C9', '#7C95FF', '#B3C2FF', '#F2F5FF'] as const;
 
-export type Theme = typeof theme;
+/** Filet de la barre de zones : garde Z1 visible sur fond clair (§5.2). */
+export const zonesBorderLight = '#A9B6D3';
+export const zonesBorderDark = darkPalette.filet;
