@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import DurationField from '../components/DurationField';
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
 import PlateCalculatorModal from '../components/PlateCalculatorModal';
 import {
@@ -22,15 +23,27 @@ import {
   Button,
   Card,
   ConfirmSheet,
+  IconButton,
   PressableScale,
   StateView,
   Thumb,
   type ConfirmRequest,
 } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
+import { isEndurance } from '../domain/exerciseCatalog';
 import { DEFAULT_BAR_WEIGHT, DEFAULT_PLATES, formatWeight, sortWeightsDesc } from '../domain/plates';
-import { clamp, beatsSet, fitWeights, formatPerformance, parseWeights, REPS_RANGE, WEIGHT_RANGE } from '../domain/workoutRules';
-import { formatKg } from '../lib/format';
+import {
+  beatsSet,
+  clamp,
+  DEFAULT_ENDURANCE_DURATION,
+  DURATION_RANGE,
+  fitWeights,
+  formatPerformance,
+  parseWeights,
+  REPS_RANGE,
+  WEIGHT_RANGE,
+} from '../domain/workoutRules';
+import { formatDuration, formatKg } from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import {
@@ -78,12 +91,15 @@ interface LiveSet {
   key: string;
   weight: number;
   reps: number;
+  /** Durée d'effort réalisée (endurance), en secondes. */
+  durationSec: number;
   completed: boolean;
 }
 
 interface PreviousSet {
   weight: number;
   reps: number;
+  durationSec: number;
 }
 
 interface LiveExercise {
@@ -91,6 +107,10 @@ interface LiveExercise {
   exercise: Exercise;
   repsMin: number;
   repsMax: number;
+  /** Exercice d'endurance : la cible est une durée, pas des répétitions. */
+  endurance: boolean;
+  /** Durée cible par série (endurance), en secondes. */
+  durationSec: number;
   /** Repos après une série, en secondes. */
   restTime: number;
   /** Bloc de superset : les exos consécutifs partageant la même valeur s'enchaînent. */
@@ -263,6 +283,15 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
+  /** Chrono d'effort en cours (série d'endurance mesurée) ; null = arrêté. */
+  const [chrono, setChrono] = useState<{
+    exIndex: number;
+    setIndex: number;
+    startedAt: number;
+  } | null>(null);
+  /** Dernier rafraîchissement de l'affichage du chrono (re-rendu périodique). */
+  const [chronoNow, setChronoNow] = useState(0);
+
   // Réglages du calculateur de disques (barre + disques), persistés en préférences.
   const [barWeight, setBarWeightState] = useState(DEFAULT_BAR_WEIGHT);
   const [customBars, setCustomBarsState] = useState<number[]>([]);
@@ -362,13 +391,18 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
         const built = rows.map((row, rowIndex) => {
           const exercise = programExerciseToExercise(row);
+          const endurance = isEndurance(exercise);
           const baseWeight = row.target_weight ?? 0;
           const series = Math.max(1, row.series ?? 3);
           const weights = fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight);
 
           const previous: Array<PreviousSet | undefined> = [];
           for (const set of previousSets[rowIndex]) {
-            previous[set.set_num - 1] = { weight: set.weight, reps: set.reps };
+            previous[set.set_num - 1] = {
+              weight: set.weight,
+              reps: set.reps,
+              durationSec: set.duration_sec ?? 0,
+            };
           }
 
           const saved = restored?.exercises.find((entry) => entry.workout_exo_id === row.id);
@@ -378,9 +412,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             exercise,
             repsMin: row.reps_min ?? REPS_RANGE.min,
             repsMax: row.reps_max ?? REPS_RANGE.min,
+            endurance,
+            durationSec: row.duration_sec ?? DEFAULT_ENDURANCE_DURATION,
             restTime: row.rest_time ?? 0,
             supersetGroup: row.superset_group,
-            bestSet: bestByExercise.get(row.exercise_id ?? -1) ?? null,
+            bestSet: endurance ? null : (bestByExercise.get(row.exercise_id ?? -1) ?? null),
             baseWeight,
             previous,
             sets: Array.from({ length: series }, (_, index) => {
@@ -389,6 +425,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                 key: nextKey(),
                 weight: kept ? kept.weight : weights[index] ?? baseWeight,
                 reps: kept?.reps ?? 0,
+                durationSec: kept?.duration_sec ?? 0,
                 completed: kept?.completed ?? false,
               };
             }),
@@ -438,6 +475,15 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     return () => clearInterval(id);
   }, []);
 
+  // Le chrono d'effort d'une série d'endurance rafraîchit son affichage en continu
+  // (l'arrêt enregistre la durée mesurée dans la série).
+  useEffect(() => {
+    if (chrono === null) return;
+    setChronoNow(Date.now());
+    const id = setInterval(() => setChronoNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [chrono]);
+
   /**
    * Met la séance de côté pour pouvoir la reprendre après l'avoir quittée.
    * `force` écrit tout de suite (à la sortie de l'écran) ; sinon on limite les
@@ -468,6 +514,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         sets: exercise.sets.map((set) => ({
           weight: set.weight,
           reps: set.reps,
+          duration_sec: set.durationSec,
           completed: set.completed,
         })),
       })),
@@ -732,10 +779,44 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     );
   };
 
+  const changeDuration = (exIndex: number, setIndex: number, seconds: number) => {
+    setLiveExercises((prev) =>
+      prev.map((exercise, i) =>
+        i === exIndex
+          ? {
+              ...exercise,
+              sets: exercise.sets.map((set, j) =>
+                // Saisir une durée coche la série (durée zéro = décoche).
+                j === setIndex ? { ...set, durationSec: seconds, completed: seconds > 0 } : set
+              ),
+            }
+          : exercise
+      )
+    );
+  };
+
   /**
-   * Coche une série. Une série validée sans reps est remplie à la **borne basse**
-   * de la fourchette (valider = « j'ai fait le minimum prévu ») ; les reps
-   * saisies à la main ne sont jamais écrasées.
+   * Chrono d'effort d'une série d'endurance : un premier appui démarre la mesure,
+   * un second l'arrête et enregistre le temps réalisé dans la série (qui est alors
+   * validée). C'est l'alternative au clavier pour les courses et le cardio.
+   */
+  const toggleChrono = (exIndex: number, setIndex: number) => {
+    if (chrono !== null && chrono.exIndex === exIndex && chrono.setIndex === setIndex) {
+      const seconds = Math.max(
+        1,
+        Math.min(DURATION_RANGE.max, Math.round((Date.now() - chrono.startedAt) / 1000))
+      );
+      changeDuration(exIndex, setIndex, seconds);
+      setChrono(null);
+      return;
+    }
+    setChrono({ exIndex, setIndex, startedAt: Date.now() });
+  };
+
+  /**
+   * Coche une série. Une série validée sans valeur est remplie avec la cible
+   * (borne basse des reps, ou durée cible pour l'endurance) ; une valeur saisie
+   * à la main n'est jamais écrasée.
    */
   const toggleSet = (exIndex: number, setIndex: number) => {
     setLiveExercises((prev) =>
@@ -746,10 +827,13 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
           sets: exercise.sets.map((set, j) => {
             if (j !== setIndex) return set;
             const completed = !set.completed;
+            if (!completed) return { ...set, completed };
             return {
               ...set,
               completed,
-              reps: completed && set.reps === 0 ? exercise.repsMin : set.reps,
+              reps: exercise.endurance || set.reps > 0 ? set.reps : exercise.repsMin,
+              durationSec:
+                !exercise.endurance || set.durationSec > 0 ? set.durationSec : exercise.durationSec,
             };
           }),
         };
@@ -765,12 +849,17 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         const allDone = exercise.sets.every((set) => set.completed);
         return {
           ...exercise,
-          sets: exercise.sets.map((set) => ({
-            ...set,
-            completed: !allDone,
-            // Même règle que série par série : une série vide est validée au minimum.
-            reps: !allDone && set.reps === 0 ? exercise.repsMin : set.reps,
-          })),
+          sets: exercise.sets.map((set) => {
+            if (allDone) return { ...set, completed: false };
+            // Même règle que série par série : une série vide est validée à la cible.
+            return {
+              ...set,
+              completed: true,
+              reps: exercise.endurance || set.reps > 0 ? set.reps : exercise.repsMin,
+              durationSec:
+                !exercise.endurance || set.durationSec > 0 ? set.durationSec : exercise.durationSec,
+            };
+          }),
         };
       })
     );
@@ -790,6 +879,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
               key: nextKey(),
               weight: last ? last.weight : exercise.baseWeight,
               reps: 0,
+              durationSec: 0,
               completed: false,
             },
           ],
@@ -800,6 +890,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   const removeSet = (exIndex: number) => {
     planDirty.current = true;
+    if (chrono !== null && chrono.exIndex === exIndex) setChrono(null);
     setLiveExercises((prev) =>
       prev.map((exercise, i) =>
         i === exIndex && exercise.sets.length > 1
@@ -869,12 +960,13 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
       for (const exercise of liveExercises) {
         exercise.sets.forEach((set, index) => {
           volume += set.weight * set.reps;
-          if (set.completed || set.reps > 0) {
+          if (set.completed || set.reps > 0 || set.durationSec > 0) {
             sets.push({
               exercise_id: exercise.exercise.id,
               set_num: index + 1,
               weight: set.weight,
               reps: set.reps,
+              duration_sec: set.durationSec,
               completed: set.completed,
             });
           }
@@ -938,6 +1030,13 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
       total + exercise.sets.reduce((sum, set) => sum + set.weight * set.reps, 0),
     0
   );
+  // Temps d'effort cumulé des séries chronométrées (remplace le « 0 kg » d'une
+  // séance d'endurance seule dans l'en-tête).
+  const effortSeconds = liveExercises.reduce(
+    (total, exercise) =>
+      total + exercise.sets.reduce((sum, set) => sum + (set.completed ? set.durationSec : 0), 0),
+    0
+  );
 
   // Premier exercice dont toutes les séries ne sont pas encore validées.
   const currentIndex = liveExercises.findIndex(
@@ -956,7 +1055,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             <Text style={styles.headerTitle}>{nom}</Text>
             <View style={styles.headerMetrics}>
               <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
-              <Text style={styles.headerTotal}>{formatKg(volume)}</Text>
+              <Text style={styles.headerTotal}>
+                {volume > 0 || effortSeconds === 0
+                  ? formatKg(volume)
+                  : `${formatDuration(effortSeconds)} d’effort`}
+              </Text>
             </View>
           </Card>
         </Appear>
@@ -1006,6 +1109,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                         />
                         <Text style={styles.cardTitle}>{exercise.exercise.nom}</Text>
                       </PressableScale>
+                      {exercise.endurance ? <Badge label="Endurance" tone="neutral" /> : null}
                       {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
                       <CheckToggle
                         checked={allDone}
@@ -1023,35 +1127,82 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                       </Text>
                     ) : null}
 
+                    {exercise.endurance ? (
+                      <Text style={styles.recordHint}>
+                        Au temps · cible {formatDuration(exercise.durationSec)} par série — ▶ lance
+                        le chrono, ■ l’arrête et enregistre
+                      </Text>
+                    ) : null}
+
                     {exercise.sets.map((set, setIndex) => {
                       const previous = exercise.previous[setIndex];
+                      const running =
+                        chrono !== null &&
+                        chrono.exIndex === exIndex &&
+                        chrono.setIndex === setIndex;
+                      const liveSeconds =
+                        chrono !== null && running
+                          ? Math.max(0, Math.floor((chronoNow - chrono.startedAt) / 1000))
+                          : 0;
                       return (
                         <View key={set.key} style={styles.setRow}>
                           <Text style={styles.setLabel}>{setIndex + 1}</Text>
                           <Text style={styles.previousText}>
-                            {previous ? `${formatWeight(previous.weight)}×${previous.reps}` : '—'}
+                            {previous
+                              ? exercise.endurance
+                                ? formatDuration(previous.durationSec)
+                                : `${formatWeight(previous.weight)}×${previous.reps}`
+                              : '—'}
                           </Text>
 
-                          <WeightField
-                            value={set.weight}
-                            onChange={(value) => changeWeight(exIndex, setIndex, value)}
-                            onOpenCalculator={() => setCalc({ exIndex, setIndex })}
-                          />
+                          {exercise.endurance ? (
+                            <>
+                              <IconButton
+                                glyph={running ? '■' : '▶'}
+                                tone={running ? 'danger' : 'accent'}
+                                active={running}
+                                size={40}
+                                accessibilityLabel={
+                                  running ? 'Arrêter le chrono' : 'Lancer le chrono'
+                                }
+                                onPress={() => toggleChrono(exIndex, setIndex)}
+                              />
+                              <DurationField
+                                value={running ? liveSeconds : set.durationSec}
+                                onChange={(seconds) => changeDuration(exIndex, setIndex, seconds)}
+                                placeholder={formatDuration(exercise.durationSec)}
+                                style={styles.durationField}
+                                inputStyle={styles.repsInput}
+                                editable={!running}
+                                accessibilityLabel={`Durée de la série ${setIndex + 1}`}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <WeightField
+                                value={set.weight}
+                                onChange={(value) => changeWeight(exIndex, setIndex, value)}
+                                onOpenCalculator={() => setCalc({ exIndex, setIndex })}
+                              />
 
-                          <TextInput
-                            style={styles.repsInput}
-                            value={set.reps > 0 ? String(set.reps) : ''}
-                            onChangeText={(value) => changeReps(exIndex, setIndex, value)}
-                            placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
-                            placeholderTextColor={theme.colors.textMuted}
-                            keyboardType="number-pad"
-                            returnKeyType="done"
-                          />
+                              <TextInput
+                                style={styles.repsInput}
+                                value={set.reps > 0 ? String(set.reps) : ''}
+                                onChangeText={(value) => changeReps(exIndex, setIndex, value)}
+                                placeholder={`${exercise.repsMin}–${exercise.repsMax}`}
+                                placeholderTextColor={theme.colors.textMuted}
+                                keyboardType="number-pad"
+                                returnKeyType="done"
+                              />
+                            </>
+                          )}
 
                           <CheckToggle
                             checked={set.completed}
                             accessibilityLabel={`Valider la série ${setIndex + 1}`}
-                            onPress={() => toggleSet(exIndex, setIndex)}
+                            onPress={() =>
+                              running ? toggleChrono(exIndex, setIndex) : toggleSet(exIndex, setIndex)
+                            }
                           />
                         </View>
                       );
@@ -1271,6 +1422,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     minWidth: 40,
   },
+  durationField: {
+    flex: 1,
+  },
   weightBox: {
     flex: 1,
     flexDirection: 'row',
@@ -1313,6 +1467,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   repsInput: {
     width: 56,
     height: 48,
+    minHeight: 48,
     textAlign: 'center',
     ...text.title,
     color: theme.colors.text,

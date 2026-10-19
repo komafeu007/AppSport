@@ -6,7 +6,7 @@ import { joinKeyList } from '../domain/profile';
 export const DATABASE_NAME = 'appsportlocal.db';
 
 /** Incrémenter à chaque évolution du schéma et ajouter la migration correspondante. */
-const DATABASE_VERSION = 10;
+const DATABASE_VERSION = 11;
 
 export interface Exercise {
   id: number;
@@ -69,6 +69,8 @@ export interface WorkoutExo {
   reps_min: number | null;
   /** Reps maximum (au-delà, on monte le poids et on redescend au min). */
   reps_max: number | null;
+  /** Durée d'effort par série (exercices d'endurance), en secondes ; null sinon. */
+  duration_sec: number | null;
   /** Repos après la série, en secondes. */
   rest_time: number | null;
   /** Poids cible « de base », en kg. */
@@ -175,6 +177,7 @@ CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
     series INTEGER,
     reps_min INTEGER,
     reps_max INTEGER,
+    duration_sec INTEGER,   -- durée d'effort par série (endurance) — v11
     rest_time INTEGER,
     target_weight REAL,
     set_weights TEXT,
@@ -201,6 +204,7 @@ CREATE TABLE IF NOT EXISTS LOGS_SETS (
     set_num INTEGER,
     weight REAL,
     reps INTEGER,
+    duration_sec INTEGER,   -- durée d'effort réalisée (endurance) — v11
     completed INTEGER,
     FOREIGN KEY(session_id) REFERENCES LOGS_SESSION(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)
@@ -251,6 +255,7 @@ export async function migrateDbIfNeeded(db: SQLite.SQLiteDatabase): Promise<void
   await ensureProgramsColumns(db);
   await ensureSessionGroupsColumns(db);
   await ensureLogsSessionColumns(db);
+  await ensureLogsSetsColumns(db);
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
@@ -263,6 +268,21 @@ async function ensureLogsSessionColumns(db: SQLite.SQLiteDatabase): Promise<void
   const names = new Set(columns.map((column) => column.name));
   if (!names.has('program_id')) {
     await db.execAsync('ALTER TABLE LOGS_SESSION ADD COLUMN program_id INTEGER');
+  }
+}
+
+/**
+ * Ajoute `LOGS_SETS.duration_sec` (v11) : durée d'effort réalisée sur les
+ * exercices d'endurance, chronométrés au lieu d'être comptés en répétitions.
+ * Idempotent : ne fait rien sur une base neuve (colonne déjà présente).
+ */
+async function ensureLogsSetsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(LOGS_SETS)');
+  if (columns.length === 0) return;
+
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has('duration_sec')) {
+    await db.execAsync('ALTER TABLE LOGS_SETS ADD COLUMN duration_sec INTEGER');
   }
 }
 
@@ -327,9 +347,10 @@ async function ensureProgramsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
- * Migrations additives de WORKOUT_EXOS (v3 -> v5) :
+ * Migrations additives de WORKOUT_EXOS (v3 -> v11) :
  * - v4 : bornes de reps `reps_min`/`reps_max` (double progression).
  * - v5 : `set_weights` (poids par série, dégressif), stocké en JSON.
+ * - v11 : `duration_sec` (durée cible d'un exercice d'endurance).
  * Idempotent : ne fait rien sur une base neuve (colonnes déjà présentes).
  */
 async function ensureWorkoutExosColumns(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -349,6 +370,9 @@ async function ensureWorkoutExosColumns(db: SQLite.SQLiteDatabase): Promise<void
   }
   if (!names.has('superset_group')) {
     await db.execAsync('ALTER TABLE WORKOUT_EXOS ADD COLUMN superset_group INTEGER');
+  }
+  if (!names.has('duration_sec')) {
+    await db.execAsync('ALTER TABLE WORKOUT_EXOS ADD COLUMN duration_sec INTEGER');
   }
 
   // Reprend l'ancienne valeur unique `reps` (v3) comme borne unique, si présente.
@@ -663,7 +687,7 @@ export function getProgramExercises(
 ): Promise<ProgramExercise[]> {
   return db.getAllAsync<ProgramExercise>(
     `SELECT we.id, we.program_id, we.exercise_id, we.series, we.reps_min, we.reps_max,
-            we.rest_time, we.target_weight, we.set_weights, we.superset_group,
+            we.duration_sec, we.rest_time, we.target_weight, we.set_weights, we.superset_group,
             e.nom, e.nom_fr, e.muscle_group, e.target, e.secondary_muscles, e.is_poly,
             e.category, e.equipment, e.image, e.instructions_fr
        FROM WORKOUT_EXOS we
@@ -679,6 +703,8 @@ export interface SaveProgramExercise {
   series: number;
   reps_min: number;
   reps_max: number;
+  /** Durée d'effort par série (endurance), en secondes ; null pour la musculation. */
+  duration_sec: number | null;
   rest_time: number;
   target_weight: number;
   /** Poids par série (dégressif) ; null = poids uniforme (target_weight). */
@@ -734,8 +760,8 @@ export async function saveProgram(
     const programIdValue = programId as number;
     const statement = await db.prepareAsync(
       `INSERT INTO WORKOUT_EXOS
-         (program_id, exercise_id, series, reps_min, reps_max, rest_time, target_weight, set_weights, superset_group)
-       VALUES ($program_id, $exercise_id, $series, $reps_min, $reps_max, $rest_time, $target_weight, $set_weights, $superset_group)`
+         (program_id, exercise_id, series, reps_min, reps_max, duration_sec, rest_time, target_weight, set_weights, superset_group)
+       VALUES ($program_id, $exercise_id, $series, $reps_min, $reps_max, $duration_sec, $rest_time, $target_weight, $set_weights, $superset_group)`
     );
     try {
       for (const ex of input.exercises) {
@@ -745,6 +771,7 @@ export async function saveProgram(
           $series: ex.series,
           $reps_min: ex.reps_min,
           $reps_max: ex.reps_max,
+          $duration_sec: ex.duration_sec,
           $rest_time: ex.rest_time,
           $target_weight: ex.target_weight,
           $set_weights: ex.set_weights ? JSON.stringify(ex.set_weights) : null,
@@ -872,6 +899,8 @@ export interface CompletedSession {
   duration_sec: number | null;
   total_volume: number;
   total_reps: number;
+  /** Temps d'effort cumulé des séries chronométrées (endurance), en secondes. */
+  total_effort_sec: number;
   exercise_count: number;
 }
 
@@ -885,6 +914,8 @@ export function getCompletedSessions(
             COALESCE(ls.total_volume, 0) AS total_volume,
             (SELECT COALESCE(SUM(s.reps), 0)
                FROM LOGS_SETS s WHERE s.session_id = ls.id) AS total_reps,
+            (SELECT COALESCE(SUM(s.duration_sec), 0)
+               FROM LOGS_SETS s WHERE s.session_id = ls.id) AS total_effort_sec,
             (SELECT COUNT(DISTINCT s.exercise_id)
                FROM LOGS_SETS s WHERE s.session_id = ls.id) AS exercise_count
        FROM LOGS_SESSION ls
@@ -902,6 +933,8 @@ export interface SaveWorkoutSet {
   set_num: number;
   weight: number;
   reps: number;
+  /** Durée d'effort réalisée sur un exercice d'endurance, en secondes (0 sinon). */
+  duration_sec: number;
   completed: boolean;
 }
 
@@ -988,8 +1021,8 @@ export async function saveWorkoutSession(
 
     if (input.sets.length > 0) {
       const statement = await db.prepareAsync(
-        `INSERT INTO LOGS_SETS (session_id, exercise_id, set_num, weight, reps, completed)
-         VALUES ($session_id, $exercise_id, $set_num, $weight, $reps, $completed)`
+        `INSERT INTO LOGS_SETS (session_id, exercise_id, set_num, weight, reps, duration_sec, completed)
+         VALUES ($session_id, $exercise_id, $set_num, $weight, $reps, $duration_sec, $completed)`
       );
       try {
         for (const set of input.sets) {
@@ -999,6 +1032,7 @@ export async function saveWorkoutSession(
             $set_num: set.set_num,
             $weight: set.weight,
             $reps: set.reps,
+            $duration_sec: set.duration_sec,
             $completed: set.completed ? 1 : 0,
           });
         }
@@ -1037,6 +1071,8 @@ export interface PreviousSet {
   set_num: number;
   weight: number;
   reps: number;
+  /** Durée d'effort réalisée (endurance), en secondes. */
+  duration_sec: number | null;
 }
 
 /**
@@ -1051,7 +1087,8 @@ export function getLastSetsForExercise(
   exerciseId: number
 ): Promise<PreviousSet[]> {
   return db.getAllAsync<PreviousSet>(
-    `SELECT ls.set_num AS set_num, ls.weight AS weight, ls.reps AS reps
+    `SELECT ls.set_num AS set_num, ls.weight AS weight, ls.reps AS reps,
+            ls.duration_sec AS duration_sec
        FROM LOGS_SETS ls
        JOIN LOGS_SESSION s ON s.id = ls.session_id
       WHERE ls.exercise_id = ?
@@ -1166,6 +1203,8 @@ export interface SessionSetDetail {
   set_num: number;
   weight: number;
   reps: number;
+  /** Durée d'effort réalisée (endurance), en secondes ; null pour la musculation. */
+  duration_sec: number | null;
   completed: number;
   nom: string;
   nom_fr: string | null;
@@ -1195,7 +1234,7 @@ export function getSessionSets(
   sessionId: number
 ): Promise<SessionSetDetail[]> {
   return db.getAllAsync<SessionSetDetail>(
-    `SELECT ls.exercise_id, ls.set_num, ls.weight, ls.reps, ls.completed,
+    `SELECT ls.exercise_id, ls.set_num, ls.weight, ls.reps, ls.duration_sec, ls.completed,
             e.nom, e.nom_fr, e.muscle_group, e.target, e.secondary_muscles, e.is_poly, e.image
        FROM LOGS_SETS ls
        JOIN EXERCISES e ON e.id = ls.exercise_id

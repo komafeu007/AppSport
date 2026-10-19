@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { exerciseImages } from '../data/exerciseImages';
+import { isEndurance } from '../domain/exerciseCatalog';
 import { exerciseTermLabel } from '../domain/exerciseLabels';
 import { buildExerciseSections, type ExerciseSection } from '../lib/exerciseSearch';
 import type { Exercise } from '../services/database';
@@ -59,6 +60,7 @@ function ExerciseRow({
 }) {
   const styles = useThemedStyles(createStyles);
   const source = exercise.image ? exerciseImages[exercise.image] : undefined;
+  const endurance = isEndurance(exercise);
 
   return (
     <Row
@@ -74,8 +76,8 @@ function ExerciseRow({
         <View style={styles.rowHeader}>
           <Text style={styles.rowTitle}>{exercise.nom}</Text>
           <Badge
-            label={exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-            tone={exercise.is_poly === 1 ? 'action' : 'neutral'}
+            label={endurance ? 'Endurance' : exercise.is_poly === 1 ? 'Poly' : 'Mono'}
+            tone={endurance ? 'neutral' : exercise.is_poly === 1 ? 'action' : 'neutral'}
           />
         </View>
         <Text style={styles.rowMeta}>

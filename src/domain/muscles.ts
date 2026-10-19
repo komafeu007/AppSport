@@ -1,5 +1,9 @@
 /**
- * Regroupement des muscles pour la répartition du volume (Module 4 - Stats).
+ * Regroupement des muscles pour la répartition du travail (Module 4 - Stats).
+ *
+ * La charge répartie par groupe est le **nombre de répétitions réalisées**
+ * (et non les kilos soulevés) : un exercice lourd en séries courtes ne doit pas
+ * écraser la répartition au même titre qu'un exercice léger en séries longues.
  *
  * Le catalogue vient du dataset hasaneyldrm/exercises-dataset : les muscles
  * (`target`, `muscle_group`, `secondary_muscles`) sont en anglais et très
@@ -102,50 +106,50 @@ export function parseSecondaryMuscles(json: string | null): string[] {
   }
 }
 
-/** Volume réalisé sur un exercice, à répartir entre ses muscles. */
-export interface MuscleVolumeEntry {
+/** Charge de travail réalisée sur un exercice, à répartir entre ses muscles. */
+export interface MuscleAmountEntry {
   /** Muscle principal visé (dataset `target`). */
   target: string | null;
   /** Groupe musculaire de secours si `target` est absent (dataset `muscle_group`). */
   muscle_group: string;
   /** Muscles secondaires bruts (dataset `secondary_muscles`). */
   secondary: string[];
-  /** Volume total de l'exercice (kg) = Σ poids × reps. */
-  volume: number;
+  /** Charge totale de l'exercice = Σ répétitions réalisées. */
+  amount: number;
 }
 
-export interface MuscleVolume {
+export interface MuscleAmount {
   key: string;
   label: string;
-  volume: number;
+  amount: number;
 }
 
-/** Part du volume comptée pour chaque muscle secondaire (échauffement de la zone). */
+/** Part de la charge comptée pour chaque muscle secondaire (échauffement de la zone). */
 const SECONDARY_SHARE = 0.5;
 
 /**
- * Répartit le volume des exercices sur les groupes musculaires : le muscle
- * principal prend tout, chaque muscle secondaire la moitié. Renvoie les groupes
- * réellement travaillés, dans l'ordre anatomique de `MUSCLE_GROUPS`.
+ * Répartit la charge (répétitions) des exercices sur les groupes musculaires : le
+ * muscle principal prend tout, chaque muscle secondaire la moitié. Renvoie les
+ * groupes réellement travaillés, dans l'ordre anatomique de `MUSCLE_GROUPS`.
  */
-export function aggregateMuscleVolume(entries: MuscleVolumeEntry[]): MuscleVolume[] {
+export function aggregateMuscleAmount(entries: MuscleAmountEntry[]): MuscleAmount[] {
   const totals = new Map<string, number>();
   const add = (key: string, amount: number) =>
     totals.set(key, (totals.get(key) ?? 0) + amount);
 
   for (const entry of entries) {
-    if (entry.volume <= 0) continue;
+    if (entry.amount <= 0) continue;
     const primary = muscleKey(entry.target) ?? muscleKey(entry.muscle_group);
-    if (primary) add(primary, entry.volume);
+    if (primary) add(primary, entry.amount);
     for (const raw of entry.secondary) {
       const key = muscleKey(raw);
-      if (key && key !== primary) add(key, entry.volume * SECONDARY_SHARE);
+      if (key && key !== primary) add(key, entry.amount * SECONDARY_SHARE);
     }
   }
 
   return MUSCLE_GROUPS.filter((group) => (totals.get(group.key) ?? 0) > 0).map((group) => ({
     key: group.key,
     label: group.label,
-    volume: totals.get(group.key) ?? 0,
+    amount: totals.get(group.key) ?? 0,
   }));
 }

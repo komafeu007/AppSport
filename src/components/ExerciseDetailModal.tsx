@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { exerciseImages } from '../data/exerciseImages';
+import { isEndurance } from '../domain/exerciseCatalog';
 import { exerciseTermLabel, exerciseTermLabels } from '../domain/exerciseLabels';
 import { exerciseGifUrls } from '../lib/exerciseMedia';
 import type { Exercise } from '../services/database';
@@ -123,8 +124,12 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
 
             <View style={styles.badges}>
               <Badge
-                label={exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-                tone={exercise.is_poly === 1 ? 'action' : 'neutral'}
+                label={
+                  isEndurance(exercise) ? 'Endurance' : exercise.is_poly === 1 ? 'Poly' : 'Mono'
+                }
+                tone={
+                  isEndurance(exercise) || exercise.is_poly !== 1 ? 'neutral' : 'action'
+                }
               />
               {exercise.target ? (
                 <View style={styles.tag}>

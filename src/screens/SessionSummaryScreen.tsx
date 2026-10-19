@@ -22,7 +22,7 @@ import {
   Thumb,
 } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
-import { aggregateMuscleVolume, parseSecondaryMuscles } from '../domain/muscles';
+import { aggregateMuscleAmount, parseSecondaryMuscles } from '../domain/muscles';
 import { formatWeight } from '../domain/plates';
 import { beatsSet, formatPerformance, type SetPerformance } from '../domain/workoutRules';
 import { formatDuration, formatKg, formatNumber, formatShortDate } from '../lib/format';
@@ -46,9 +46,13 @@ interface ExerciseBlock {
   name: string;
   image: string | null;
   isPoly: number;
-  sets: Array<{ weight: number; reps: number }>;
+  sets: Array<{ weight: number; reps: number; durationSec: number }>;
   reps: number;
   volume: number;
+  /** Temps d'effort cumulé (endurance), en secondes. */
+  duration: number;
+  /** Exercice chronométré : ni reps ni charge, on affiche la durée. */
+  timed: boolean;
   /** Meilleure série jamais faite sur cet exo **avant** cette séance ; null si 1re fois. */
   previousBest: ExerciseBestSet | null;
   /** Meilleure série de cette séance sur cet exo (poids puis reps). */
@@ -57,7 +61,7 @@ interface ExerciseBlock {
 
 /** true si la séance a battu le record absolu de cet exercice. */
 function isRecord(block: ExerciseBlock): boolean {
-  if (block.previousBest === null || block.bestSet === null) return false;
+  if (block.timed || block.previousBest === null || block.bestSet === null) return false;
   return beatsSet(block.bestSet, block.previousBest);
 }
 
@@ -81,16 +85,26 @@ function groupByExercise(
         sets: [],
         reps: 0,
         volume: 0,
+        duration: 0,
+        timed: false,
         previousBest: bestBefore.get(row.exercise_id) ?? null,
         bestSet: null,
       });
     }
     const block = blocks[index];
-    block.sets.push({ weight: row.weight, reps: row.reps });
+    const durationSec = row.duration_sec ?? 0;
+    block.sets.push({ weight: row.weight, reps: row.reps, durationSec });
     block.reps += row.reps;
     block.volume += row.weight * row.reps;
-    // Un vrai record suppose des reps réalisées (une case cochée sans reps ne compte pas).
-    if (row.reps > 0 && (block.bestSet === null || beatsSet(row, block.bestSet))) {
+    block.duration += durationSec;
+    if (durationSec > 0) block.timed = true;
+    // Un vrai record suppose des reps réalisées (une case cochée sans reps ne compte pas)
+    // et un exercice de musculation : l'endurance se compte au temps, pas en charges.
+    const beats =
+      durationSec === 0 &&
+      row.reps > 0 &&
+      (block.bestSet === null || beatsSet(row, block.bestSet));
+    if (beats) {
       block.bestSet = { weight: row.weight, reps: row.reps };
     }
   }
@@ -111,8 +125,9 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
   const [durationSec, setDurationSec] = useState(0);
   const [totalVolume, setTotalVolume] = useState(0);
   const [totalReps, setTotalReps] = useState(0);
+  const [totalEffort, setTotalEffort] = useState(0);
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
-  const [muscles, setMuscles] = useState<ReturnType<typeof aggregateMuscleVolume>>([]);
+  const [muscles, setMuscles] = useState<ReturnType<typeof aggregateMuscleAmount>>([]);
   const [history, setHistory] = useState<VolumeLinePoint[]>([]);
 
   useEffect(() => {
@@ -124,6 +139,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
         const rows = await getSessionSets(db, sessionId);
         const volume = rows.reduce((total, row) => total + row.weight * row.reps, 0);
         const reps = rows.reduce((total, row) => total + row.reps, 0);
+        const effort = rows.reduce((total, row) => total + (row.duration_sec ?? 0), 0);
 
         // Records : meilleure série déjà faite sur chaque exo avant cette séance.
         const bestRows =
@@ -141,14 +157,16 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
         setDurationSec(summary.duration_sec ?? 0);
         setTotalVolume(volume || summary.total_volume || 0);
         setTotalReps(reps);
+        setTotalEffort(effort);
         setBlocks(groupByExercise(rows, bestBefore));
         setMuscles(
-          aggregateMuscleVolume(
+          aggregateMuscleAmount(
             rows.map((row) => ({
               target: row.target,
               muscle_group: row.muscle_group,
               secondary: parseSecondaryMuscles(row.secondary_muscles),
-              volume: row.weight * row.reps,
+              // Répartition en répétitions, pas en kilos.
+              amount: row.reps,
             }))
           )
         );
@@ -197,7 +215,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
   }
 
   const radarSize = Math.min(width - spacing.xl * 2 - spacing.lg * 2, 300);
-  const muscleMax = Math.max(...muscles.map((muscle) => muscle.volume), 1);
+  const muscleMax = Math.max(...muscles.map((muscle) => muscle.amount), 1);
   const records = blocks.filter(isRecord);
 
   return (
@@ -226,8 +244,19 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{totalReps}</Text>
-                <Text style={styles.statLabel}>répétitions</Text>
+                {totalReps > 0 ? (
+                  <>
+                    <Text style={styles.statValue}>{totalReps}</Text>
+                    <Text style={styles.statLabel}>répétitions</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.statValue, styles.statTime]}>
+                      {formatDuration(totalEffort)}
+                    </Text>
+                    <Text style={styles.statLabel}>temps d’effort</Text>
+                  </>
+                )}
               </View>
             </View>
           </View>
@@ -235,10 +264,11 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
 
         <Appear style={styles.section}>
           <View style={styles.flat}>
-            <SectionTitle>Répartition par muscle</SectionTitle>
+            <SectionTitle hint="en répétitions">Répartition par muscle</SectionTitle>
             {muscles.length === 0 ? (
               <Text style={styles.emptyText}>
-                Aucune série enregistrée : rien à répartir pour cette séance.
+                Aucune répétition à répartir : les exercices d’endurance, comptés au temps, ne
+                comptent pas comme des répétitions.
               </Text>
             ) : (
               <>
@@ -248,7 +278,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                       size={radarSize}
                       data={muscles.map((muscle) => ({
                         label: muscle.label,
-                        value: muscle.volume,
+                        value: muscle.amount,
                       }))}
                     />
                   </View>
@@ -264,11 +294,11 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                         <View
                           style={[
                             styles.legendFill,
-                            { width: `${Math.max(4, (muscle.volume / muscleMax) * 100)}%` },
+                            { width: `${Math.max(4, (muscle.amount / muscleMax) * 100)}%` },
                           ]}
                         />
                       </View>
-                      <Text style={styles.legendValue}>{formatKg(muscle.volume)}</Text>
+                      <Text style={styles.legendValue}>{formatNumber(muscle.amount)}</Text>
                     </View>
                   ))}
                 </View>
@@ -347,12 +377,18 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                       {isRecord(block) ? <Badge label="Record" tone="marker" /> : null}
                     </View>
                     <Text style={styles.exerciseMeta}>
-                      {block.sets.length} série{block.sets.length > 1 ? 's' : ''} · {block.reps}{' '}
-                      reps · {formatKg(block.volume)}
+                      {block.sets.length} série{block.sets.length > 1 ? 's' : ''} ·{' '}
+                      {block.timed
+                        ? `${formatDuration(block.duration)} d’effort`
+                        : `${block.reps} reps · ${formatKg(block.volume)}`}
                     </Text>
                     <Text style={styles.exerciseSets} numberOfLines={2}>
                       {block.sets
-                        .map((set) => `${formatWeight(set.weight)}×${set.reps}`)
+                        .map((set) =>
+                          set.durationSec > 0
+                            ? formatDuration(set.durationSec)
+                            : `${formatWeight(set.weight)}×${set.reps}`
+                        )
                         .join('  ·  ')}
                     </Text>
                   </View>

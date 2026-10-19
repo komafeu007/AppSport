@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import DurationField from '../components/DurationField';
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
 import ExerciseSearchList from '../components/ExerciseSearchList';
 import {
@@ -32,11 +33,13 @@ import {
 } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import { findExerciseAlternatives } from '../domain/exerciseAlternatives';
+import { isEndurance } from '../domain/exerciseCatalog';
 import {
   buildDegressiveWeights,
   clamp,
   defaultTargets,
   describeRules,
+  ENDURANCE_HINT,
   fitWeights,
   formatRest,
   normalizeRepBounds,
@@ -73,6 +76,8 @@ interface DraftItem {
   series: number;
   reps_min: number;
   reps_max: number;
+  /** Durée d'effort par série (endurance), en secondes. */
+  duration_sec: number;
   rest_time: number;
   /** Poids par série (kg) — toujours un poids par série ; la 1re série sert de référence. */
   set_weights: number[];
@@ -232,7 +237,8 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           setItems(
             rows.map((row, index) => {
               const exercise = programExerciseToExercise(row);
-              const defaults = defaultTargets(exercise.is_poly);
+              const endurance = isEndurance(exercise);
+              const defaults = defaultTargets(exercise.is_poly, endurance);
               const bounds = normalizeRepBounds(
                 row.reps_min ?? defaults.reps_min,
                 row.reps_max ?? defaults.reps_max
@@ -243,8 +249,9 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                 key: nextKey(),
                 exercise,
                 series,
-                reps_min: bounds.reps_min,
-                reps_max: bounds.reps_max,
+                reps_min: endurance ? 0 : bounds.reps_min,
+                reps_max: endurance ? 0 : bounds.reps_max,
+                duration_sec: row.duration_sec ?? defaults.duration_sec,
                 rest_time: row.rest_time ?? defaults.rest_time,
                 set_weights: fitWeights(parseWeights(row.set_weights) ?? [], series, baseWeight),
                 // Rattaché au suivant s'ils partagent le même groupe de superset.
@@ -270,7 +277,10 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const updateItem = (
     key: string,
     patch: Partial<
-      Pick<DraftItem, 'series' | 'reps_min' | 'reps_max' | 'rest_time' | 'set_weights' | 'superset'>
+      Pick<
+        DraftItem,
+        'series' | 'reps_min' | 'reps_max' | 'duration_sec' | 'rest_time' | 'set_weights' | 'superset'
+      >
     >
   ) => {
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
@@ -279,7 +289,8 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const addExercise = (exercise: Exercise) => {
     setItems((prev) => {
       if (prev.some((item) => item.exercise.id === exercise.id)) return prev;
-      const defaults = defaultTargets(exercise.is_poly);
+      const endurance = isEndurance(exercise);
+      const defaults = defaultTargets(exercise.is_poly, endurance);
       return [
         ...prev,
         {
@@ -288,6 +299,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           series: defaults.series,
           reps_min: defaults.reps_min,
           reps_max: defaults.reps_max,
+          duration_sec: defaults.duration_sec,
           rest_time: defaults.rest_time,
           set_weights: Array.from({ length: defaults.series }, () => defaults.target_weight),
           superset: false,
@@ -302,8 +314,10 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
 
   /**
    * Remplace l'exercice d'un item par un autre qui travaille les mêmes muscles :
-   * on conserve séries / reps / repos, mais les poids repartent de zéro (ils
-   * étaient propres à l'ancien mouvement). Refusé si déjà présent ailleurs.
+   * on conserve séries / cible / repos, mais les poids repartent de zéro (ils
+   * étaient propres à l'ancien mouvement). Si le mode change (musculation ↔
+   * endurance), on repart des valeurs par défaut du nouveau mode.
+   * Refusé si déjà présent ailleurs.
    */
   const replaceExercise = (itemKey: string, exercise: Exercise) => {
     setItems((prev) =>
@@ -312,11 +326,25 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         if (prev.some((other) => other.key !== itemKey && other.exercise.id === exercise.id)) {
           return item;
         }
-        const defaults = defaultTargets(exercise.is_poly);
+        const endurance = isEndurance(exercise);
+        const defaults = defaultTargets(exercise.is_poly, endurance);
+        const modeChanged = isEndurance(item.exercise) !== endurance;
         return {
           ...item,
           exercise,
-          set_weights: Array.from({ length: item.series }, () => defaults.target_weight),
+          ...(modeChanged
+            ? {
+                series: defaults.series,
+                reps_min: defaults.reps_min,
+                reps_max: defaults.reps_max,
+                duration_sec: defaults.duration_sec,
+                rest_time: defaults.rest_time,
+              }
+            : {}),
+          set_weights: Array.from(
+            { length: modeChanged ? defaults.series : item.series },
+            () => defaults.target_weight
+          ),
         };
       })
     );
@@ -367,6 +395,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           series: item.series,
           reps_min: item.reps_min,
           reps_max: item.reps_max,
+          duration_sec: isEndurance(item.exercise) ? item.duration_sec : null,
           rest_time: item.rest_time,
           target_weight: item.set_weights[0] ?? 0,
           set_weights: item.set_weights,
@@ -397,6 +426,14 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   }
 
   const selectedIds = items.map((item) => item.exercise.id);
+  const hasEndurance = items.some((item) => isEndurance(item.exercise));
+  const hasStrength = items.some((item) => !isEndurance(item.exercise));
+  const editorHint =
+    hasEndurance && hasStrength
+      ? `${ENDURANCE_HINT}\n${PROGRESSION_HINT}`
+      : hasEndurance
+        ? ENDURANCE_HINT
+        : PROGRESSION_HINT;
 
   /** Item dont on remplace l'exercice (sélecteur ouvert en mode « replace »). */
   const pickerTarget =
@@ -480,142 +517,170 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           Exercices
         </SectionTitle>
 
-        <Text style={styles.progressionHint}>{PROGRESSION_HINT}</Text>
+        <Text style={styles.progressionHint}>{editorHint}</Text>
 
         {items.length === 0 ? (
           <Text style={styles.emptyText}>
-            Aucun exercice. Les séries, la fourchette de reps, le repos et le poids sont préremplis
-            selon la règle polyarticulaire / monoarticulaire, puis restent modifiables.
+            Aucun exercice. Les séries, la cible (reps ou durée), le repos et le poids sont
+            préremplis selon la règle polyarticulaire / monoarticulaire, puis restent modifiables.
           </Text>
         ) : (
-          items.map((item, index) => (
-            <Appear key={item.key}>
-              <Card
-                style={[
-                  styles.card,
-                  (item.superset || (index > 0 && items[index - 1].superset)) && styles.cardSuperset,
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardIndex}>{index + 1}</Text>
-                  <PressableScale
-                    style={styles.cardTap}
-                    onPress={() => setDetail({ exercise: item.exercise, itemKey: item.key })}
-                    accessibilityLabel={`Voir et remplacer ${item.exercise.nom}`}
-                    scaleTo={0.97}
-                  >
-                    <Thumb
-                      source={
-                        item.exercise.image ? exerciseImages[item.exercise.image] : undefined
-                      }
-                      size={44}
+          items.map((item, index) => {
+            const endurance = isEndurance(item.exercise);
+            return (
+              <Appear key={item.key}>
+                <Card
+                  style={[
+                    styles.card,
+                    (item.superset || (index > 0 && items[index - 1].superset)) && styles.cardSuperset,
+                  ]}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardIndex}>{index + 1}</Text>
+                    <PressableScale
+                      style={styles.cardTap}
+                      onPress={() => setDetail({ exercise: item.exercise, itemKey: item.key })}
+                      accessibilityLabel={`Voir et remplacer ${item.exercise.nom}`}
+                      scaleTo={0.97}
+                    >
+                      <Thumb
+                        source={
+                          item.exercise.image ? exerciseImages[item.exercise.image] : undefined
+                        }
+                        size={44}
+                      />
+                      <View style={styles.cardTitleBlock}>
+                        <Text style={styles.cardTitle}>{item.exercise.nom}</Text>
+                        <Badge
+                          label={
+                            endurance ? 'Endurance' : item.exercise.is_poly === 1 ? 'Poly' : 'Mono'
+                          }
+                          tone={
+                            endurance
+                              ? 'neutral'
+                              : item.exercise.is_poly === 1
+                                ? 'action'
+                                : 'neutral'
+                          }
+                        />
+                      </View>
+                    </PressableScale>
+                    <IconButton
+                      glyph="×"
+                      tone="danger"
+                      accessibilityLabel={`Retirer ${item.exercise.nom}`}
+                      onPress={() => removeExercise(item.key)}
                     />
-                    <View style={styles.cardTitleBlock}>
-                      <Text style={styles.cardTitle}>{item.exercise.nom}</Text>
-                      <Badge
-                        label={item.exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-                        tone={item.exercise.is_poly === 1 ? 'action' : 'neutral'}
+                  </View>
+
+                  <Text style={styles.rules}>
+                    {describeRules(item.exercise.is_poly, endurance)}
+                  </Text>
+
+                  {item.superset || (index > 0 && items[index - 1].superset) ? (
+                    <Text style={styles.supersetNote}>
+                      Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
+                    </Text>
+                  ) : null}
+
+                  <View style={styles.fields}>
+                    <StepperField
+                      label="Séries"
+                      value={item.series}
+                      range={SERIES_RANGE}
+                      onChange={(value) =>
+                        updateItem(item.key, {
+                          series: value,
+                          set_weights: fitWeights(item.set_weights, value, item.set_weights[0] ?? 0),
+                        })
+                      }
+                    />
+                    {endurance ? (
+                      <DurationField
+                        label="Durée par série"
+                        value={item.duration_sec}
+                        hint
+                        style={styles.field}
+                        inputStyle={styles.durationInput}
+                        onChange={(value) => updateItem(item.key, { duration_sec: value })}
+                      />
+                    ) : (
+                      <>
+                        <StepperField
+                          label="Reps min"
+                          value={item.reps_min}
+                          range={REPS_RANGE}
+                          onChange={(value) =>
+                            updateItem(item.key, {
+                              reps_min: value,
+                              ...(value > item.reps_max ? { reps_max: value } : {}),
+                            })
+                          }
+                        />
+                        <StepperField
+                          label="Reps max"
+                          value={item.reps_max}
+                          range={REPS_RANGE}
+                          onChange={(value) =>
+                            updateItem(item.key, {
+                              reps_max: value,
+                              ...(value < item.reps_min ? { reps_min: value } : {}),
+                            })
+                          }
+                        />
+                      </>
+                    )}
+                    <StepperField
+                      label="Repos (s)"
+                      value={item.rest_time}
+                      range={REST_RANGE}
+                      hint={formatRest(item.rest_time)}
+                      onChange={(value) => updateItem(item.key, { rest_time: value })}
+                    />
+                  </View>
+
+                  {endurance ? null : (
+                    <View style={styles.setWeights}>
+                      <Text style={styles.fieldLabel}>Poids par série (kg)</Text>
+                      <Text style={styles.setWeightsHint}>
+                        La série 1 s’applique à toutes : modifie-la pour changer tout le monde. Une
+                        série modifiée plus bas garde son propre poids.
+                      </Text>
+                      <View style={styles.fields}>
+                        {item.set_weights.map((weight, setIndex) => (
+                          <StepperField
+                            key={`${item.key}-set-${setIndex}`}
+                            label={`Série ${setIndex + 1}`}
+                            value={weight}
+                            range={WEIGHT_RANGE}
+                            onChange={(value) => setWeightAt(item, setIndex, value)}
+                            snap={false}
+                          />
+                        ))}
+                      </View>
+                      <Button
+                        label="Dégressif auto (−10 %/série)"
+                        variant="secondary"
+                        size="sm"
+                        style={styles.degressive}
+                        onPress={() => applyDegressive(item)}
                       />
                     </View>
-                  </PressableScale>
-                  <IconButton
-                    glyph="×"
-                    tone="danger"
-                    accessibilityLabel={`Retirer ${item.exercise.nom}`}
-                    onPress={() => removeExercise(item.key)}
-                  />
-                </View>
+                  )}
 
-                <Text style={styles.rules}>{describeRules(item.exercise.is_poly)}</Text>
-
-                {item.superset || (index > 0 && items[index - 1].superset) ? (
-                  <Text style={styles.supersetNote}>
-                    Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
-                  </Text>
-                ) : null}
-
-                <View style={styles.fields}>
-                  <StepperField
-                    label="Séries"
-                    value={item.series}
-                    range={SERIES_RANGE}
-                    onChange={(value) =>
-                      updateItem(item.key, {
-                        series: value,
-                        set_weights: fitWeights(item.set_weights, value, item.set_weights[0] ?? 0),
-                      })
-                    }
-                  />
-                  <StepperField
-                    label="Reps min"
-                    value={item.reps_min}
-                    range={REPS_RANGE}
-                    onChange={(value) =>
-                      updateItem(item.key, {
-                        reps_min: value,
-                        ...(value > item.reps_max ? { reps_max: value } : {}),
-                      })
-                    }
-                  />
-                  <StepperField
-                    label="Reps max"
-                    value={item.reps_max}
-                    range={REPS_RANGE}
-                    onChange={(value) =>
-                      updateItem(item.key, {
-                        reps_max: value,
-                        ...(value < item.reps_min ? { reps_min: value } : {}),
-                      })
-                    }
-                  />
-                  <StepperField
-                    label="Repos (s)"
-                    value={item.rest_time}
-                    range={REST_RANGE}
-                    hint={formatRest(item.rest_time)}
-                    onChange={(value) => updateItem(item.key, { rest_time: value })}
-                  />
-                </View>
-
-                <View style={styles.setWeights}>
-                  <Text style={styles.fieldLabel}>Poids par série (kg)</Text>
-                  <Text style={styles.setWeightsHint}>
-                    La série 1 s’applique à toutes : modifie-la pour changer tout le monde. Une
-                    série modifiée plus bas garde son propre poids.
-                  </Text>
-                  <View style={styles.fields}>
-                    {item.set_weights.map((weight, setIndex) => (
-                      <StepperField
-                        key={`${item.key}-set-${setIndex}`}
-                        label={`Série ${setIndex + 1}`}
-                        value={weight}
-                        range={WEIGHT_RANGE}
-                        onChange={(value) => setWeightAt(item, setIndex, value)}
-                        snap={false}
+                  {index < items.length - 1 ? (
+                    <View style={styles.supersetRow}>
+                      <Chip
+                        label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
+                        selected={item.superset}
+                        onPress={() => updateItem(item.key, { superset: !item.superset })}
                       />
-                    ))}
-                  </View>
-                  <Button
-                    label="Dégressif auto (−10 %/série)"
-                    variant="secondary"
-                    size="sm"
-                    style={styles.degressive}
-                    onPress={() => applyDegressive(item)}
-                  />
-                </View>
-
-                {index < items.length - 1 ? (
-                  <View style={styles.supersetRow}>
-                    <Chip
-                      label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
-                      selected={item.superset}
-                      onPress={() => updateItem(item.key, { superset: !item.superset })}
-                    />
-                  </View>
-                ) : null}
-              </Card>
-            </Appear>
-          ))
+                    </View>
+                  ) : null}
+                </Card>
+              </Appear>
+            );
+          })
         )}
 
         <Button
@@ -650,8 +715,8 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
           </View>
           {pickerTarget ? (
             <Text style={styles.pickerSubtitle}>
-              Exercices qui travaillent les mêmes muscles. Séries, reps et repos sont conservés ;
-              les poids repartent de zéro.
+              Exercices qui travaillent les mêmes muscles. Séries, cible (reps ou durée) et repos
+              sont conservés ; les poids repartent de zéro.
             </Text>
           ) : null}
           <ExerciseSearchList
@@ -831,6 +896,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: radius.control,
+  },
+  durationInput: {
+    height: 44,
+    minHeight: 44,
   },
   fieldHint: {
     ...text.micro,

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS WORKOUT_EXOS (
     series INTEGER,
     reps_min INTEGER,       -- reps minimum (début de la double progression)
     reps_max INTEGER,       -- reps maximum : au-delà, on monte le poids et on repart au min
+    duration_sec INTEGER,   -- durée d'effort par série (endurance, cardio) — v11
     rest_time INTEGER, -- en secondes
     target_weight REAL,     -- poids de base (kg)
     set_weights TEXT,       -- poids par série en JSON (dégressif), ex. '[100,90,80]' ; null = uniforme
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS LOGS_SETS (
     set_num INTEGER,
     weight REAL,
     reps INTEGER,
+    duration_sec INTEGER,   -- durée d'effort réalisée (endurance) — v11
     completed INTEGER,
     FOREIGN KEY(session_id) REFERENCES LOGS_SESSION(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)

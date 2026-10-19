@@ -253,7 +253,10 @@ export default function MainScreen() {
                 </Text>
                 <Text style={styles.historyMeta} numberOfLines={1}>
                   {formatShortDate(session.date, true)} · {session.exercise_count} exercice
-                  {session.exercise_count > 1 ? 's' : ''} · {session.total_reps} reps
+                  {session.exercise_count > 1 ? 's' : ''} ·{' '}
+                  {session.total_reps > 0
+                    ? `${session.total_reps} reps`
+                    : `${formatDuration(session.total_effort_sec)} d’effort`}
                 </Text>
               </View>
               <View style={styles.historyStats}>

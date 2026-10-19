@@ -66,6 +66,8 @@ La DA « Foulée » ([`DA_Foulee_app_sport.md`](DA_Foulee_app_sport.md)) se test
 - **Fermer complètement l'app** pendant une séance : au relancement la bulle est toujours là (le brouillon est écrit au fil de la séance et à la sortie de l'écran).
 - **« × » de la bulle** : demande confirmation puis abandonne la séance (les séries validées ne sont pas enregistrées ; les poids restent dans le programme). **« Arrêter la séance »** en bas de la séance en cours reste le chemin qui enregistre et ouvre le récapitulatif.
 - Ouvrir une **autre** séance depuis l'accueil démarre celle-ci à zéro et remplace le brouillon (une seule séance en cours par profil).
+- **Endurance (cardio)** : les exercices de cardio (course, vélo, rameur…) affichent un champ `mm:ss` **au lieu** du poids et des reps. Le bouton **▶** lance un chrono sur la série ; **■** (ou la coche de la série) l'arrête, inscrit la durée mesurée et valide la série. Le champ reste saisissable à la main quand le chrono est à l'arrêt.
+- **Récapitulatif de séance** : la « Répartition par muscle » (radar + barres) se compte **en répétitions**, pas en kilos — une séance lourde en séries courtes ne doit plus écraser la répartition.
 
 ## Voir ce qui marche / ce qui casse
 
@@ -74,6 +76,7 @@ La DA « Foulée » ([`DA_Foulee_app_sport.md`](DA_Foulee_app_sport.md)) se test
 - **Génération de programme** (onglet **Séance** → carte « Générer un programme », ou automatiquement à la fin du questionnaire de profil) :
   1. L'aperçu doit afficher « Pourquoi ce programme ? », le volume par muscle, puis chaque séance avec ses exercices (vignette, séries × reps, repos). **Rien n'est enregistré à ce stade.**
   2. « Régénérer » doit changer les exercices (même structure, autre graine) — vérifie que le groupe n'est pas créé avant « Enregistrer ce programme ».
+  2 bis. Le bouton **↻** d'une ligne propose un autre exercice du même muscle (le reste de la séance ne bouge pas) ; le nouvel exercice ne doit pas déjà être dans la séance.
   3. Après enregistrement : le groupe apparaît dans l'onglet Séance avec ses séances ; la carte du haut indique `semaine 1/8` et le nombre de séances faites.
   4. Vérifie les exclusions : un profil avec « genoux » sensibles ne doit proposer ni squat, ni fente, ni extension, ni saut ; un profil « Maison » ne doit proposer ni barre ni haltères ; un profil sans « barre de traction » ne doit pas proposer de tractions.
   5. Charges de départ : après une première séance, regénère un programme contenant un exercice déjà fait → le poids saisi doit réapparaître dans la colonne « précédent ».

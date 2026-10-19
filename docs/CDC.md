@@ -26,6 +26,7 @@
 
 ## Modules Fonctionnels
 - **Module 1 - Onboarding** : Profiling (prénom, âge, poids, taille, niveau, douleurs, matériel, fréquence, durée). À la fin du questionnaire : génération du programme (aperçu → validation).
-- **Module 2 - Programme** : Consultation et modification des séances/exercices, substitution d'exercices par groupe musculaire, génération/régénération d'un programme complet.
+- **Module 2 - Programme** : Consultation et modification des séances/exercices, substitution d'exercices par groupe musculaire, génération/régénération d'un programme complet. Après génération, chaque exercice de l'aperçu peut être **relancé individuellement** (autre variante du même groupe musculaire) sans régénérer tout le programme.
 - **Module 3 - Live Workout** : Minuteur dynamique auto-lancé à la validation d'une série, saisie des poids/reps, ajout/suppression d'exercices volatiles.
-- **Module 4 - Stats** : Calcul du volume total ($kg$), récapitulatif post-séance, suivi de progression du 1RM estimé et répartition du volume par muscle.
+  - **Endurance** : les exercices de cardio (course, vélo, rameur, corde à sauter, machines d'endurance) se comptent **au temps** et non en répétitions. La cible est une durée par série (format `mm:ss`), la charge n'est pas demandée ; chaque série peut être **mesurée au chrono** (bouton ▶/■) et le temps réalisé est enregistré à l'arrêt ; le récapitulatif affiche le temps d'effort au lieu des reps (volume kg et records inchangés).
+- **Module 4 - Stats** : Calcul du volume total ($kg$), récapitulatif post-séance, suivi de progression du 1RM estimé et **répartition des répétitions** par muscle (le radar « araignée » ne compte pas les kilos).

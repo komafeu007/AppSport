@@ -115,6 +115,18 @@ export function isCardio(exercise: CatalogExercise): boolean {
 }
 
 /**
+ * true pour un exercice qui se mesure **au temps** et non en répétitions :
+ * course, vélo, rameur, corde à sauter, machines d'endurance…
+ *
+ * Le générateur écarte déjà ces fiches des programmes de musculation. Ajoutées
+ * à la main, elles sont chronométrées : on saisit une durée (mm:ss) par série,
+ * sans fourchette de reps ni charge.
+ */
+export function isEndurance(exercise: CatalogExercise): boolean {
+  return isCardio(exercise);
+}
+
+/**
  * Mouvements qui exigent une barre fixe (tractions) ou des barres parallèles.
  * `equipment` vaut « body weight » dans le dataset, ce qui laisserait croire
  * qu'ils sont possibles partout : on les conditionne au matériel déclaré.

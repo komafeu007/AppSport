@@ -762,6 +762,41 @@ function exerciseCountFor(sets: number): number {
 }
 
 /**
+ * Catalogue utilisable pour un profil : écarte le cardio, le matériel absent, les
+ * mouvements à risque pour une zone douloureuse et les fiches hors musculation.
+ * Le filtre dépend du découpage (`format`) : « Maison » ne garde que le poids du corps.
+ */
+function buildPool(
+  profile: GeneratorProfile,
+  catalog: readonly CatalogExercise[],
+  format: string
+): {
+  pool: CatalogExercise[];
+  allowed: Set<string>;
+  /** Nombre de mouvements écartés par zone sensible (pour le message d'avertissement). */
+  excludedByZone: Map<string, number>;
+} {
+  const allowed = allowedEquipment(profile.materiel, format);
+  // Tractions et dips demandent de quoi se suspendre : il faut une barre déclarée
+  // (« barre de traction », ou la salle qui en est équipée).
+  const hasBar = profile.materiel.includes('traction') || profile.materiel.includes('salle');
+  const excludedByZone = new Map<string, number>();
+  const pool = catalog.filter((exercise) => {
+    if (isCardio(exercise)) return false;
+    if (isNonStrength(exercise)) return false;
+    if (!hasAvailableEquipment(exercise, allowed)) return false;
+    if (!hasBar && needsPullUpBar(exercise)) return false;
+    const zone = zoneViolation(exercise, profile.zonesDouloureuses);
+    if (zone) {
+      excludedByZone.set(zone, (excludedByZone.get(zone) ?? 0) + 1);
+      return false;
+    }
+    return primaryMuscle(exercise) !== null;
+  });
+  return { pool, allowed, excludedByZone };
+}
+
+/**
  * Construit un programme complet à partir du profil.
  * Fonction pure : aucun accès base, aucune notion de date.
  */
@@ -787,24 +822,8 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   if (formatWarning) warnings.push(formatWarning);
 
   // 1. Catalogue utilisable : écarte cardio, matériel absent et mouvements à risque.
-  const allowed = allowedEquipment(profile.materiel, format);
-  // Tractions et dips demandent de quoi se suspendre : il faut une barre déclarée
-  // (« barre de traction », ou la salle qui en est équipée).
-  const hasBar = profile.materiel.includes('traction') || profile.materiel.includes('salle');
+  const { pool, allowed, excludedByZone } = buildPool(profile, input.catalog, format);
   const recentIds = new Set(input.recentExerciseIds ?? []);
-  const excludedByZone = new Map<string, number>();
-  const pool = input.catalog.filter((exercise) => {
-    if (isCardio(exercise)) return false;
-    if (isNonStrength(exercise)) return false;
-    if (!hasAvailableEquipment(exercise, allowed)) return false;
-    if (!hasBar && needsPullUpBar(exercise)) return false;
-    const zone = zoneViolation(exercise, profile.zonesDouloureuses);
-    if (zone) {
-      excludedByZone.set(zone, (excludedByZone.get(zone) ?? 0) + 1);
-      return false;
-    }
-    return primaryMuscle(exercise) !== null;
-  });
 
   if (allowed.size <= 1) {
     warnings.push(
@@ -967,6 +986,73 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
     rationale,
     warnings,
   };
+}
+
+/** Entrée de « Relancer » : remplacer un exercice d'une séance par une variante. */
+export interface RerollExerciseInput {
+  profile: GeneratorProfile;
+  catalog: readonly CatalogExercise[];
+  /** Exercices faits récemment (variété), du plus récent au plus ancien. */
+  recentExerciseIds?: readonly number[];
+  /** Découpage du programme (filtre le matériel comme à la génération). */
+  format: string;
+  /** Tous les exercices de la séance, dans leur ordre : évite les doublons. */
+  sessionExercises: readonly PlannedExercise[];
+  /** Index de l'exercice à remplacer dans `sessionExercises`. */
+  targetIndex: number;
+  /** Graine du tirage : chaque « Relancer » change la variante. */
+  seed: number;
+}
+
+/**
+ * Remplace **un seul** exercice d'une séance par une autre variante du même
+ * groupe musculaire. Le reste de la séance sert de contrainte : la nouvelle
+ * proposition ne peut pas être un exercice déjà placé, ni reprendre une famille
+ * de mouvement déjà travaillée dans la journée. Renvoie `null` si le catalogue
+ * n'offre aucune autre option avec ce matériel.
+ */
+export function rerollPlannedExercise(input: RerollExerciseInput): PlannedExercise | null {
+  const target = input.sessionExercises[input.targetIndex];
+  if (!target) return null;
+  const muscle = primaryMuscle(target.exercise);
+  if (!muscle) return null;
+
+  const objective =
+    input.profile.objectif && OBJECTIVE_RULES[input.profile.objectif]
+      ? input.profile.objectif
+      : DEFAULT_OBJECTIVE;
+  const objectiveRules = OBJECTIVE_RULES[objective];
+
+  const { pool, allowed } = buildPool(input.profile, input.catalog, input.format);
+
+  // L'exercice remplacé compte comme « déjà utilisé » : il ne peut pas ressortir.
+  const usedInSession = new Set(input.sessionExercises.map((item) => item.exercise.id));
+  const usedSessionFamilies = new Set<string>();
+  for (const item of input.sessionExercises) {
+    const itemMuscle = primaryMuscle(item.exercise);
+    if (!itemMuscle) continue;
+    const family = movementFamily(item.exercise, itemMuscle);
+    if (family !== null) usedSessionFamilies.add(family);
+  }
+  // Position dans le groupe musculaire : le 1er mouvement reste le polyarticulaire.
+  const position = input.sessionExercises
+    .slice(0, input.targetIndex)
+    .filter((item) => primaryMuscle(item.exercise) === muscle).length;
+
+  const context: PickContext = {
+    pool,
+    allowed,
+    objective,
+    usedInSession,
+    usedInWeek: new Map(),
+    recentIds: new Set(input.recentExerciseIds ?? []),
+    rng: createRandom(input.seed),
+    usedSessionFamilies,
+  };
+
+  const [picked] = pickForMuscle(muscle, 1, context, { complement: position > 0 });
+  if (!picked) return null;
+  return plannedExercise(picked, target.series, objectiveRules);
 }
 
 /** Repos conseillé (secondes) : règle du CDC par `is_poly`, décalée par l'objectif. */

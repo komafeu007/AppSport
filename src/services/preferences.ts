@@ -97,6 +97,8 @@ export async function setGroupHidden(
 export interface WorkoutDraftSet {
   weight: number;
   reps: number;
+  /** Durée d'effort réalisée (endurance), en secondes. Absent sur un ancien brouillon. */
+  duration_sec?: number;
   completed: boolean;
 }
 

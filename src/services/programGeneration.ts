@@ -13,8 +13,10 @@ import type * as SQLite from 'expo-sqlite';
 import { DEFAULT_NIVEAU, parseKeyList } from '../domain/profile';
 import {
   generateProgram,
+  rerollPlannedExercise,
   type GeneratedProgram,
   type GeneratorProfile,
+  type PlannedExercise,
   type PlannedSession,
 } from '../domain/programGenerator';
 import {
@@ -81,6 +83,38 @@ export async function buildPlan(
   });
 }
 
+/**
+ * « Relancer » un exercice de l'aperçu (Module 2) : propose une autre variante du
+ * même groupe musculaire, sans toucher au reste du programme. Le catalogue et
+ * l'historique sont relus en base, comme à la génération. Renvoie `null` si le
+ * catalogue n'offre pas d'autre option.
+ */
+export async function rerollExercise(
+  db: SQLite.SQLiteDatabase,
+  account: Account,
+  plan: GeneratedProgram,
+  sessionIndex: number,
+  exerciseIndex: number
+): Promise<PlannedExercise | null> {
+  const session = plan.sessions[sessionIndex];
+  if (!session) return null;
+
+  const [catalog, recentIds] = await Promise.all([
+    getAllExercises(db),
+    account.id ? getRecentExerciseIds(db, account.id, RECENT_SESSIONS) : Promise.resolve([]),
+  ]);
+
+  return rerollPlannedExercise({
+    profile: generatorProfileFromAccount(account),
+    catalog,
+    recentExerciseIds: recentIds,
+    format: plan.format,
+    sessionExercises: session.exercises,
+    targetIndex: exerciseIndex,
+    seed: newSeed(),
+  });
+}
+
 /** Enregistre un programme généré : nouveau groupe (avec son bloc) + ses séances. */
 export async function savePlan(
   db: SQLite.SQLiteDatabase,
@@ -106,6 +140,7 @@ export async function savePlan(
         series: planned.series,
         reps_min: planned.repsMin,
         reps_max: planned.repsMax,
+        duration_sec: null,
         rest_time: planned.restTime,
         // Charge de départ reprise de la dernière séance sur cet exercice.
         target_weight: weights.get(planned.exercise.id) ?? 0,

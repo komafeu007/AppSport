@@ -2,7 +2,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Appear, Button, Card, SectionTitle, StateView, Thumb } from '../components/ui';
+import { Appear, Button, Card, IconButton, SectionTitle, StateView, Thumb } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
 import {
   describePlannedExercise,
@@ -13,15 +13,31 @@ import {
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { getAccount, type Account } from '../services/database';
-import { BLOCK_WEEKS, buildPlan, newSeed, savePlan, sessionSummary } from '../services/programGeneration';
+import {
+  BLOCK_WEEKS,
+  buildPlan,
+  newSeed,
+  rerollExercise,
+  savePlan,
+  sessionSummary,
+} from '../services/programGeneration';
 import { useThemedStyles, type Theme } from '../theme';
 import { radius, spacing, text } from '../theme/tokens';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProgramGenerator' | 'WelcomeGenerator'>;
 
-/** Une ligne d'exercice planifié : vignette, nom, séries × reps et repos. */
-function ExerciseRow({ planned }: { planned: PlannedExercise }) {
+/** Une ligne d'exercice planifié : vignette, nom, séries × reps, repos, et « relancer ». */
+function ExerciseRow({
+  planned,
+  onReroll,
+  rerolling = false,
+}: {
+  planned: PlannedExercise;
+  /** Propose une autre variante de cet exercice (absent = pas de bouton). */
+  onReroll?: () => void;
+  rerolling?: boolean;
+}) {
   const styles = useThemedStyles(createStyles);
   const { exercise } = planned;
   const source = exercise.image ? exerciseImages[exercise.image] : undefined;
@@ -35,6 +51,15 @@ function ExerciseRow({ planned }: { planned: PlannedExercise }) {
         </Text>
         <Text style={styles.exerciseMeta}>{describePlannedExercise(planned)}</Text>
       </View>
+      {onReroll ? (
+        <IconButton
+          glyph={rerolling ? '⋯' : '↻'}
+          tone="neutral"
+          size={36}
+          accessibilityLabel="Proposer un autre exercice"
+          onPress={onReroll}
+        />
+      ) : null}
     </View>
   );
 }
@@ -59,6 +84,11 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Exercice en cours de « relance » : la ligne affiche un état d'attente. */
+  const [rerolling, setRerolling] = useState<{
+    sessionIndex: number;
+    exerciseIndex: number;
+  } | null>(null);
 
   // Profil visé : le compte actif, ou celui qu'on vient de créer (onboarding).
   useEffect(() => {
@@ -142,6 +172,40 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
     await select(account.id);
   };
 
+  /** « Relancer » un exercice : variante du même muscle, le reste ne bouge pas. */
+  const handleReroll = async (sessionIndex: number, exerciseIndex: number) => {
+    if (!plan || !account || rerolling !== null) return;
+    setRerolling({ sessionIndex, exerciseIndex });
+    try {
+      const replacement = await rerollExercise(db, account, plan, sessionIndex, exerciseIndex);
+      if (replacement === null) {
+        setError('Aucune autre variante disponible avec ce matériel pour cet exercice.');
+        return;
+      }
+      setError(null);
+      setPlan((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sessions: prev.sessions.map((session, sIndex) =>
+            sIndex !== sessionIndex
+              ? session
+              : {
+                  ...session,
+                  exercises: session.exercises.map((item, eIndex) =>
+                    eIndex === exerciseIndex ? replacement : item
+                  ),
+                }
+          ),
+        };
+      });
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Remplacement impossible.');
+    } finally {
+      setRerolling(null);
+    }
+  };
+
   if (loading && !plan) {
     return (
       <View style={styles.container}>
@@ -201,7 +265,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
 
             <Appear style={styles.section}>
               <SectionTitle>{`Séances (${plan.sessions.length})`}</SectionTitle>
-              {plan.sessions.map((session) => {
+              {plan.sessions.map((session, sessionIndex) => {
                 const summary = sessionSummary(session);
                 return (
                   <View key={session.nom} style={styles.sessionCard}>
@@ -209,8 +273,16 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
                     <Text style={styles.sessionMeta}>
                       {summary.exercises} exercices · {summary.sets} séries · ≈ {summary.minutes} min
                     </Text>
-                    {session.exercises.map((planned) => (
-                      <ExerciseRow key={`${session.nom}-${planned.exercise.id}`} planned={planned} />
+                    {session.exercises.map((planned, exerciseIndex) => (
+                      <ExerciseRow
+                        key={`${session.nom}-${exerciseIndex}-${planned.exercise.id}`}
+                        planned={planned}
+                        onReroll={() => handleReroll(sessionIndex, exerciseIndex)}
+                        rerolling={
+                          rerolling?.sessionIndex === sessionIndex &&
+                          rerolling.exerciseIndex === exerciseIndex
+                        }
+                      />
                     ))}
                   </View>
                 );
@@ -220,7 +292,8 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
             <Text style={styles.note}>
               Le programme démarre sur tes charges habituelles et se règle en séance : dès que tu
               atteins le haut de la fourchette de répétitions, tu montes le poids et tu repars au
-              minimum. Tout reste modifiable dans l’éditeur de séance.
+              minimum. Un exercice qui ne te convient pas ? Appuie sur ↻ pour en proposer un autre,
+              et tout reste modifiable dans l’éditeur de séance.
             </Text>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}

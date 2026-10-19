@@ -6,16 +6,17 @@ Application mobile (Expo + React Native + TypeScript) de suivi d'entraînement :
 
 ## État du projet
 
-- [x] Base SQLite locale (migrations versionnées, **v10**) + catalogue de **1 324 exercices**
+- [x] Base SQLite locale (migrations versionnées, **v11**) + catalogue de **1 324 exercices**
 - [x] **Recherche** d'exercices par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*), dans le picker de séance
 - [x] Vignettes **embarquées** (hors-ligne) **+ démonstration animée (GIF)** chargée à la demande dans la fiche exercice
 - [x] Module 1 — **Profils** : plusieurs profils par appareil, prénom, âge, taille, poids, objectif, niveau, zones douloureuses + note, fréquence/semaine, matériel, format et durée de séance
 - [x] Module 2 — **Création de séance** manuelle : séances rangées en **groupes/splits** (PPL, Maison, Upper/Lower…), nom, ajout d'exercices, séries / fourchette de reps / repos (à la seconde) / **poids par série** (la série 1 s'applique à toutes, les séries surchargées restent), renommage, retrait de l'accueil et suppression — depuis le menu « ⋯ » du groupe, qui supprime aussi ses séances (confirmation demandée).
-- [x] Module 2 — **Génération automatique de programme** : moteur de règles **local** (aucune IA, aucune clé d'API) sur les 1 324 exercices — split selon fréquence/format, volume, reps et repos par objectif, garde-fous par zone douloureuse, matériel et niveau. Aperçu (« pourquoi ce programme ? », volume par muscle) avant « Enregistrer », régénération par graine, **bloc de 8 semaines** et proposition de renouvellement.
+- [x] Module 2 — **Génération automatique de programme** : moteur de règles **local** (aucune IA, aucune clé d'API) sur les 1 324 exercices — split selon fréquence/format, volume, reps et repos par objectif, garde-fous par zone douloureuse, matériel et niveau. Aperçu (« pourquoi ce programme ? », volume par muscle) avant « Enregistrer », régénération par graine, **relance d'un seul exercice** depuis l'aperçu (bouton **↻** : autre variante du même muscle, sans toucher au reste de la séance), **bloc de 8 semaines** et proposition de renouvellement.
 - [x] Module 2 — **Substitution** d'un exercice par un autre travaillant **les mêmes muscles** (variantes du même mouvement en tête), depuis la fiche d'un exercice de l'éditeur de séance
 - [x] Module 3 — **Séance en cours** : poids/séries/reps par série, poids reporté d'une séance à l'autre (+ colonne « précédent »), **repos minuté** (bip + notification), record à battre, défilement automatique vers l'exercice suivant, arrêt et enregistrement. **Cocher une série (ou la coche d'exercice) remplit les reps vides au minimum de la fourchette**. **Quitter la séance ne la perd pas** : bulle « Reprendre la séance » au-dessus des onglets, avancement et chrono (en pause) conservés.
+- [x] Module 3 — **Endurance (cardio)** : les exercices d'endurance (course, vélo, rameur, corde à sauter…) se comptent **au temps** et non en reps — cible `mm:ss` par série, poids masqué, et **chrono par série** (▶ lance, ■ arrête et enregistre la durée mesurée, la coche de la série l'arrête aussi). Le récapitulatif compte le **temps d'effort** au lieu des répétitions.
 - [ ] Module 3 — Exercices volatils (ajouter un exercice non prévu en pleine séance)
-- [x] Module 4 — **Récapitulatif de fin de séance** : volume, durée, reps, **radar des muscles**, courbe d'évolution, détail des exercices et **records** (SVG). *(À venir : 1RM estimé, progression par exercice.)*
+- [x] Module 4 — **Récapitulatif de fin de séance** : volume, durée, reps, **radar des muscles — réparti en répétitions (pas en kilos)**, courbe d'évolution, détail des exercices et **records** (SVG). *(À venir : 1RM estimé, progression par exercice.)*
 - [ ] Module 4 — Statistiques globales (progression par exercice, volume par semaine)
 - [x] Écran **Accueil** : carte de la séance à faire (nom + bouton **Démarrer**, ou **Reprendre** si cette séance est en cours ; bouton compact **Go** si le nom est court ; rotation par groupe), choix du groupe et historique des séances terminées. Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
 - [x] Navigation : **2 onglets** (Accueil / Séances) + écrans empilés (éditeur, séance en cours, récapitulatif, profils)
@@ -124,6 +125,7 @@ src/
   components/
     ActionSheet.tsx         # menu d'actions en feuille basse (appui à côté = fermer)
     ActiveWorkoutBubble.tsx # bulle « Reprendre la séance » au-dessus des onglets
+    DurationField.tsx       # champ de durée d'effort mm:ss (exercices d'endurance)
     ExerciseAlternatives.tsx # substituts d'un exercice (mêmes muscles) dans la fiche
     ExerciseDetailModal.tsx # fiche exercice (démonstration animée + tuto) en feuille basse
     ExerciseSearchList.tsx  # liste + recherche d'exercices (picker de séance)
@@ -138,7 +140,7 @@ src/
     exerciseAlternatives.ts # substituts d'un exercice (même muscle / même mouvement)
     exerciseCatalog.ts      # profil → matériel, garde-fous par zone, patterns, familles
     exerciseLabels.ts       # vocabulaire français du catalogue (cible, matériel, muscles…)
-    muscles.ts              # regroupement des muscles (radar, volume)
+    muscles.ts              # regroupement des muscles (radar, répartition en répétitions)
     plates.ts               # barre + disques : combinaisons de charge
     profile.ts              # référentiel des choix de profil (objectif, niveau, matériel…)
     programGenerator.ts     # moteur de génération de programme (règles, aucun appel réseau)
@@ -195,6 +197,7 @@ L'app suit la DA « Foulée » ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_a
 - Catalogue importé depuis [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset) (code/données **MIT**).
 - **Langue** : les **noms d'exercices restent en anglais** ; le reste des repères du catalogue (`target`, `category`, `equipment`, `muscle_group`, `secondary_muscles`) est affiché en français via `src/domain/exerciseLabels.ts`.
 - **Substitution** : depuis la fiche d'un exercice de l'éditeur de séance, `src/domain/exerciseAlternatives.ts` propose des exercices qui travaillent les mêmes muscles (variantes du même mouvement en tête), avec un accès à la liste complète (`ExerciseAlternatives`). Le remplacement garde séries/reps/repos et remet les poids à zéro.
+- **Endurance** : les exercices de cardio sont comptés **au temps** — `WORKOUT_EXOS.duration_sec` (cible par série) et `LOGS_SETS.duration_sec` (réalisé), schéma **v11**. En séance, un **chrono par série** mesure l'effort et enregistre la durée. Le récapitulatif répartit les muscles **en répétitions** (le radar ne compte pas les kilos) et affiche le **temps d'effort** au lieu des reps.
 - Champs **dérivés, non officiels** : `nom_fr` (traduction automatique best-effort, **non affichée**, seulement indexée par la recherche) et `is_poly` (heuristique par mots-clés). À ne pas considérer comme fiables.
 - `docs/SCHEMA.sql` est la **source de vérité** du schéma SQLite (à garder synchronisé avec `src/services/database.ts`).
 - Remarques pour les agents/développeurs : [`AGENTS.md`](AGENTS.md).

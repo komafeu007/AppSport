@@ -51,7 +51,8 @@ export default function ExerciseAlternatives({
     <View style={styles.root}>
       <SectionTitle>Remplacer cet exercice</SectionTitle>
       <Text style={styles.hint}>
-        Mêmes muscles travaillés. Séries, reps et repos sont conservés ; les poids repartent de zéro.
+        Mêmes muscles travaillés. Séries, cible (reps ou durée) et repos sont conservés ; les
+        poids repartent de zéro.
       </Text>
 
       <View style={styles.list}>
