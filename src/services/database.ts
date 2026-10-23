@@ -6,7 +6,7 @@ import { joinKeyList } from '../domain/profile';
 export const DATABASE_NAME = 'appsportlocal.db';
 
 /** Incrémenter à chaque évolution du schéma et ajouter la migration correspondante. */
-const DATABASE_VERSION = 11;
+const DATABASE_VERSION = 12;
 
 export interface Exercise {
   id: number;
@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS ACCOUNTS (
     taille REAL,
     objectif TEXT,
     niveau TEXT,               -- niveau d'expérience (debutant, intermediaire, avance) — v10
+    points_forts TEXT,         -- points forts à limiter, tableau JSON de clés — v12
+    points_faibles TEXT,       -- points faibles à prioriser, tableau JSON de clés — v12
     douleurs_zones TEXT,       -- zones sensibles, tableau JSON de clés
     douleurs_note TEXT,        -- précision libre sur les douleurs
     sessions_per_week INTEGER, -- nb d'entraînements par semaine visé
@@ -288,7 +290,8 @@ async function ensureLogsSetsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
 
 /**
  * Colonnes de profil de `ACCOUNTS` (v8 : onboarding / multi-comptes,
- * v10 : `niveau`, utilisé par le générateur de programme).
+ * v10 : `niveau`, utilisé par le générateur de programme,
+ * v12 : `points_forts` / `points_faibles`, priorités musculaires du générateur).
  * Idempotent : ne fait rien sur une base neuve (colonnes déjà présentes).
  */
 async function ensureAccountsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -304,6 +307,8 @@ async function ensureAccountsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
     ['format_seance', 'TEXT'],
     ['duree_seance', 'INTEGER'],
     ['niveau', 'TEXT'],
+    ['points_forts', 'TEXT'],
+    ['points_faibles', 'TEXT'],
   ];
 
   for (const [name, type] of additions) {
@@ -517,6 +522,10 @@ export interface Account {
   objectif: string | null;
   /** Niveau d'expérience (clé de `NIVEAUX`) : pilote le volume généré. */
   niveau: string | null;
+  /** Points forts à limiter, encodés en JSON (clés de `MUSCLE_GROUPS`). */
+  points_forts: string | null;
+  /** Points faibles à prioriser, encodés en JSON (clés de `MUSCLE_GROUPS`). */
+  points_faibles: string | null;
   /** Zones sensibles, encodées en JSON (clés de `HEALTH_ZONES`). */
   douleurs_zones: string | null;
   douleurs_note: string | null;
@@ -536,6 +545,8 @@ export interface AccountInput {
   taille: number | null;
   objectif: string | null;
   niveau: string | null;
+  points_forts: string[];
+  points_faibles: string[];
   douleurs_zones: string[];
   douleurs_note: string | null;
   sessions_per_week: number | null;
@@ -565,15 +576,17 @@ export async function createAccount(
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
       `INSERT INTO ACCOUNTS
-         (prenom, age, poids, taille, objectif, niveau, douleurs_zones, douleurs_note,
-          sessions_per_week, materiel, format_seance, duree_seance)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (prenom, age, poids, taille, objectif, niveau, points_forts, points_faibles,
+          douleurs_zones, douleurs_note, sessions_per_week, materiel, format_seance, duree_seance)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       input.prenom,
       input.age,
       input.poids,
       input.taille,
       input.objectif,
       input.niveau,
+      joinKeyList(input.points_forts),
+      joinKeyList(input.points_faibles),
       joinKeyList(input.douleurs_zones),
       input.douleurs_note,
       input.sessions_per_week,
@@ -602,6 +615,7 @@ export async function updateAccount(
   await db.runAsync(
     `UPDATE ACCOUNTS
         SET prenom = ?, age = ?, poids = ?, taille = ?, objectif = ?, niveau = ?,
+            points_forts = ?, points_faibles = ?,
             douleurs_zones = ?, douleurs_note = ?, sessions_per_week = ?,
             materiel = ?, format_seance = ?, duree_seance = ?
       WHERE id = ?`,
@@ -611,6 +625,8 @@ export async function updateAccount(
     input.taille,
     input.objectif,
     input.niveau,
+    joinKeyList(input.points_forts),
+    joinKeyList(input.points_faibles),
     joinKeyList(input.douleurs_zones),
     input.douleurs_note,
     input.sessions_per_week,

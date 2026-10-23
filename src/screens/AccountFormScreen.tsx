@@ -33,6 +33,7 @@ import {
   parseKeyList,
   type ProfileOption,
 } from '../domain/profile';
+import { MUSCLE_GROUPS } from '../domain/muscles';
 import { formatRest, rulesFor } from '../domain/workoutRules';
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
@@ -55,6 +56,12 @@ const DURATION_OPTIONS: readonly ProfileOption[] = SESSION_DURATIONS.map((value)
 const FREQUENCY_OPTIONS: readonly ProfileOption[] = WEEKLY_FREQUENCIES.map((value) => ({
   key: String(value),
   label: value === 1 ? '1 séance' : `${value} séances`,
+}));
+
+/** Groupes musculaires proposés comme points forts / points faibles. */
+const MUSCLE_OPTIONS: readonly ProfileOption[] = MUSCLE_GROUPS.map((group) => ({
+  key: group.key,
+  label: group.label,
 }));
 
 /** « 82,5 » → 82.5 ; vide/invalide → null. */
@@ -102,6 +109,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   const [poids, setPoids] = useState('');
   const [objectif, setObjectif] = useState<string | null>(null);
   const [niveau, setNiveau] = useState<string>(DEFAULT_NIVEAU);
+  const [pointsForts, setPointsForts] = useState<string[]>([]);
+  const [pointsFaibles, setPointsFaibles] = useState<string[]>([]);
   const [frequence, setFrequence] = useState<number | null>(null);
   const [duree, setDuree] = useState<number | null>(null);
   const [format, setFormat] = useState<string | null>(null);
@@ -131,6 +140,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
         setPoids(row.poids !== null ? String(row.poids) : '');
         setObjectif(row.objectif);
         setNiveau(row.niveau ?? DEFAULT_NIVEAU);
+        setPointsForts(parseKeyList(row.points_forts));
+        setPointsFaibles(parseKeyList(row.points_faibles));
         setFrequence(row.sessions_per_week);
         setDuree(row.duree_seance);
         setFormat(row.format_seance);
@@ -152,6 +163,19 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   const toggleMulti = (setter: (updater: (prev: string[]) => string[]) => void) => (key: string) =>
     setter((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
 
+  /**
+   * Un muscle ne peut pas être à la fois point fort et point faible : le dernier
+   * choix gagne, on retire la clé de la liste opposée.
+   */
+  const toggleFocus = (
+    setter: (updater: (prev: string[]) => string[]) => void,
+    other: (updater: (prev: string[]) => string[]) => void,
+    key: string
+  ) => {
+    toggleMulti(setter)(key);
+    other((prev) => prev.filter((item) => item !== key));
+  };
+
   const notify = (title: string, message: string) =>
     setConfirm({ title, message, confirmLabel: 'Compris', hideCancel: true });
 
@@ -169,6 +193,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
       poids: parseNumber(poids),
       objectif,
       niveau,
+      points_forts: pointsForts,
+      points_faibles: pointsFaibles,
       sessions_per_week: frequence,
       duree_seance: duree,
       format_seance: format,
@@ -318,6 +344,29 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             values={format ? [format] : []}
             onToggle={(key) => setFormat((prev) => (prev === key ? null : key))}
           />
+        </Appear>
+
+        <Appear style={styles.section}>
+          <SectionTitle>Points forts & points faibles</SectionTitle>
+          <Text style={styles.subLabel}>Points faibles à prioriser</Text>
+          <ChipGroup
+            options={MUSCLE_OPTIONS}
+            values={pointsFaibles}
+            onToggle={(key) => toggleFocus(setPointsFaibles, setPointsForts, key)}
+          />
+          <Text style={styles.subLabel}>Points forts à limiter</Text>
+          <ChipGroup
+            options={MUSCLE_OPTIONS}
+            values={pointsForts}
+            onToggle={(key) => toggleFocus(setPointsForts, setPointsFaibles, key)}
+          />
+          <Text style={styles.rulesHint}>
+            Un point faible reçoit plus de séries et revient dans chaque séance qui travaille la
+            même zone du corps. Un point fort est allégé (moins de séries, un seul exercice), et
+            une séance entièrement dédiée à un point fort est raccourcie. Le programme garde son
+            découpage : on ne met pas des jambes un jour de haut du corps. Pour viser tout le bas du
+            corps, coche quadriceps, ischios, fessiers et mollets.
+          </Text>
         </Appear>
 
         <Appear style={styles.section}>

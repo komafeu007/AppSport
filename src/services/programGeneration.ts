@@ -52,6 +52,8 @@ export function generatorProfileFromAccount(account: Account): GeneratorProfile 
     format: account.format_seance,
     materiel: parseKeyList(account.materiel),
     zonesDouloureuses: parseKeyList(account.douleurs_zones),
+    pointsForts: parseKeyList(account.points_forts),
+    pointsFaibles: parseKeyList(account.points_faibles),
   };
 }
 

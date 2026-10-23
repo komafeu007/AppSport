@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS ACCOUNTS (
     taille REAL,
     objectif TEXT,             -- objectif principal (masse, seche, force, forme, sante)
     niveau TEXT,               -- niveau d'expérience (debutant, intermediaire, avance) — v10
+    points_forts TEXT,         -- points forts à limiter, tableau JSON de clés — v12
+    points_faibles TEXT,       -- points faibles à prioriser, tableau JSON de clés — v12
     douleurs_zones TEXT,       -- zones sensibles, tableau JSON de clés
     douleurs_note TEXT,        -- précision libre sur les douleurs
     sessions_per_week INTEGER, -- nb d'entraînements par semaine visé

@@ -40,6 +40,10 @@ export interface GeneratorProfile {
   format: string | null;
   materiel: string[];
   zonesDouloureuses: string[];
+  /** Groupes à prioriser (clés de `MUSCLE_GROUPS`) : plus de volume, à chaque séance. */
+  pointsFaibles: string[];
+  /** Groupes à limiter (clés de `MUSCLE_GROUPS`) : moins de volume, séances allégées. */
+  pointsForts: string[];
 }
 
 export interface GenerateProgramInput {
@@ -405,6 +409,110 @@ const MONO_WORK_SECONDS = 30;
 const MIN_SERIES = 2;
 const MAX_SERIES = 6;
 
+/** Point faible : +25 % de séries (plafonné) et un exercice de plus par séance. */
+const WEAK_SETS_FACTOR = 1.25;
+const WEAK_MAX_SETS = 10;
+/** Jamais plus de deux exercices d'un point faible dans une même séance. */
+const WEAK_MAX_EXERCISES = 2;
+/** Séries d'un point faible **ajouté** à une séance qui ne le prévoyait pas. */
+const WEAK_ADDED_SETS = 3;
+/** Point fort : −40 % de séries et un seul exercice par séance. */
+const STRONG_SETS_FACTOR = 0.6;
+const STRONG_MAX_EXERCISES = 1;
+/** Séance dédiée à un point fort : nombre d'exercices plafonné (6 → 4 par exemple). */
+const STRONG_FOCUS_MAX_ITEMS = 4;
+
+/** Zone du corps d'un groupe musculaire : sert à ne pas ajouter des jambes un jour de push. */
+type MuscleZone = 'upper' | 'lower' | 'core';
+
+const MUSCLE_ZONE: Record<string, MuscleZone> = {
+  pectoraux: 'upper',
+  dos: 'upper',
+  epaules: 'upper',
+  biceps: 'upper',
+  triceps: 'upper',
+  'avant-bras': 'upper',
+  quadriceps: 'lower',
+  ischios: 'lower',
+  fessiers: 'lower',
+  mollets: 'lower',
+  abdos: 'core',
+};
+
+function zoneOf(muscle: string): MuscleZone | null {
+  return MUSCLE_ZONE[muscle] ?? null;
+}
+
+/** Priorité d'un groupe musculaire dans le programme. */
+type Focus = 'weak' | 'strong' | null;
+
+function focusFor(
+  muscle: string,
+  weakPoints: ReadonlySet<string>,
+  strongPoints: ReadonlySet<string>
+): Focus {
+  if (weakPoints.has(muscle)) return 'weak';
+  if (strongPoints.has(muscle)) return 'strong';
+  return null;
+}
+
+/** Créneau de trame, éventuellement ajouté pour couvrir un point faible absent. */
+interface FocusSlot extends SlotTemplate {
+  /** true = créneau ajouté hors trame : un seul exercice, volume d'appoint. */
+  added?: boolean;
+}
+
+/**
+ * Créneaux d'une séance, point faible compris. Un point faible absent de la trame
+ * reçoit **un** créneau d'appoint dans chaque séance qui travaille déjà la même
+ * zone du corps : le dos revient donc aussi un jour de push, mais jamais des
+ * jambes un jour de haut du corps. Les abdos sont compatibles avec tout.
+ */
+function focusedSlots(
+  template: SessionTemplate,
+  weakPoints: ReadonlySet<string>
+): FocusSlot[] {
+  const slots: FocusSlot[] = template.slots.map((slot) => ({ ...slot }));
+  const present = new Set(slots.map((slot) => slot.muscle));
+
+  for (const muscle of weakPoints) {
+    if (present.has(muscle)) continue;
+    const zone = zoneOf(muscle);
+    if (!zone) continue;
+    const compatible =
+      zone === 'core' ||
+      template.slots.some((slot) => zoneOf(slot.muscle) === zone);
+    if (!compatible) continue;
+    slots.push({ muscle, sets: WEAK_ADDED_SETS, added: true });
+    present.add(muscle);
+  }
+
+  return slots;
+}
+
+/**
+ * Une séance « dédiée » ne travaille qu'une seule zone du corps (jambes, push…) et
+ * la moitié au moins de ses créneaux sont des points forts : on plafonne alors son
+ * nombre d'exercices (6 → 4), au lieu de simplement réduire les séries. Un full body
+ * n'est jamais plafonné, même avec plusieurs points forts.
+ */
+function isStrongFocused(
+  template: SessionTemplate,
+  strongPoints: ReadonlySet<string>
+): boolean {
+  if (strongPoints.size === 0) return false;
+  // Les abdos (core) ne changent pas la zone d'une séance : « jambes + abdos »
+  // reste une séance jambes, « push + abdos » reste une séance haut du corps.
+  const zones = new Set(
+    template.slots
+      .map((slot) => zoneOf(slot.muscle))
+      .filter((zone): zone is Exclude<MuscleZone, 'core'> => zone !== null && zone !== 'core')
+  );
+  if (zones.size !== 1) return false;
+  const strongSlots = template.slots.filter((slot) => strongPoints.has(slot.muscle)).length;
+  return strongSlots >= Math.ceil(template.slots.length / 2);
+}
+
 /** Séance tenable par défaut si le profil n'indique pas de durée (minutes). */
 const DEFAULT_DURATION = 60;
 
@@ -695,35 +803,64 @@ function estimateGroups(groups: readonly PlannedGroup[]): number {
   return estimateMinutes(groups.flatMap((group) => group.items));
 }
 
+/** Nombre total d'exercices d'une liste de groupes. */
+function countItems(groups: readonly PlannedGroup[]): number {
+  return groups.reduce((total, group) => total + group.items.length, 0);
+}
+
 /**
  * Ajuste la séance à la durée visée : on retire d'abord les exercices les moins
  * prioritaires (la fin de la séance : abdos, mollets, avant-bras…), puis on
  * réduit les séries sans descendre sous `MIN_SERIES`.
+ *
+ * Un **point faible** est protégé : on retire d'abord un autre groupe, et on
+ * réduit ses séries en dernier. `maxItems` plafonne la séance (point fort dédié).
  */
-function trimToDuration(groups: readonly PlannedGroup[], targetMinutes: number): PlannedGroup[] {
+function trimToDuration(
+  groups: readonly PlannedGroup[],
+  targetMinutes: number,
+  weakPoints: ReadonlySet<string>,
+  maxItems: number = Number.POSITIVE_INFINITY
+): PlannedGroup[] {
   const list = groups.map((group) => ({ muscle: group.muscle, items: [...group.items] }));
   let guard = 0;
 
-  while (estimateGroups(list) > targetMinutes + 2 && guard < 60) {
-    const total = list.reduce((sum, group) => sum + group.items.length, 0);
+  while (
+    (estimateGroups(list) > targetMinutes + 2 || countItems(list) > maxItems) &&
+    guard < 60
+  ) {
+    const total = countItems(list);
     if (total <= MIN_ITEMS) break;
-    const last = list[list.length - 1];
-    last.items.pop();
-    if (last.items.length === 0) list.pop();
+    // Dernier groupe non prioritaire ; si tout est prioritaire, le dernier groupe.
+    let index = -1;
+    for (let group = list.length - 1; group >= 0; group -= 1) {
+      if (!weakPoints.has(list[group].muscle)) {
+        index = group;
+        break;
+      }
+    }
+    if (index < 0) index = list.length - 1;
+    list[index].items.pop();
+    if (list[index].items.length === 0) list.splice(index, 1);
     guard += 1;
   }
 
   while (estimateGroups(list) > targetMinutes + 2 && guard < 200) {
     let changed = false;
-    for (let group = list.length - 1; group >= 0 && !changed; group -= 1) {
-      const items = list[group].items;
-      for (let index = items.length - 1; index >= 0; index -= 1) {
-        if (items[index].series > MIN_SERIES) {
-          items[index] = { ...items[index], series: items[index].series - 1 };
-          changed = true;
-          break;
+    // Les séries d'un point faible ne baissent qu'en dernier recours.
+    for (const allowWeak of [false, true]) {
+      for (let group = list.length - 1; group >= 0 && !changed; group -= 1) {
+        if (!allowWeak && weakPoints.has(list[group].muscle)) continue;
+        const items = list[group].items;
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          if (items[index].series > MIN_SERIES) {
+            items[index] = { ...items[index], series: items[index].series - 1 };
+            changed = true;
+            break;
+          }
         }
       }
+      if (changed) break;
     }
     if (!changed) break;
     guard += 1;
@@ -754,11 +891,18 @@ function splitSeries(total: number, exercises: number): number[] {
 
 // --- Génération ------------------------------------------------------------
 
-/** 3 à 4 séries par exercice : la maille du découpage en exercices. */
-function exerciseCountFor(sets: number): number {
-  if (sets >= 10) return 3;
-  if (sets >= 6) return 2;
-  return 1;
+/**
+ * Nombre d'exercices pour un groupe musculaire à partir de son volume de séries.
+ * Un point faible gagne un exercice (le volume doit être réparti, pas empilé sur
+ * une seule série longue) ; un point fort reste sur un seul mouvement.
+ */
+function exerciseCountFor(sets: number, focus: Focus = null): number {
+  let count = sets >= 10 ? 3 : sets >= 6 ? 2 : 1;
+  if (focus === 'weak') {
+    count = Math.min(MAX_ITEMS_PER_GROUP, WEAK_MAX_EXERCISES, count + 1);
+  }
+  if (focus === 'strong') count = Math.min(count, STRONG_MAX_EXERCISES);
+  return count;
 }
 
 /**
@@ -812,6 +956,24 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   const warnings: string[] = [];
   const rationale: string[] = [];
 
+  // Points faibles / points forts : clés de groupes connues uniquement. Un muscle
+  // coché des deux côtés est traité en point faible (on ne peut pas à la fois
+  // prioriser et limiter un groupe).
+  const requestedFaibles = (profile.pointsFaibles ?? []).filter(
+    (muscle) => zoneOf(muscle) !== null
+  );
+  const requestedForts = (profile.pointsForts ?? []).filter(
+    (muscle) => zoneOf(muscle) !== null
+  );
+  const weakPoints = new Set(requestedFaibles);
+  const strongPoints = new Set(requestedForts.filter((muscle) => !weakPoints.has(muscle)));
+  const overlapping = requestedForts.filter((muscle) => weakPoints.has(muscle));
+  if (overlapping.length > 0) {
+    warnings.push(
+      `${overlapping.map((muscle) => muscleLabel(muscle)).join(', ')} ${overlapping.length > 1 ? 'sont cochés' : 'est coché'} à la fois en point fort et en point faible : priorisé${overlapping.length > 1 ? 's' : ''} (point faible).`
+    );
+  }
+
   if ((profile.sessionsPerWeek ?? 3) > MAX_SESSIONS) {
     warnings.push(
       `Tu as indiqué ${profile.sessionsPerWeek} séances par semaine : le programme est plafonné à ${MAX_SESSIONS}, la récupération fait partie de la progression.`
@@ -847,6 +1009,8 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   const sessions: PlannedSession[] = [];
   /** Groupes de la trame pour lesquels le catalogue ne propose **aucun** exercice. */
   const unreachable = new Set<string>();
+  /** Séances dédiées à un point fort, dont le nombre d'exercices est plafonné. */
+  const cappedSessions = new Set<string>();
 
   for (const template of templates) {
     const usedInSession = new Set<number>();
@@ -862,14 +1026,30 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
       usedSessionFamilies,
     };
     const groups: PlannedGroup[] = [];
+    const slots = focusedSlots(template, weakPoints);
+    /** Points faibles couverts par un créneau d'appoint : un seul exercice. */
+    const addedWeak = new Set(
+      slots.filter((slot) => slot.added).map((slot) => slot.muscle)
+    );
+    // Séance entièrement dédiée à des points forts (ex. jambes fortes en PPL) :
+    // on plafonne le nombre d'exercices au lieu de remplir la durée.
+    const strongFocused = isStrongFocused(template, strongPoints);
+    const maxItems = strongFocused ? STRONG_FOCUS_MAX_ITEMS : Number.POSITIVE_INFINITY;
+    if (strongFocused) cappedSessions.add(template.nom);
 
     // a. Un exercice (ou deux) par groupe musculaire de la trame.
-    for (const slot of template.slots) {
-      const targetSets = Math.max(
+    for (const slot of slots) {
+      const focus = focusFor(slot.muscle, weakPoints, strongPoints);
+      const focusFactor =
+        focus === 'weak' ? WEAK_SETS_FACTOR : focus === 'strong' ? STRONG_SETS_FACTOR : 1;
+      let targetSets = Math.max(
         MIN_SERIES,
-        Math.round(slot.sets * objectiveRules.setsFactor * levelFactor)
+        Math.round(slot.sets * objectiveRules.setsFactor * levelFactor * focusFactor)
       );
-      const picked = pickForMuscle(slot.muscle, exerciseCountFor(targetSets), context, {
+      if (focus === 'weak') targetSets = Math.min(WEAK_MAX_SETS, targetSets);
+      // Un créneau d'appoint pour un point faible reste un seul exercice.
+      const count = slot.added ? 1 : exerciseCountFor(targetSets, focus);
+      const picked = pickForMuscle(slot.muscle, count, context, {
         prefer: slot.prefer,
       });
       if (picked.length === 0) {
@@ -889,18 +1069,28 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
       groups.push({ muscle: slot.muscle, items });
     }
 
-    // b. Ajustement à la durée visée (on retire la fin, puis des séries).
-    const fitted = trimToDuration(groups, targetMinutes);
+    // b. Ajustement à la durée visée (on retire la fin, puis des séries) sans
+    // toucher aux points faibles ni dépasser le plafond d'une séance dédiée.
+    const fitted = trimToDuration(groups, targetMinutes, weakPoints, maxItems);
 
     // c. Séance trop courte : on ajoute des exercices plutôt que d'empiler des séries.
     // On complète dans l'ordre de la trame (le muscle qui porte la séance d'abord),
     // avec **un seul** complément par groupe : le volume doit rester celui du découpage.
+    // Un point fort ne reçoit jamais de complément.
     const grew = new Set<string>();
     let guard = 0;
-    while (estimateGroups(fitted) < targetMinutes - 8 && guard < 40) {
+    while (
+      estimateGroups(fitted) < targetMinutes - 8 &&
+      guard < 40 &&
+      countItems(fitted) < maxItems
+    ) {
       const group = fitted.find(
         (candidate) =>
-          candidate.items.length < MAX_ITEMS_PER_GROUP && !grew.has(candidate.muscle)
+          candidate.items.length <
+            (weakPoints.has(candidate.muscle) ? WEAK_MAX_EXERCISES : MAX_ITEMS_PER_GROUP) &&
+          !grew.has(candidate.muscle) &&
+          !strongPoints.has(candidate.muscle) &&
+          !addedWeak.has(candidate.muscle)
       );
       if (!group) break;
       grew.add(group.muscle);
@@ -964,6 +1154,21 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   rationale.push(
     'Le volume est calé sur cette durée : si une séance débordait, les exercices de fin de séance (abdos, mollets, avant-bras) sont retirés en premier ; s’il restait du temps, des exercices complémentaires sont ajoutés.'
   );
+  if (weakPoints.size > 0) {
+    rationale.push(
+      `Points faibles priorisés (${[...weakPoints].map((muscle) => muscleLabel(muscle)).join(', ')}) : +25 % de séries et un exercice de plus ; chaque groupe revient dans chaque séance qui travaille déjà la même zone du corps (jamais des jambes un jour de haut du corps).`
+    );
+  }
+  if (strongPoints.size > 0) {
+    rationale.push(
+      `Points forts allégés (${[...strongPoints].map((muscle) => muscleLabel(muscle)).join(', ')}) : −40 % de séries et un seul exercice par séance, pour laisser la place au reste.`
+    );
+  }
+  if (cappedSessions.size > 0) {
+    rationale.push(
+      `Séance(s) dédiée(s) à un point fort (${[...cappedSessions].join(', ')}) : ${STRONG_FOCUS_MAX_ITEMS} exercices maximum au lieu de la trame complète.`
+    );
+  }
   rationale.push(
     `Niveau ${LEVEL_LABEL[level]} : ${Math.round(levelFactor * 100)} % du volume de référence, ${MIN_SERIES} à ${MAX_SERIES} séries par exercice.`
   );
