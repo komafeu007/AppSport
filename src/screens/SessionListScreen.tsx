@@ -1,6 +1,6 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,7 +20,7 @@ import {
   StateView,
   type ConfirmRequest,
 } from '../components/ui';
-import type { SessionListNavigation } from '../navigation/types';
+import type { MainTabParamList, SessionListNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { useActiveWorkout } from '../services/activeWorkout';
 import {
@@ -62,6 +62,7 @@ export default function SessionListScreen() {
   // Séance mise de côté : on réserve la hauteur de la bulle de reprise.
   const hasActiveWorkout = useActiveWorkout() !== null;
   const navigation = useNavigation<SessionListNavigation>();
+  const route = useRoute<RouteProp<MainTabParamList, 'Seance'>>();
   const db = useSQLiteContext();
   const { accountId } = useAccount();
   const [groups, setGroups] = useState<SessionGroup[]>([]);
@@ -107,6 +108,13 @@ export default function SessionListScreen() {
   }, [accountId, db]);
 
   useFocusEffect(load);
+
+  // Depuis l'accueil, « Créer un groupe » arrive ici avec l'ordre d'ouvrir la feuille.
+  useEffect(() => {
+    if (!route.params?.createGroup) return;
+    setGroupModal({ mode: 'create', name: '' });
+    navigation.setParams({ createGroup: undefined });
+  }, [navigation, route.params?.createGroup]);
 
   const sections = useMemo<SessionSection[]>(() => {
     const result: SessionSection[] = groups.map((group) => ({
@@ -216,7 +224,10 @@ export default function SessionListScreen() {
       return;
     }
     if (groupModal.mode === 'create') {
-      await createSessionGroup(db, accountId, name);
+      const id = await createSessionGroup(db, accountId, name);
+      // Le groupe tout juste créé devient le groupe actif de l'accueil : il est
+      // visible tout de suite, même avant d'avoir ajouté sa première séance.
+      await setActiveGroupId(accountId, id);
     } else if (groupModal.groupId != null) {
       await renameSessionGroup(db, groupModal.groupId, name);
     }

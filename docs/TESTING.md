@@ -39,7 +39,7 @@ npx eas-cli@latest build --profile preview --platform android
 
 À savoir :
 - Après un changement de code, il faut **relancer un build** et réinstaller. Pour pousser le JS sans rebuild, `expo-updates` (EAS Update) est la suite logique — non installé pour l'instant.
-- Pour des notifications fiables écran verrouillé : désactive l'**optimisation de batterie** pour l'app (Paramètres Android → Applications → AppSportLocal → Batterie → sans restriction).
+- Pour des notifications fiables écran verrouillé : désactive l'**optimisation de batterie** pour l'app (Paramètres Android → Applications → Arny → Batterie → sans restriction).
 - Cette app installée n'a besoin ni du PC ni d'Expo Go : c'est elle qu'on utilise au gymnase. Le build de développement (dev client) n'est utile que pour itérer sur du code natif — il demanderait `npx expo install expo-dev-client`.
 
 ## Option C — Build local

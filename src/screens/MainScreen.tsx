@@ -23,7 +23,6 @@ import {
   getCompletedSessions,
   getNextProgramInGroup,
   getSessionGroups,
-  hasCompletedSessions,
   type CompletedSession,
   type ProgramSummary,
   type SessionGroup,
@@ -44,7 +43,6 @@ export default function MainScreen() {
   const [hiddenIds, setHiddenIds] = useState<number[]>([]);
   const [nextSession, setNextSession] = useState<ProgramSummary | null>(null);
   const [activeGroupId, setActive] = useState<number | null>(null);
-  const [completed, setCompleted] = useState(false);
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,10 +56,9 @@ export default function MainScreen() {
       getSessionGroups(db, accountId),
       getActiveGroupId(accountId),
       getHiddenGroupIds(accountId),
-      hasCompletedSessions(db, accountId),
       getCompletedSessions(db, accountId),
     ])
-      .then(async ([groupRows, storedActive, hidden, done, sessionRows]) => {
+      .then(async ([groupRows, storedActive, hidden, sessionRows]) => {
         // Un groupe « retiré » de l'accueil ne compte plus comme groupe actif.
         const activeId =
           storedActive !== null &&
@@ -75,7 +72,6 @@ export default function MainScreen() {
         setHiddenIds(hidden);
         setActive(activeId);
         setNextSession(next);
-        setCompleted(done);
         setSessions(sessionRows);
         setError(null);
       })
@@ -106,6 +102,22 @@ export default function MainScreen() {
     [accountId, load]
   );
 
+  /**
+   * Le bouton du héros va au plus court : créer un groupe, ajouter une séance au
+   * groupe choisi, ou ouvrir la liste pour choisir un groupe.
+   */
+  const openPrimaryAction = useCallback(() => {
+    if (groups.length === 0) {
+      navigation.navigate('Seance', { createGroup: true });
+      return;
+    }
+    if (activeGroup) {
+      navigation.navigate('SessionEditor', { groupId: activeGroup.id });
+      return;
+    }
+    navigation.navigate('Seance');
+  }, [activeGroup, groups.length, navigation]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -129,7 +141,8 @@ export default function MainScreen() {
     );
   }
 
-  const showChooser = (!completed || activeGroupId === null) && visibleGroups.length > 0;
+  const showChooser =
+    visibleGroups.length > 0 && (visibleGroups.length > 1 || activeGroupId === null);
   const shortName = nextSession !== null && nextSession.nom_seance.length <= 20;
 
   return (
@@ -199,7 +212,7 @@ export default function MainScreen() {
                   }
                   size="lg"
                   style={styles.heroButton}
-                  onPress={() => navigation.navigate('Seance')}
+                  onPress={openPrimaryAction}
                 />
               </>
             )}

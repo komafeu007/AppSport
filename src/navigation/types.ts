@@ -4,7 +4,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export type MainTabParamList = {
   Main: undefined;
-  Seance: undefined;
+  /** `createGroup` ouvre la feuille « Nouveau groupe » en arrivant sur l'onglet. */
+  Seance: { createGroup?: boolean } | undefined;
 };
 
 export type RootStackParamList = {

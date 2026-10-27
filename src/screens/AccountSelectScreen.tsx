@@ -2,7 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ActionSheet from '../components/ActionSheet';
@@ -154,10 +154,18 @@ export default function AccountSelectScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={onboarding ? ['top', 'bottom'] : ['bottom']}>
       {onboarding ? (
-        <ScreenHeader
-          title="AppSport Local"
-          subtitle="Choisis ton profil — chaque compte garde ses séances et son historique."
-        />
+        <>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            accessibilityLabel="Logo Arny"
+            accessibilityIgnoresInvertColors
+          />
+          <ScreenHeader
+            title="Arny"
+            subtitle="Choisis ton profil — chaque compte garde ses séances et son historique."
+          />
+        </>
       ) : null}
 
       {loading ? (
@@ -264,6 +272,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.control,
+    marginTop: spacing.lg,
+    marginLeft: spacing.xl,
   },
   rowActive: {
     borderLeftWidth: 3,

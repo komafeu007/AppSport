@@ -1,12 +1,13 @@
-# AppSport Local
+# Arny
 
-Application mobile (Expo + React Native + TypeScript) de suivi d'entraînement : catalogue d'exercices, recherche, génération de programme et journal de séances. Interface suivant la direction artistique **« Foulée »** — thème **clair ou sombre selon le téléphone** ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md)) — textes et données en **français**.
+**Arny** — application mobile (Expo + React Native + TypeScript) de suivi d'entraînement : catalogue d'exercices, recherche, génération de programme et journal de séances. Interface suivant la direction artistique **« Foulée »** — thème **clair ou sombre selon le téléphone** ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md)) — textes et données en **français**.
 
 > 📌 **Document vivant** — ce README est mis à jour à chaque évolution. On coche la feuille de route et on ajuste les sections plutôt que de tout réécrire.
 
 ## État du projet
 
 - [x] Base SQLite locale (migrations versionnées, **v11**) + catalogue de **1 324 exercices**
+- [x] **Identité Arny** : nom de l'app, icône iOS, icônes adaptatives (couleur marine + variante monochrome) et splash marine, à partir du logo de `docs/`
 - [x] **Recherche** d'exercices par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*), dans le picker de séance
 - [x] Vignettes **embarquées** (hors-ligne) **+ démonstration animée (GIF)** chargée à la demande dans la fiche exercice
 - [x] Module 1 — **Profils** : plusieurs profils par appareil, prénom, âge, taille, poids, objectif, niveau, zones douloureuses + note, fréquence/semaine, matériel, format et durée de séance
@@ -29,7 +30,7 @@ Application mobile (Expo + React Native + TypeScript) de suivi d'entraînement :
 - `expo-sqlite` (persistance) et `expo-sqlite/kv-store` (préférences clé/valeur : groupe actif, groupes masqués, barres/disques, **séance en cours**)
 - `@react-navigation/native` + `native-stack` + `bottom-tabs` (onglets Accueil / Séances + écrans empilés)
 - `expo-font` + les deux polices de la DA (`@expo-google-fonts/big-shoulders-display`, `@expo-google-fonts/public-sans`), `react-native-svg` (graphiques du récapitulatif), `expo-image` (GIF de démonstration)
-- `expo-notifications` + `expo-audio` (fin de repos), `expo-location`, `expo-status-bar`, `react-native-safe-area-context`
+- `expo-notifications` + `expo-audio` (fin de repos), `expo-location`, `expo-status-bar`, `expo-splash-screen` (splash marine), `react-native-safe-area-context`
 - EAS (`eas.json`) pour les builds cloud ; `npx expo run:android|ios` pour un build local
 
 ## Démarrage rapide
@@ -93,7 +94,7 @@ npx eas-cli@latest build --profile preview --platform android
 - Le premier build crée le projet Expo et génère le **keystore Android** : garde ce compte, c'est lui qui livrera les mises à jour de la même app.
 - À la fin, ouvre le lien (ou le QR code) donné dans le terminal **sur le téléphone** → installe l'APK (autorise l'installation depuis cette source).
 - **Rebuild obligatoire** après l'ajout d'une lib native ou d'une police (`expo-font`, `expo-image`…) : un APK installé ne se met pas à jour tout seul.
-- Astuce batterie (pour les notifications de fin de repos écran verrouillé) : Paramètres Android → Applications → AppSportLocal → Batterie → **sans restriction**.
+- Astuce batterie (pour les notifications de fin de repos écran verrouillé) : Paramètres Android → Applications → Arny → Batterie → **sans restriction**.
 
 ### 3. Build local sur ton PC — sans EAS ni compte Expo
 
