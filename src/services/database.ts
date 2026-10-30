@@ -6,7 +6,7 @@ import { joinKeyList } from '../domain/profile';
 export const DATABASE_NAME = 'appsportlocal.db';
 
 /** Incrémenter à chaque évolution du schéma et ajouter la migration correspondante. */
-const DATABASE_VERSION = 12;
+const DATABASE_VERSION = 15;
 
 export interface Exercise {
   id: number;
@@ -38,8 +38,8 @@ export interface SessionGroup {
   account_id: number | null;
   nom: string;
   ordre: number | null;
-  /** Date ISO du début du bloc d'entraînement (groupes générés ; null = manuel). */
-  bloc_debut: string | null;
+  /** Date ISO du début du bloc d'entraînement (groupes générés ; null/undefined = manuel). */
+  bloc_debut: string | null | undefined;
   /** Durée du bloc en semaines (8 par défaut ; null = pas de cycle). */
   bloc_semaines: number | null;
 }
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS ACCOUNTS (
     poids REAL,
     taille REAL,
     objectif TEXT,
-    niveau TEXT,               -- niveau d'expérience (debutant, intermediaire, avance) — v10
+    sexe TEXT,                 -- sexe (homme, femme) — v15
     points_forts TEXT,         -- points forts à limiter, tableau JSON de clés — v12
     points_faibles TEXT,       -- points faibles à prioriser, tableau JSON de clés — v12
     douleurs_zones TEXT,       -- zones sensibles, tableau JSON de clés
@@ -258,6 +258,7 @@ export async function migrateDbIfNeeded(db: SQLite.SQLiteDatabase): Promise<void
   await ensureSessionGroupsColumns(db);
   await ensureLogsSessionColumns(db);
   await ensureLogsSetsColumns(db);
+  await backfillOrderColumns(db);
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
@@ -307,6 +308,7 @@ async function ensureAccountsColumns(db: SQLite.SQLiteDatabase): Promise<void> {
     ['format_seance', 'TEXT'],
     ['duree_seance', 'INTEGER'],
     ['niveau', 'TEXT'],
+    ['sexe', 'TEXT'],
     ['points_forts', 'TEXT'],
     ['points_faibles', 'TEXT'],
   ];
@@ -338,6 +340,12 @@ async function ensureSessionGroupsColumns(db: SQLite.SQLiteDatabase): Promise<vo
       await db.execAsync(`ALTER TABLE SESSION_GROUPS ADD COLUMN ${name} ${type}`);
     }
   }
+}
+
+/** Backfill de la colonne `ordre` (v14) : on donne à chaque ligne existante son id comme ordre. */
+async function backfillOrderColumns(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync('UPDATE SESSION_GROUPS SET ordre = id WHERE ordre IS NULL');
+  await db.execAsync('UPDATE PROGRAMS SET ordre = id WHERE ordre IS NULL');
 }
 
 /** Ajoute `PROGRAMS.group_id` (v6 : rangement des séances par groupe/split). */
@@ -520,8 +528,8 @@ export interface Account {
   poids: number | null;
   taille: number | null;
   objectif: string | null;
-  /** Niveau d'expérience (clé de `NIVEAUX`) : pilote le volume généré. */
-  niveau: string | null;
+  /** Sexe (clé de `SEXES`) : pilote les muscles prioritaires de l'esthétique. */
+  sexe: string | null;
   /** Points forts à limiter, encodés en JSON (clés de `MUSCLE_GROUPS`). */
   points_forts: string | null;
   /** Points faibles à prioriser, encodés en JSON (clés de `MUSCLE_GROUPS`). */
@@ -544,7 +552,7 @@ export interface AccountInput {
   poids: number | null;
   taille: number | null;
   objectif: string | null;
-  niveau: string | null;
+  sexe: string | null;
   points_forts: string[];
   points_faibles: string[];
   douleurs_zones: string[];
@@ -576,7 +584,7 @@ export async function createAccount(
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
       `INSERT INTO ACCOUNTS
-         (prenom, age, poids, taille, objectif, niveau, points_forts, points_faibles,
+         (prenom, age, poids, taille, objectif, sexe, points_forts, points_faibles,
           douleurs_zones, douleurs_note, sessions_per_week, materiel, format_seance, duree_seance)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       input.prenom,
@@ -584,7 +592,7 @@ export async function createAccount(
       input.poids,
       input.taille,
       input.objectif,
-      input.niveau,
+      input.sexe,
       joinKeyList(input.points_forts),
       joinKeyList(input.points_faibles),
       joinKeyList(input.douleurs_zones),
@@ -614,7 +622,7 @@ export async function updateAccount(
 ): Promise<void> {
   await db.runAsync(
     `UPDATE ACCOUNTS
-        SET prenom = ?, age = ?, poids = ?, taille = ?, objectif = ?, niveau = ?,
+        SET prenom = ?, age = ?, poids = ?, taille = ?, objectif = ?, sexe = ?,
             points_forts = ?, points_faibles = ?,
             douleurs_zones = ?, douleurs_note = ?, sessions_per_week = ?,
             materiel = ?, format_seance = ?, duree_seance = ?
@@ -624,7 +632,7 @@ export async function updateAccount(
     input.poids,
     input.taille,
     input.objectif,
-    input.niveau,
+    input.sexe,
     joinKeyList(input.points_forts),
     joinKeyList(input.points_faibles),
     joinKeyList(input.douleurs_zones),
@@ -687,7 +695,7 @@ export function getPrograms(
             (SELECT COUNT(*) FROM WORKOUT_EXOS we WHERE we.program_id = p.id) AS exercise_count
        FROM PROGRAMS p
       WHERE p.account_id = ?
-      ORDER BY p.id DESC`,
+      ORDER BY COALESCE(p.ordre, p.id)`,
     accountId
   );
 }
@@ -711,6 +719,34 @@ export function getProgramExercises(
       WHERE we.program_id = ?
       ORDER BY we.id`,
     programId
+  );
+}
+
+/** Exercice prévu dans un groupe de séances (split), pour la répartition musculaire. */
+export interface GroupPlanExercise {
+  exercise_id: number | null;
+  target: string | null;
+  muscle_group: string;
+  secondary_muscles: string | null;
+  series: number | null;
+  reps_min: number | null;
+  reps_max: number | null;
+  duration_sec: number | null;
+}
+
+/** Tous les exercices prévus dans les séances d'un groupe (split). */
+export function getGroupPlanExercises(
+  db: SQLite.SQLiteDatabase,
+  groupId: number
+): Promise<GroupPlanExercise[]> {
+  return db.getAllAsync<GroupPlanExercise>(
+    `SELECT we.exercise_id, e.target, e.muscle_group, e.secondary_muscles,
+            we.series, we.reps_min, we.reps_max, we.duration_sec
+       FROM WORKOUT_EXOS we
+       JOIN PROGRAMS p ON p.id = we.program_id
+       JOIN EXERCISES e ON e.id = we.exercise_id
+      WHERE p.group_id = ?`,
+    groupId
   );
 }
 
@@ -753,11 +789,16 @@ export async function saveProgram(
 
   await db.withTransactionAsync(async () => {
     if (programId == null) {
+      const last = await db.getFirstAsync<{ m: number | null }>(
+        'SELECT MAX(ordre) AS m FROM PROGRAMS WHERE account_id = ?',
+        input.account_id
+      );
+      const nextOrdre = (last?.m ?? 0) + 1;
       const result = await db.runAsync(
         'INSERT INTO PROGRAMS (account_id, nom_seance, ordre, group_id) VALUES (?, ?, ?, ?)',
         input.account_id,
         input.nom_seance,
-        null,
+        nextOrdre,
         input.group_id
       );
       programId = result.lastInsertRowId;
@@ -851,7 +892,7 @@ export function getSessionGroups(
   accountId: number
 ): Promise<SessionGroup[]> {
   return db.getAllAsync<SessionGroup>(
-    'SELECT * FROM SESSION_GROUPS WHERE account_id = ? ORDER BY ordre, id',
+    'SELECT * FROM SESSION_GROUPS WHERE account_id = ? ORDER BY COALESCE(ordre, id)',
     accountId
   );
 }
@@ -863,11 +904,17 @@ export async function createSessionGroup(
   /** Bloc d'entraînement (groupes générés) : date de début ISO + durée en semaines. */
   block: { debut: string; semaines: number } | null = null
 ): Promise<number> {
+  // Ordre : on se place après le dernier groupe existant.
+  const last = await db.getFirstAsync<{ m: number | null }>(
+    'SELECT MAX(ordre) AS m FROM SESSION_GROUPS WHERE account_id = ?',
+    accountId
+  );
+  const nextOrdre = (last?.m ?? 0) + 1;
   const result = await db.runAsync(
     'INSERT INTO SESSION_GROUPS (account_id, nom, ordre, bloc_debut, bloc_semaines) VALUES (?, ?, ?, ?, ?)',
     accountId,
     nom,
-    null,
+    nextOrdre,
     block?.debut ?? null,
     block?.semaines ?? null
   );
@@ -880,6 +927,30 @@ export function renameSessionGroup(
   nom: string
 ): Promise<unknown> {
   return db.runAsync('UPDATE SESSION_GROUPS SET nom = ? WHERE id = ?', nom, id);
+}
+
+/** Réordonne les groupes d'un compte selon l'ordre des ids fournis. */
+export async function reorderSessionGroups(
+  db: SQLite.SQLiteDatabase,
+  orderedIds: number[]
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync('UPDATE SESSION_GROUPS SET ordre = ? WHERE id = ?', i + 1, orderedIds[i]);
+    }
+  });
+}
+
+/** Réordonne les séances d'un compte selon l'ordre des ids fournis. */
+export async function reorderPrograms(
+  db: SQLite.SQLiteDatabase,
+  orderedIds: number[]
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync('UPDATE PROGRAMS SET ordre = ? WHERE id = ?', i + 1, orderedIds[i]);
+    }
+  });
 }
 
 /** Supprime un groupe ET toutes ses séances (avec leurs exercices). */

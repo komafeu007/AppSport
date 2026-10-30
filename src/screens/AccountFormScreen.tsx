@@ -23,10 +23,9 @@ import {
 } from '../components/ui';
 import {
   EQUIPMENTS,
-  DEFAULT_NIVEAU,
   HEALTH_ZONES,
-  NIVEAUX,
   OBJECTIFS,
+  SEXES,
   SESSION_DURATIONS,
   SESSION_FORMATS,
   WEEKLY_FREQUENCIES,
@@ -108,7 +107,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   const [taille, setTaille] = useState('');
   const [poids, setPoids] = useState('');
   const [objectif, setObjectif] = useState<string | null>(null);
-  const [niveau, setNiveau] = useState<string>(DEFAULT_NIVEAU);
+  const [sexe, setSexe] = useState<string | null>(null);
   const [pointsForts, setPointsForts] = useState<string[]>([]);
   const [pointsFaibles, setPointsFaibles] = useState<string[]>([]);
   const [frequence, setFrequence] = useState<number | null>(null);
@@ -139,7 +138,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
         setTaille(row.taille !== null ? String(row.taille) : '');
         setPoids(row.poids !== null ? String(row.poids) : '');
         setObjectif(row.objectif);
-        setNiveau(row.niveau ?? DEFAULT_NIVEAU);
+        setSexe(row.sexe);
         setPointsForts(parseKeyList(row.points_forts));
         setPointsFaibles(parseKeyList(row.points_faibles));
         setFrequence(row.sessions_per_week);
@@ -192,7 +191,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
       taille: parseNumber(taille),
       poids: parseNumber(poids),
       objectif,
-      niveau,
+      sexe,
       points_forts: pointsForts,
       points_faibles: pointsFaibles,
       sessions_per_week: frequence,
@@ -250,7 +249,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Appear>
@@ -311,12 +310,12 @@ export default function AccountFormScreen({ navigation, route }: Props) {
         </Appear>
 
         <Appear style={styles.section}>
-          <SectionTitle>Niveau</SectionTitle>
-          <ChipGroup options={NIVEAUX} values={[niveau]} onToggle={(key) => setNiveau(key)} />
-          <Text style={styles.rulesHint}>
-            Le niveau ajuste le volume du programme généré (séries et exercices par séance),
-            pas les charges : celles-ci viennent de ton historique.
-          </Text>
+          <SectionTitle>Sexe</SectionTitle>
+          <ChipGroup
+            options={SEXES}
+            values={sexe ? [sexe] : []}
+            onToggle={(key) => setSexe((prev) => (prev === key ? null : key))}
+          />
         </Appear>
 
         <Appear style={styles.section}>
@@ -382,6 +381,10 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           <SectionTitle>État de santé</SectionTitle>
           <Text style={styles.subLabel}>Zones sensibles / douloureuses</Text>
           <ChipGroup options={HEALTH_ZONES} values={zones} onToggle={toggleMulti(setZones)} />
+          <Text style={styles.rulesHint}>
+            Les exercices concernés par ces zones sont retirés du programme (et non seulement
+            allégés), contrairement aux points forts qui ne font que réduire le volume.
+          </Text>
           <Text style={styles.subLabel}>Précisions (optionnel)</Text>
           <Input
             style={[styles.input, styles.noteInput]}

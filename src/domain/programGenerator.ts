@@ -34,7 +34,7 @@ import { muscleLabel } from './muscles';
 
 export interface GeneratorProfile {
   objectif: string | null;
-  niveau: string | null;
+  sexe: string | null;
   sessionsPerWeek: number | null;
   dureeSeance: number | null;
   format: string | null;
@@ -264,57 +264,6 @@ const UPPER_LOWER: readonly SessionTemplate[] = [
   },
 ];
 
-/** Format « Split par muscle ». */
-const MUSCLE_SPLIT: readonly SessionTemplate[] = [
-  {
-    nom: 'Pectoraux / Triceps',
-    slots: [
-      { muscle: 'pectoraux', sets: 9 },
-      { muscle: 'triceps', sets: 6 },
-    ],
-  },
-  {
-    nom: 'Dos / Biceps',
-    slots: [
-      { muscle: 'dos', sets: 9 },
-      { muscle: 'biceps', sets: 6 },
-      { muscle: 'avant-bras', sets: 2 },
-    ],
-  },
-  {
-    nom: 'Jambes',
-    slots: [
-      { muscle: 'quadriceps', sets: 8 },
-      { muscle: 'ischios', sets: 6 },
-      { muscle: 'fessiers', sets: 4 },
-      { muscle: 'mollets', sets: 5 },
-    ],
-  },
-  {
-    nom: 'Épaules / Abdos',
-    slots: [
-      { muscle: 'epaules', sets: 8 },
-      { muscle: 'abdos', sets: 6 },
-    ],
-  },
-  {
-    nom: 'Bras',
-    slots: [
-      { muscle: 'biceps', sets: 7 },
-      { muscle: 'triceps', sets: 7 },
-      { muscle: 'avant-bras', sets: 4 },
-    ],
-  },
-  {
-    nom: 'Rappel haut du corps',
-    slots: [
-      { muscle: 'dos', sets: 5 },
-      { muscle: 'pectoraux', sets: 5 },
-      { muscle: 'epaules', sets: 4 },
-    ],
-  },
-];
-
 /** Volume et intensité d'un objectif. */
 interface ObjectiveRules {
   label: string;
@@ -328,12 +277,19 @@ interface ObjectiveRules {
 
 /** Volume et intensité par objectif. */
 const OBJECTIVE_RULES: Record<string, ObjectiveRules> = {
-  masse: {
-    label: 'Prise de masse',
-    setsFactor: 1.05,
+  esthetique: {
+    label: 'Esthétique',
+    setsFactor: 0.75,
     polyReps: [8, 10],
     monoReps: [10, 12],
     restDelta: 0,
+  },
+  recomposition: {
+    label: 'Recomposition corporelle',
+    setsFactor: 1,
+    polyReps: [8, 12],
+    monoReps: [10, 15],
+    restDelta: -15,
   },
   force: {
     label: 'Force',
@@ -341,20 +297,6 @@ const OBJECTIVE_RULES: Record<string, ObjectiveRules> = {
     polyReps: [4, 6],
     monoReps: [8, 10],
     restDelta: 45,
-  },
-  seche: {
-    label: 'Perte de poids',
-    setsFactor: 0.95,
-    polyReps: [12, 15],
-    monoReps: [12, 15],
-    restDelta: -45,
-  },
-  forme: {
-    label: 'Remise en forme',
-    setsFactor: 0.9,
-    polyReps: [8, 12],
-    monoReps: [10, 12],
-    restDelta: -30,
   },
   sante: {
     label: 'Santé / mobilité',
@@ -365,24 +307,10 @@ const OBJECTIVE_RULES: Record<string, ObjectiveRules> = {
   },
 };
 
-const DEFAULT_OBJECTIVE = 'forme';
+const DEFAULT_OBJECTIVE = 'recomposition';
 
-/** Facteur de volume par niveau d'expérience. */
-const LEVEL_FACTOR: Record<string, number> = {
-  debutant: 0.75,
-  intermediaire: 1,
-  avance: 1.15,
-};
-
-const LEVEL_LABEL: Record<string, string> = {
-  debutant: 'débutant',
-  intermediaire: 'intermédiaire',
-  avance: 'avancé',
-};
-
-const DEFAULT_LEVEL = 'debutant';
-
-/** Matériel « libre » (barre, haltères) privilégié pour la force et la masse. */
+// (niveau retiré : le volume ne dépend plus de l'expérience)
+/** Matériel « libre » (barre, haltères) privilégié pour la force et l'esthétique. */
 const FREE_WEIGHTS: readonly string[] = [
   'barbell',
   'olympic barbell',
@@ -441,6 +369,20 @@ const MUSCLE_ZONE: Record<string, MuscleZone> = {
 
 function zoneOf(muscle: string): MuscleZone | null {
   return MUSCLE_ZONE[muscle] ?? null;
+}
+
+/** Muscles prioritaires par sexe en mode esthétique (volume ~10 séries/sem.). */
+const ESTHETIQUE_PRIORITY_HOMME: ReadonlySet<string> = new Set(['pectoraux', 'dos', 'epaules']);
+const ESTHETIQUE_PRIORITY_FEMME: ReadonlySet<string> = new Set([
+  'fessiers',
+  'ischios',
+  'quadriceps',
+  'dos',
+]);
+
+function esthetiquePriority(muscle: string, sexe: string | null): boolean {
+  const set = sexe === 'femme' ? ESTHETIQUE_PRIORITY_FEMME : ESTHETIQUE_PRIORITY_HOMME;
+  return set.has(muscle);
 }
 
 /** Priorité d'un groupe musculaire dans le programme. */
@@ -536,7 +478,6 @@ const FORMAT_LABEL: Record<string, string> = {
   ppl: 'Push / Pull / Legs',
   'upper-lower': 'Haut / Bas du corps',
   'full-body': 'Full body',
-  split: 'Split par muscle',
   maison: 'Maison (poids du corps)',
 };
 
@@ -575,18 +516,12 @@ function resolveFormat(
       warning: `Le découpage ${FORMAT_LABEL['upper-lower']} demande au moins 2 séances par semaine : Full body appliqué.`,
     };
   }
-  if (wanted === 'split' && sessionsPerWeek < 4) {
-    return {
-      format: 'upper-lower',
-      warning: `Le split par muscle demande au moins 4 séances par semaine : Haut / Bas du corps appliqué.`,
-    };
-  }
   return { format: wanted, warning: null };
 }
 
 /** Modèles de séances d'un découpage, dans l'ordre, pour un nombre de séances donné. */
 function templatesFor(format: string, sessionsPerWeek: number): readonly SessionTemplate[] {
-  const base = format === 'maison' ? FULL_BODY : format === 'ppl' ? PPL : format === 'split' ? MUSCLE_SPLIT : format === 'upper-lower' ? UPPER_LOWER : FULL_BODY;
+  const base = format === 'maison' ? FULL_BODY : format === 'ppl' ? PPL : format === 'upper-lower' ? UPPER_LOWER : FULL_BODY;
   const cycle = base.map((template) =>
     format === 'maison' ? { ...template, nom: template.nom.replace('Full body', 'Maison') } : template
   );
@@ -627,12 +562,21 @@ function blemishPenalty(exercise: CatalogExercise): number {
 /** Préférence de matériel selon l'objectif (force/masse : poids libres d'abord). */
 function equipmentScore(exercise: CatalogExercise, objective: string): number {
   const equipment = exercise.equipment ?? 'body weight';
+  if (objective === 'sante') {
+    // Mode santé : on privilégie le matériel maison / poids du corps et on
+    // pénalise fortement le matériel de salle (machines, barres lourdes).
+    let score = 0;
+    if (equipment === 'body weight') score += 1.5;
+    if (equipment === 'band' || equipment === 'resistance band') score += 1.2;
+    if (FREE_WEIGHTS.includes(equipment)) score -= 0.4;
+    if (GUIDED_EQUIPMENT.includes(equipment)) score -= 1.0;
+    return score;
+  }
   let score = 0;
   if (FREE_WEIGHTS.includes(equipment)) score += 1.2;
   if (GUIDED_EQUIPMENT.includes(equipment)) score += 0.5;
   if (equipment === 'body weight') score += 0.35;
   if (equipment === 'band' || equipment === 'resistance band') score += 0.2;
-  if (objective === 'sante') score *= 0.3;
   return score;
 }
 
@@ -948,8 +892,6 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   const profile = input.profile;
   const objective = profile.objectif && OBJECTIVE_RULES[profile.objectif] ? profile.objectif : DEFAULT_OBJECTIVE;
   const objectiveRules = OBJECTIVE_RULES[objective];
-  const level = profile.niveau && LEVEL_FACTOR[profile.niveau] ? profile.niveau : DEFAULT_LEVEL;
-  const levelFactor = LEVEL_FACTOR[level];
   const sessionsPerWeek = Math.min(MAX_SESSIONS, Math.max(1, profile.sessionsPerWeek ?? 3));
   const targetMinutes = Math.min(120, Math.max(20, profile.dureeSeance ?? DEFAULT_DURATION));
 
@@ -1042,9 +984,20 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
       const focus = focusFor(slot.muscle, weakPoints, strongPoints);
       const focusFactor =
         focus === 'weak' ? WEAK_SETS_FACTOR : focus === 'strong' ? STRONG_SETS_FACTOR : 1;
+      // Répartition par objectif :
+      //  - force : volume égal sur tous les muscles (sauf points forts/faibles).
+      //  - esthétique : ~10 séries/sem. sur les muscles prioritaires, 2-3 sur le
+      //    maintien (muscles non prioritaires).
+      let baseSlotSets = slot.sets;
+      if (objective === 'force') {
+        baseSlotSets = 6;
+      } else if (objective === 'esthetique') {
+        const priority = esthetiquePriority(slot.muscle, profile.sexe);
+        baseSlotSets = priority ? slot.sets : Math.max(2, Math.round(slot.sets * 0.35));
+      }
       let targetSets = Math.max(
         MIN_SERIES,
-        Math.round(slot.sets * objectiveRules.setsFactor * levelFactor * focusFactor)
+        Math.round(baseSlotSets * objectiveRules.setsFactor * focusFactor)
       );
       if (focus === 'weak') targetSets = Math.min(WEAK_MAX_SETS, targetSets);
       // Un créneau d'appoint pour un point faible reste un seul exercice.
@@ -1170,7 +1123,7 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
     );
   }
   rationale.push(
-    `Niveau ${LEVEL_LABEL[level]} : ${Math.round(levelFactor * 100)} % du volume de référence, ${MIN_SERIES} à ${MAX_SERIES} séries par exercice.`
+    `${MIN_SERIES} à ${MAX_SERIES} séries par exercice.`
   );
   if (profile.materiel.length > 0) {
     rationale.push(`Matériel pris en compte : ${profile.materiel.length} type(s) déclaré(s).`);

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -70,7 +72,11 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.root}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         <Animated.View style={[styles.backdrop, { opacity: progress }]}>
           <Pressable
             style={styles.backdropPress}
@@ -97,7 +103,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
           {title ? <Text style={styles.title}>{title}</Text> : null}
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

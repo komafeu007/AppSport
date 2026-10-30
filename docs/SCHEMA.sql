@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS ACCOUNTS (
     age INTEGER,
     poids REAL,
     taille REAL,
-    objectif TEXT,             -- objectif principal (masse, seche, force, forme, sante)
-    niveau TEXT,               -- niveau d'expérience (debutant, intermediaire, avance) — v10
+    objectif TEXT,             -- objectif principal (esthetique, recomposition, force, sante)
+    sexe TEXT,                 -- sexe (homme, femme) — v15
     points_forts TEXT,         -- points forts à limiter, tableau JSON de clés — v12
     points_faibles TEXT,       -- points faibles à prioriser, tableau JSON de clés — v12
     douleurs_zones TEXT,       -- zones sensibles, tableau JSON de clés

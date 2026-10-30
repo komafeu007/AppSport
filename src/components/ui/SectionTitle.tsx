@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
 import { spacing, text } from '../../theme/tokens';
@@ -11,19 +11,29 @@ interface Props {
   /** Élément aligné à droite (compteur, boutons). */
   right?: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** Rend le titre cliquable (ex. ouvrir la répartition d'un groupe). */
+  onPress?: () => void;
 }
 
 /**
  * Titre de section (§6.2 « titre-2 ») : Big Shoulders, casse de phrase, encre
  * principale. Plus de majuscules espacées : la DA l'interdit (§3).
  */
-export default function SectionTitle({ children, hint, right, style }: Props) {
+export default function SectionTitle({ children, hint, right, style, onPress }: Props) {
   const styles = useThemedStyles(createStyles);
+
+  const title = onPress ? (
+    <Pressable onPress={onPress} accessibilityRole="button">
+      <Text style={styles.title}>{children}</Text>
+    </Pressable>
+  ) : (
+    <Text style={styles.title}>{children}</Text>
+  );
 
   return (
     <View style={[styles.row, style]}>
       <View style={styles.left}>
-        <Text style={styles.title}>{children}</Text>
+        {title}
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
       {right}

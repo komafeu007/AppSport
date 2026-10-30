@@ -10,7 +10,7 @@
 
 import type * as SQLite from 'expo-sqlite';
 
-import { DEFAULT_NIVEAU, parseKeyList } from '../domain/profile';
+import { parseKeyList } from '../domain/profile';
 import {
   generateProgram,
   rerollPlannedExercise,
@@ -46,7 +46,7 @@ export function newSeed(): number {
 export function generatorProfileFromAccount(account: Account): GeneratorProfile {
   return {
     objectif: account.objectif,
-    niveau: account.niveau ?? DEFAULT_NIVEAU,
+    sexe: account.sexe,
     sessionsPerWeek: account.sessions_per_week,
     dureeSeance: account.duree_seance,
     format: account.format_seance,
@@ -58,8 +58,8 @@ export function generatorProfileFromAccount(account: Account): GeneratorProfile 
 }
 
 /** Longueur du bloc d'entraînement d'un groupe (null si le groupe n'est pas un bloc généré). */
-export function blockWeeks(group: SessionGroup): number | null {
-  if (!group.bloc_debut) return null;
+export function blockWeeks(group: SessionGroup | undefined | null): number | null {
+  if (!group || !group.bloc_debut) return null;
   return group.bloc_semaines ?? BLOCK_WEEKS;
 }
 
@@ -186,8 +186,9 @@ export async function getBlockStatus(
     account.id
   );
   const group = rows[0];
+  if (!group || !group.bloc_debut) return null;
   const weeks = blockWeeks(group);
-  if (!group || !group.bloc_debut || weeks === null) return null;
+  if (weeks === null) return null;
 
   const started = new Date(group.bloc_debut).getTime();
   const elapsedMs = Number.isNaN(started) ? 0 : Date.now() - started;

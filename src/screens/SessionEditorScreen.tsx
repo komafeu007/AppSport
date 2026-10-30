@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
+import { PanResponder } from 'react-native';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -174,6 +175,54 @@ function StepperField({
   );
 }
 
+/** Poignée de réordonnancement (glisser-déposer) pour un exercice. */
+function DragHandle({
+  onStart,
+  onMove,
+  onEnd,
+}: {
+  onStart: () => void;
+  onMove: (dy: number) => void;
+  onEnd: (dy: number) => void;
+}) {
+  const onStartRef = useRef(onStart);
+  const onMoveRef = useRef(onMove);
+  const onEndRef = useRef(onEnd);
+  onStartRef.current = onStart;
+  onMoveRef.current = onMove;
+  onEndRef.current = onEnd;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => onStartRef.current(),
+      onPanResponderMove: (_, gesture) => onMoveRef.current(gesture.dy),
+      onPanResponderRelease: (_, gesture) => onEndRef.current(gesture.dy),
+      onPanResponderTerminate: (_, gesture) => onEndRef.current(gesture.dy),
+    })
+  ).current;
+
+  return (
+    <View style={dragHandleStyles.handle} {...pan.panHandlers}>
+      <Text style={dragHandleStyles.glyph}>≡</Text>
+    </View>
+  );
+}
+
+const dragHandleStyles = StyleSheet.create({
+  handle: {
+    width: 32,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glyph: {
+    fontSize: 20,
+    color: '#999',
+  },
+});
+
 export default function SessionEditorScreen({ navigation, route }: Props) {
   const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
@@ -197,6 +246,11 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const keyRef = useRef(0);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const itemLayoutsRef = useRef(new Map<string, { y: number; height: number }>());
+  const scrollRef = useRef<ScrollView>(null);
 
   /** Message d'information dans une carte de confirmation (un seul bouton). */
   const notify = (title: string, message: string) => {
@@ -287,29 +341,67 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   };
 
   const addExercise = (exercise: Exercise) => {
-    setItems((prev) => {
-      if (prev.some((item) => item.exercise.id === exercise.id)) return prev;
-      const endurance = isEndurance(exercise);
-      const defaults = defaultTargets(exercise.is_poly, endurance);
-      return [
-        ...prev,
-        {
-          key: nextKey(),
-          exercise,
-          series: defaults.series,
-          reps_min: defaults.reps_min,
-          reps_max: defaults.reps_max,
-          duration_sec: defaults.duration_sec,
-          rest_time: defaults.rest_time,
-          set_weights: Array.from({ length: defaults.series }, () => defaults.target_weight),
-          superset: false,
-        },
-      ];
+    if (items.some((item) => item.exercise.id === exercise.id)) return;
+    const endurance = isEndurance(exercise);
+    const defaults = defaultTargets(exercise.is_poly, endurance);
+    const key = nextKey();
+    setItems((prev) => [
+      ...prev,
+      {
+        key,
+        exercise,
+        series: defaults.series,
+        reps_min: defaults.reps_min,
+        reps_max: defaults.reps_max,
+        duration_sec: defaults.duration_sec,
+        rest_time: defaults.rest_time,
+        set_weights: Array.from({ length: defaults.series }, () => defaults.target_weight),
+        superset: false,
+      },
+    ]);
+    setExpandedKeys((prev) => new Set(prev).add(key));
+  };
+
+  const toggleExpanded = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
   };
 
   const removeExercise = (key: string) => {
     setItems((prev) => prev.filter((item) => item.key !== key));
+  };
+
+  const finishDrag = (key: string, dy: number) => {
+    const originalIndex = items.findIndex((item) => item.key === key);
+    if (originalIndex < 0) return;
+    const heights = items.map(
+      (item) => itemLayoutsRef.current.get(item.key)?.height ?? 60
+    );
+    const draggedHeight = heights[originalIndex];
+    const draggedTop = heights.slice(0, originalIndex).reduce((a, b) => a + b, 0);
+    const draggedCenter = draggedTop + draggedHeight / 2 + dy;
+
+    let newIndex = items.length - 1;
+    let cum = 0;
+    for (let i = 0; i < items.length; i++) {
+      cum += heights[i];
+      if (draggedCenter < cum) {
+        newIndex = i;
+        break;
+      }
+    }
+    if (newIndex !== originalIndex) {
+      setItems((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(originalIndex, 1);
+        next.splice(newIndex, 0, moved);
+        return next;
+      });
+    }
   };
 
   /**
@@ -466,9 +558,14 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={draggingKey === null}
+      >
         <Text style={styles.label}>Nom de la séance</Text>
         <Input
           style={styles.nameInput}
@@ -527,43 +624,88 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         ) : (
           items.map((item, index) => {
             const endurance = isEndurance(item.exercise);
+            const isDragging = draggingKey === item.key;
             return (
-              <Appear key={item.key}>
-                <Card
+              <View
+                key={item.key}
+                onLayout={(e) => {
+                  itemLayoutsRef.current.set(item.key, {
+                    y: e.nativeEvent.layout.y,
+                    height: e.nativeEvent.layout.height,
+                  });
+                }}
+                style={
+                  isDragging
+                    ? { transform: [{ translateY: dragOffset }], zIndex: 20, elevation: 20 }
+                    : undefined
+                }
+              >
+                <Appear>
+                <View
                   style={[
-                    styles.card,
-                    (item.superset || (index > 0 && items[index - 1].superset)) && styles.cardSuperset,
+                    styles.item,
+                    (item.superset || (index > 0 && items[index - 1].superset)) && styles.itemSuperset,
                   ]}
                 >
-                  <View style={styles.cardHeader}>
+                  <View style={styles.itemHeader}>
+                    <DragHandle
+                      onStart={() => {
+                        setDraggingKey(item.key);
+                        setDragOffset(0);
+                      }}
+                      onMove={setDragOffset}
+                      onEnd={(dy) => {
+                        finishDrag(item.key, dy);
+                        setDraggingKey(null);
+                        setDragOffset(0);
+                      }}
+                    />
                     <Text style={styles.cardIndex}>{index + 1}</Text>
                     <PressableScale
-                      style={styles.cardTap}
+                      style={styles.itemImageTap}
                       onPress={() => setDetail({ exercise: item.exercise, itemKey: item.key })}
-                      accessibilityLabel={`Voir et remplacer ${item.exercise.nom}`}
+                      accessibilityLabel={`Voir le tutoriel de ${item.exercise.nom}`}
                       scaleTo={0.97}
                     >
                       <Thumb
                         source={
                           item.exercise.image ? exerciseImages[item.exercise.image] : undefined
                         }
-                        size={44}
+                        size={40}
                       />
+                    </PressableScale>
+                    <PressableScale
+                      style={styles.itemNameTap}
+                      onPress={() => toggleExpanded(item.key)}
+                      accessibilityLabel={`Modifier ${item.exercise.nom}`}
+                      scaleTo={0.97}
+                    >
                       <View style={styles.cardTitleBlock}>
-                        <Text style={styles.cardTitle}>{item.exercise.nom}</Text>
-                        <Badge
-                          label={
-                            endurance ? 'Endurance' : item.exercise.is_poly === 1 ? 'Poly' : 'Mono'
-                          }
-                          tone={
-                            endurance
-                              ? 'neutral'
-                              : item.exercise.is_poly === 1
-                                ? 'action'
-                                : 'neutral'
-                          }
-                        />
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {item.exercise.nom}
+                        </Text>
+                        <Text style={styles.itemSummary}>
+                          {endurance
+                            ? `${item.series}×${Math.floor(item.duration_sec / 60)}:${String(
+                                item.duration_sec % 60
+                              ).padStart(2, '0')} · ${formatRest(item.rest_time)}`
+                            : `${item.series}×${item.reps_min}-${item.reps_max} · ${formatRest(
+                                item.rest_time
+                              )}`}
+                        </Text>
                       </View>
+                      <Badge
+                        label={
+                          endurance ? 'Endurance' : item.exercise.is_poly === 1 ? 'Poly' : 'Mono'
+                        }
+                        tone={
+                          endurance
+                            ? 'neutral'
+                            : item.exercise.is_poly === 1
+                            ? 'action'
+                            : 'neutral'
+                        }
+                      />
                     </PressableScale>
                     <IconButton
                       glyph="×"
@@ -573,112 +715,117 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                     />
                   </View>
 
-                  <Text style={styles.rules}>
-                    {describeRules(item.exercise.is_poly, endurance)}
-                  </Text>
-
-                  {item.superset || (index > 0 && items[index - 1].superset) ? (
-                    <Text style={styles.supersetNote}>
-                      Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
-                    </Text>
-                  ) : null}
-
-                  <View style={styles.fields}>
-                    <StepperField
-                      label="Séries"
-                      value={item.series}
-                      range={SERIES_RANGE}
-                      onChange={(value) =>
-                        updateItem(item.key, {
-                          series: value,
-                          set_weights: fitWeights(item.set_weights, value, item.set_weights[0] ?? 0),
-                        })
-                      }
-                    />
-                    {endurance ? (
-                      <DurationField
-                        label="Durée par série"
-                        value={item.duration_sec}
-                        hint
-                        style={styles.field}
-                        inputStyle={styles.durationInput}
-                        onChange={(value) => updateItem(item.key, { duration_sec: value })}
-                      />
-                    ) : (
-                      <>
-                        <StepperField
-                          label="Reps min"
-                          value={item.reps_min}
-                          range={REPS_RANGE}
-                          onChange={(value) =>
-                            updateItem(item.key, {
-                              reps_min: value,
-                              ...(value > item.reps_max ? { reps_max: value } : {}),
-                            })
-                          }
-                        />
-                        <StepperField
-                          label="Reps max"
-                          value={item.reps_max}
-                          range={REPS_RANGE}
-                          onChange={(value) =>
-                            updateItem(item.key, {
-                              reps_max: value,
-                              ...(value < item.reps_min ? { reps_min: value } : {}),
-                            })
-                          }
-                        />
-                      </>
-                    )}
-                    <StepperField
-                      label="Repos (s)"
-                      value={item.rest_time}
-                      range={REST_RANGE}
-                      hint={formatRest(item.rest_time)}
-                      onChange={(value) => updateItem(item.key, { rest_time: value })}
-                    />
-                  </View>
-
-                  {endurance ? null : (
-                    <View style={styles.setWeights}>
-                      <Text style={styles.fieldLabel}>Poids par série (kg)</Text>
-                      <Text style={styles.setWeightsHint}>
-                        La série 1 s’applique à toutes : modifie-la pour changer tout le monde. Une
-                        série modifiée plus bas garde son propre poids.
+                  {expandedKeys.has(item.key) ? (
+                    <>
+                      <Text style={styles.rules}>
+                        {describeRules(item.exercise.is_poly, endurance)}
                       </Text>
-                      <View style={styles.fields}>
-                        {item.set_weights.map((weight, setIndex) => (
-                          <StepperField
-                            key={`${item.key}-set-${setIndex}`}
-                            label={`Série ${setIndex + 1}`}
-                            value={weight}
-                            range={WEIGHT_RANGE}
-                            onChange={(value) => setWeightAt(item, setIndex, value)}
-                            snap={false}
-                          />
-                        ))}
-                      </View>
-                      <Button
-                        label="Dégressif auto (−10 %/série)"
-                        variant="secondary"
-                        size="sm"
-                        style={styles.degressive}
-                        onPress={() => applyDegressive(item)}
-                      />
-                    </View>
-                  )}
 
-                  {index < items.length - 1 ? (
-                    <View style={styles.supersetRow}>
-                      <Chip
-                        label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
-                        selected={item.superset}
-                        onPress={() => updateItem(item.key, { superset: !item.superset })}
-                      />
-                    </View>
+                      {item.superset || (index > 0 && items[index - 1].superset) ? (
+                        <Text style={styles.supersetNote}>
+                          Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
+                        </Text>
+                      ) : null}
+
+                      <View style={styles.fields}>
+                        <StepperField
+                          label="Séries"
+                          value={item.series}
+                          range={SERIES_RANGE}
+                          onChange={(value) =>
+                            updateItem(item.key, {
+                              series: value,
+                              set_weights: fitWeights(item.set_weights, value, item.set_weights[0] ?? 0),
+                            })
+                          }
+                        />
+                        {endurance ? (
+                          <DurationField
+                            label="Durée par série"
+                            value={item.duration_sec}
+                            hint
+                            style={styles.field}
+                            inputStyle={styles.durationInput}
+                            onChange={(value) => updateItem(item.key, { duration_sec: value })}
+                          />
+                        ) : (
+                          <>
+                            <StepperField
+                              label="Reps min"
+                              value={item.reps_min}
+                              range={REPS_RANGE}
+                              onChange={(value) =>
+                                updateItem(item.key, {
+                                  reps_min: value,
+                                  ...(value > item.reps_max ? { reps_max: value } : {}),
+                                })
+                              }
+                            />
+                            <StepperField
+                              label="Reps max"
+                              value={item.reps_max}
+                              range={REPS_RANGE}
+                              onChange={(value) =>
+                                updateItem(item.key, {
+                                  reps_max: value,
+                                  ...(value < item.reps_min ? { reps_min: value } : {}),
+                                })
+                              }
+                            />
+                          </>
+                        )}
+                        <StepperField
+                          label="Repos (s)"
+                          value={item.rest_time}
+                          range={REST_RANGE}
+                          hint={formatRest(item.rest_time)}
+                          onChange={(value) => updateItem(item.key, { rest_time: value })}
+                        />
+                      </View>
+
+                      {endurance ? null : (
+                        <View style={styles.setWeights}>
+                          <Text style={styles.fieldLabel}>Poids par série (kg)</Text>
+                          <Text style={styles.setWeightsHint}>
+                            La série 1 s’applique à toutes : modifie-la pour changer tout le monde. Une
+                            série modifiée plus bas garde son propre poids.
+                          </Text>
+                          <View style={styles.fields}>
+                            {item.set_weights.map((weight, setIndex) => (
+                              <StepperField
+                                key={`${item.key}-set-${setIndex}`}
+                                label={`Série ${setIndex + 1}`}
+                                value={weight}
+                                range={WEIGHT_RANGE}
+                                onChange={(value) => setWeightAt(item, setIndex, value)}
+                                snap={false}
+                              />
+                            ))}
+                          </View>
+                          <Button
+                            label="Dégressif auto (−10 %/série)"
+                            variant="secondary"
+                            size="sm"
+                            style={styles.degressive}
+                            onPress={() => applyDegressive(item)}
+                          />
+                        </View>
+                      )}
+
+                      {index < items.length - 1 ? (
+                        <View style={styles.supersetRow}>
+                          <Chip
+                            label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
+                            selected={item.superset}
+                            onPress={() => updateItem(item.key, { superset: !item.superset })}
+                          />
+                        </View>
+                      ) : null}
+                    </>
                   ) : null}
-                </Card>
+                </View>
               </Appear>
+              </View>
             );
           })
         )}
@@ -836,6 +983,36 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     ...text.caption,
     color: theme.colors.textMuted,
     marginTop: spacing.md,
+  },
+  item: {
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  itemSuperset: {
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.action,
+    paddingLeft: spacing.sm,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  itemImageTap: {
+    padding: spacing.xs,
+  },
+  itemNameTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  itemSummary: {
+    ...text.micro,
+    color: theme.colors.textMuted,
+    marginTop: 2,
   },
   cardSuperset: {
     borderLeftWidth: 3,

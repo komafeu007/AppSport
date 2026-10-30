@@ -17,6 +17,7 @@ import LiveWorkoutScreen from '../screens/LiveWorkoutScreen';
 import MainScreen from '../screens/MainScreen';
 import ProgramGeneratorScreen from '../screens/ProgramGeneratorScreen';
 import SessionEditorScreen from '../screens/SessionEditorScreen';
+import GroupStatsScreen from '../screens/GroupStatsScreen';
 import SessionListScreen from '../screens/SessionListScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
 import { useAccount } from '../services/account';
@@ -163,6 +164,11 @@ export default function RootNavigator() {
                 headerBackVisible: false,
               }}
             />
+             <Stack.Screen
+               name="GroupStats"
+               component={GroupStatsScreen}
+               options={{ title: 'Répartition du groupe' }}
+             />
             <Stack.Screen
               name="ProgramGenerator"
               component={ProgramGeneratorScreen}

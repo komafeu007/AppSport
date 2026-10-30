@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ACTIVE_WORKOUT_BUBBLE_SPACE } from '../components/ActiveWorkoutBubble';
@@ -30,6 +30,7 @@ import {
   getAccount,
   getPrograms,
   getSessionGroups,
+  reorderPrograms,
   renameSessionGroup,
   type ProgramSummary,
   type SessionGroup,
@@ -57,6 +58,54 @@ interface GroupModalState {
   name: string;
 }
 
+/** Poignée de réordonnancement (glisser-déposer) pour une séance. */
+function DragHandle({
+  onStart,
+  onMove,
+  onEnd,
+}: {
+  onStart: () => void;
+  onMove: (dy: number) => void;
+  onEnd: (dy: number) => void;
+}) {
+  const onStartRef = useRef(onStart);
+  const onMoveRef = useRef(onMove);
+  const onEndRef = useRef(onEnd);
+  onStartRef.current = onStart;
+  onMoveRef.current = onMove;
+  onEndRef.current = onEnd;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => onStartRef.current(),
+      onPanResponderMove: (_, gesture) => onMoveRef.current(gesture.dy),
+      onPanResponderRelease: (_, gesture) => onEndRef.current(gesture.dy),
+      onPanResponderTerminate: (_, gesture) => onEndRef.current(gesture.dy),
+    })
+  ).current;
+
+  return (
+    <View style={dragHandleStyles.handle} {...pan.panHandlers}>
+      <Text style={dragHandleStyles.glyph}>≡</Text>
+    </View>
+  );
+}
+
+const dragHandleStyles = StyleSheet.create({
+  handle: {
+    width: 32,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glyph: {
+    fontSize: 20,
+    color: '#999',
+  },
+});
+
 export default function SessionListScreen() {
   const styles = useThemedStyles(createStyles);
   // Séance mise de côté : on réserve la hauteur de la bulle de reprise.
@@ -75,6 +124,10 @@ export default function SessionListScreen() {
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [block, setBlock] = useState<BlockStatus | null>(null);
   const loaded = useRef(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const itemLayoutsRef = useRef(new Map<number, { y: number; height: number }>());
+  const listRef = useRef<any>(null);
 
   const load = useCallback(() => {
     if (accountId === null) return;
@@ -146,6 +199,37 @@ export default function SessionListScreen() {
       });
     },
     [db, load]
+  );
+
+  const finishDrag = useCallback(
+    (programId: number, dy: number) => {
+      const section = sections.find((s) => s.data.some((p) => p.id === programId));
+      if (!section) return;
+      const list = section.data;
+      const originalIndex = list.findIndex((p) => p.id === programId);
+      if (originalIndex < 0) return;
+      const heights = list.map((p) => itemLayoutsRef.current.get(p.id)?.height ?? 60);
+      const draggedHeight = heights[originalIndex];
+      const draggedTop = heights.slice(0, originalIndex).reduce((a, b) => a + b, 0);
+      const draggedCenter = draggedTop + draggedHeight / 2 + dy;
+
+      let newIndex = list.length - 1;
+      let cum = 0;
+      for (let i = 0; i < list.length; i++) {
+        cum += heights[i];
+        if (draggedCenter < cum) {
+          newIndex = i;
+          break;
+        }
+      }
+      if (newIndex !== originalIndex) {
+        const ordered = [...list];
+        const [moved] = ordered.splice(originalIndex, 1);
+        ordered.splice(newIndex, 0, moved);
+        reorderPrograms(db, ordered.map((p) => p.id)).then(() => load());
+      }
+    },
+    [db, load, sections]
   );
 
   const toggleGroupHidden = useCallback(
@@ -270,7 +354,7 @@ export default function SessionListScreen() {
                     } faite${block.sessionsDone > 1 ? 's' : ''}${
                       block.due ? ' → un nouveau bloc est proposé' : ''
                     }`
-                  : 'Séances calculées à partir de ton profil (objectif, niveau, matériel, durée), avec aperçu et régénération avant enregistrement.'}
+                  : 'Séances calculées à partir de ton profil (objectif, sexe, matériel, durée), avec aperçu et régénération avant enregistrement.'}
               </Text>
             </View>
             <Text style={styles.chevron}>›</Text>
@@ -290,14 +374,21 @@ export default function SessionListScreen() {
         />
       ) : (
         <SectionList
+          ref={listRef}
           sections={sections}
           keyExtractor={(item) => String(item.id)}
+          scrollEnabled={draggingId === null}
           contentContainerStyle={[styles.listContent, hasActiveWorkout && styles.listContentReserved]}
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => (
             <Appear>
               <SectionTitle
                 style={styles.sectionHeader}
+                onPress={
+                  section.group
+                    ? () => navigation.navigate('GroupStats', { groupId: section.group!.id })
+                    : undefined
+                }
                 hint={
                   section.group && hiddenIds.includes(section.group.id)
                     ? 'retiré de l’accueil'
@@ -327,29 +418,58 @@ export default function SessionListScreen() {
               </SectionTitle>
             </Appear>
           )}
-          renderItem={({ item, index, section }) => (
-            <Row
-              inset={false}
-              last={index === section.data.length - 1}
-              accessibilityLabel={item.nom_seance}
-              onPress={() => navigation.navigate('SessionEditor', { programId: item.id })}
-              onLongPress={() => confirmDeleteProgram(item)}
-            >
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle}>{item.nom_seance}</Text>
-                  <Text style={styles.rowMeta}>
-                    {item.exercise_count} exercice{item.exercise_count > 1 ? 's' : ''}
-                  </Text>
-                </View>
-                <IconButton
-                  glyph="×"
-                  tone="danger"
-                  accessibilityLabel={`Supprimer ${item.nom_seance}`}
-                  onPress={() => confirmDeleteProgram(item)}
-                />
-              <Text style={styles.chevron}>›</Text>
-            </Row>
-          )}
+          renderItem={({ item, index, section }) => {
+            const isDragging = draggingId === item.id;
+            return (
+              <View
+                onLayout={(e) => {
+                  itemLayoutsRef.current.set(item.id, {
+                    y: e.nativeEvent.layout.y,
+                    height: e.nativeEvent.layout.height,
+                  });
+                }}
+                style={
+                  isDragging
+                    ? { transform: [{ translateY: dragOffset }], zIndex: 20, elevation: 20 }
+                    : undefined
+                }
+              >
+                <Row
+                  inset={false}
+                  last={index === (section as SessionSection).data.length - 1}
+                  accessibilityLabel={item.nom_seance}
+                  onPress={() => navigation.navigate('SessionEditor', { programId: item.id })}
+                  onLongPress={() => confirmDeleteProgram(item)}
+                >
+                  <DragHandle
+                    onStart={() => {
+                      setDraggingId(item.id);
+                      setDragOffset(0);
+                    }}
+                    onMove={setDragOffset}
+                    onEnd={(dy) => {
+                      finishDrag(item.id, dy);
+                      setDraggingId(null);
+                      setDragOffset(0);
+                    }}
+                  />
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowTitle}>{item.nom_seance}</Text>
+                    <Text style={styles.rowMeta}>
+                      {item.exercise_count} exercice{item.exercise_count > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <IconButton
+                    glyph="×"
+                    tone="danger"
+                    accessibilityLabel={`Supprimer ${item.nom_seance}`}
+                    onPress={() => confirmDeleteProgram(item)}
+                  />
+                  <Text style={styles.chevron}>›</Text>
+                </Row>
+              </View>
+            );
+          }}
           renderSectionFooter={({ section }) =>
             section.group && section.data.length === 0 ? (
               <Text style={styles.groupEmptyText}>
@@ -377,7 +497,7 @@ export default function SessionListScreen() {
           />
         </View>
         <Text style={styles.footerHint}>
-          Appui long ou × supprime une séance · ⋯ renomme ou supprime un groupe
+          Glisser ≡ pour réordonner · appui long ou × supprime une séance · ⋯ renomme ou supprime un groupe
         </Text>
       </View>
 

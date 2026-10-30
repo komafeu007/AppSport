@@ -14,6 +14,8 @@ export type RootStackParamList = {
   LiveWorkout: { programId: number };
   /** Récapitulatif post-séance (Module 4 - Stats), ouvert à la fin d'une séance. */
   SessionSummary: { sessionId: number };
+  /** Répartition musculaire d'un groupe (split). */
+  GroupStats: { groupId: number };
   /**
    * Écrans affichés **sans** compte actif (onboarding). Noms volontairement
    * distincts des écrans app : React Navigation ne réinitialise la navigation

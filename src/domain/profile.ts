@@ -11,25 +11,17 @@ export interface ProfileOption {
 
 /** Objectif principal. */
 export const OBJECTIFS: readonly ProfileOption[] = [
-  { key: 'masse', label: 'Prise de masse' },
-  { key: 'seche', label: 'Perte de poids' },
+  { key: 'esthetique', label: 'Esthétique' },
+  { key: 'recomposition', label: 'Recomposition corporelle' },
   { key: 'force', label: 'Force' },
-  { key: 'forme', label: 'Remise en forme' },
   { key: 'sante', label: 'Santé / mobilité' },
 ];
 
-/**
- * Niveau d'expérience (choix unique) : pilote le **volume** généré (séries par
- * muscle, exercices par séance) et non les charges, qui sont reprises de l'historique.
- */
-export const NIVEAUX: readonly ProfileOption[] = [
-  { key: 'debutant', label: 'Débutant' },
-  { key: 'intermediaire', label: 'Intermédiaire' },
-  { key: 'avance', label: 'Avancé' },
+/** Sexe (choix unique) : pilote les muscles prioritaires de l'objectif esthétique. */
+export const SEXES: readonly ProfileOption[] = [
+  { key: 'homme', label: 'Homme' },
+  { key: 'femme', label: 'Femme' },
 ];
-
-/** Niveau retenu quand le profil n'en indique pas (profils créés avant la v10). */
-export const DEFAULT_NIVEAU = 'debutant';
 
 /** Matériel disponible (multi-sélection). */
 export const EQUIPMENTS: readonly ProfileOption[] = [
@@ -37,10 +29,8 @@ export const EQUIPMENTS: readonly ProfileOption[] = [
   { key: 'halteres', label: 'Haltères' },
   { key: 'barre', label: 'Barre + disques' },
   { key: 'traction', label: 'Barre de traction' },
-  { key: 'poids-corps', label: 'Poids du corps' },
   { key: 'kettlebell', label: 'Kettlebell' },
   { key: 'elastiques', label: 'Élastiques' },
-  { key: 'machines', label: 'Machines' },
 ];
 
 /** Format de séance souhaité (choix unique). */
@@ -48,7 +38,6 @@ export const SESSION_FORMATS: readonly ProfileOption[] = [
   { key: 'ppl', label: 'Push / Pull / Legs' },
   { key: 'upper-lower', label: 'Haut / Bas du corps' },
   { key: 'full-body', label: 'Full body' },
-  { key: 'split', label: 'Split par muscle' },
   { key: 'maison', label: 'Maison (poids du corps)' },
 ];
 
