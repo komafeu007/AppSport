@@ -17,7 +17,11 @@ export interface MuscleGroup {
   label: string;
 }
 
-/** Ordre canonique des axes du radar (haut → tour complet). */
+/**
+ * Groupes musculaires **internes** : c'est la maille du profil (points forts /
+ * faibles) et du générateur de programme, qui a besoin de distinguer quadriceps,
+ * ischios, fessiers et mollets. Les radars, eux, affichent `MUSCLE_AXES`.
+ */
 export const MUSCLE_GROUPS: readonly MuscleGroup[] = [
   { key: 'pectoraux', label: 'Pectoraux' },
   { key: 'dos', label: 'Dos' },
@@ -32,11 +36,65 @@ export const MUSCLE_GROUPS: readonly MuscleGroup[] = [
   { key: 'avant-bras', label: 'Avant-bras' },
 ] as const;
 
-const LABELS = new Map(MUSCLE_GROUPS.map((group) => [group.key, group.label]));
+/** Ramène un groupe interne à son axe d'affichage (les jambes n'en font qu'un). */
+const AXIS_OF_GROUP: Record<string, string> = {
+  quadriceps: 'jambes',
+  ischios: 'jambes',
+  fessiers: 'jambes',
+  mollets: 'jambes',
+};
+
+/** Groupes internes réunis sous l'axe d'affichage « Jambes ». */
+export const LEG_MUSCLE_KEYS: readonly string[] = [
+  'quadriceps',
+  'ischios',
+  'fessiers',
+  'mollets',
+];
+
+/** Ordre canonique des axes affichés (haut → tour complet). */
+export const MUSCLE_AXES: readonly MuscleGroup[] = [
+  { key: 'pectoraux', label: 'Pectoraux' },
+  { key: 'dos', label: 'Dos' },
+  { key: 'epaules', label: 'Épaules' },
+  { key: 'biceps', label: 'Biceps' },
+  { key: 'triceps', label: 'Triceps' },
+  { key: 'abdos', label: 'Abdos' },
+  { key: 'jambes', label: 'Jambes' },
+  { key: 'avant-bras', label: 'Avant-bras' },
+] as const;
+
+const LABELS = new Map(
+  [...MUSCLE_GROUPS, ...MUSCLE_AXES].map((group) => [group.key, group.label])
+);
 
 /** libellé français d'une clé de groupe (ex. « quadriceps » → « Quadriceps »). */
 export function muscleLabel(key: string): string {
   return LABELS.get(key) ?? key;
+}
+
+/**
+ * Éclate des clés d'affichage en groupes internes : « jambes » → quadriceps,
+ * ischios, fessiers et mollets. Le générateur raisonne muscle par muscle, pas
+ * par axe de radar.
+ */
+export function expandMuscleKeys(keys: readonly string[]): string[] {
+  return keys.flatMap((key) => (key === 'jambes' ? LEG_MUSCLE_KEYS : [key]));
+}
+
+/** Replie des groupes internes sur les axes d'affichage (les 4 jambes → « jambes »). */
+export function collapseMuscleKeys(keys: readonly string[]): string[] {
+  const collapsed: string[] = [];
+  for (const key of keys) {
+    const axis = AXIS_OF_GROUP[key] ?? key;
+    if (!collapsed.includes(axis)) collapsed.push(axis);
+  }
+  return collapsed;
+}
+
+/** Deux clés désignent-elles le même axe affiché ? (ex. « jambes » et « quadriceps ») */
+export function sameMuscleAxis(a: string, b: string): boolean {
+  return (AXIS_OF_GROUP[a] ?? a) === (AXIS_OF_GROUP[b] ?? b);
 }
 
 /** Correspondance mot-clé anglais (dataset) → clé de groupe canonique. */
@@ -128,28 +186,36 @@ export interface MuscleAmount {
 const SECONDARY_SHARE = 0.5;
 
 /**
- * Répartit la charge (répétitions) des exercices sur les groupes musculaires : le
- * muscle principal prend tout, chaque muscle secondaire la moitié. Renvoie les
- * groupes réellement travaillés, dans l'ordre anatomique de `MUSCLE_GROUPS`.
+ * Répartit la charge (répétitions) des exercices sur les axes musculaires : le
+ * muscle principal prend tout, chaque muscle secondaire la moitié. Quadriceps,
+ * ischios, fessiers et mollets sont cumulés sur l'axe « Jambes ». Renvoie les
+ * axes réellement travaillés, dans l'ordre anatomique de `MUSCLE_AXES`.
  */
 export function aggregateMuscleAmount(entries: MuscleAmountEntry[]): MuscleAmount[] {
   const totals = new Map<string, number>();
-  const add = (key: string, amount: number) =>
-    totals.set(key, (totals.get(key) ?? 0) + amount);
+  const add = (key: string, amount: number) => {
+    const axis = AXIS_OF_GROUP[key] ?? key;
+    totals.set(axis, (totals.get(axis) ?? 0) + amount);
+  };
 
   for (const entry of entries) {
     if (entry.amount <= 0) continue;
     const primary = muscleKey(entry.target) ?? muscleKey(entry.muscle_group);
+    // Un secondaire déjà couvert par l'axe principal (ex. fessiers sur un
+    // soulevé de terre, tous deux « Jambes ») ne compte pas deux fois.
+    const primaryAxis = primary ? AXIS_OF_GROUP[primary] ?? primary : null;
     if (primary) add(primary, entry.amount);
     for (const raw of entry.secondary) {
       const key = muscleKey(raw);
-      if (key && key !== primary) add(key, entry.amount * SECONDARY_SHARE);
+      if (key && (AXIS_OF_GROUP[key] ?? key) !== primaryAxis) {
+        add(key, entry.amount * SECONDARY_SHARE);
+      }
     }
   }
 
-  return MUSCLE_GROUPS.filter((group) => (totals.get(group.key) ?? 0) > 0).map((group) => ({
-    key: group.key,
-    label: group.label,
-    amount: totals.get(group.key) ?? 0,
+  return MUSCLE_AXES.filter((axis) => (totals.get(axis.key) ?? 0) > 0).map((axis) => ({
+    key: axis.key,
+    label: axis.label,
+    amount: totals.get(axis.key) ?? 0,
   }));
 }

@@ -7,7 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Appear, SectionTitle, StateView } from '../components/ui';
 import MuscleRadarChart from '../components/MuscleRadarChart';
-import { exerciseTermLabel } from '../domain/exerciseLabels';
+import {
+  aggregateMuscleAmount,
+  parseSecondaryMuscles,
+  type MuscleAmount,
+} from '../domain/muscles';
 import type { RootStackParamList } from '../navigation/types';
 import { getGroupPlanExercises, type GroupPlanExercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
@@ -15,9 +19,10 @@ import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupStats'>;
 
-/** Arrondi simple pour l'affichage des reps. */
-function formatReps(value: number): string {
-  return String(Math.round(value));
+/** Séries affichées : entier, ou une décimale quand un muscle secondaire compte pour moitié. */
+function formatSets(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
 }
 
 /**
@@ -25,8 +30,12 @@ function formatReps(value: number): string {
  * découpage programme, séries par muscle, sur l'ensemble de ses séances. Aucune
  * lecture de l'historique : ce n'est pas le bilan des séances déjà faites.
  *
- * La charge répartie est le **nombre de séries prévues** (muscle principal pour
- * tout, moitié pour chaque muscle secondaire), l'unité qui décrit un programme.
+ * Même agencement que le récapitulatif de fin de séance : les muscles bruts du
+ * catalogue (lats, traps, abductors…) sont rangés dans les axes d'affichage
+ * (`MUSCLE_AXES`, jambes regroupées), et la charge se répartit pareil — tout
+ * pour le muscle principal, la moitié pour chaque muscle secondaire. Seule
+ * l'unité change : ce sont les **séries prévues**, l'unité qui décrit un
+ * programme.
  */
 export default function GroupStatsScreen({ route }: Props) {
   const styles = useThemedStyles(createStyles);
@@ -37,7 +46,7 @@ export default function GroupStatsScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exercises, setExercises] = useState<GroupPlanExercise[]>([]);
-  const [muscles, setMuscles] = useState<{ label: string; amount: number }[]>([]);
+  const [muscles, setMuscles] = useState<MuscleAmount[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -46,20 +55,19 @@ export default function GroupStatsScreen({ route }: Props) {
       .then((rows) => {
         if (!mounted) return;
         setExercises(rows);
-        // On compte les reps par muscle principal (fort), sans secondaires ni
-        // regroupement canonique : chaque muscle brut garde son propre total.
-        const totals = new Map<string, number>();
-        for (const row of rows) {
-          const raw = row.target ?? row.muscle_group;
-          const label = exerciseTermLabel(raw) || raw;
-          const series = row.series ?? 0;
-          if (series <= 0) continue;
-          totals.set(label, (totals.get(label) ?? 0) + series);
-        }
-        const sorted = [...totals.entries()]
-          .map(([label, amount]) => ({ label, amount }))
-          .sort((a, b) => b.amount - a.amount);
-        setMuscles(sorted);
+        // Mêmes axes que le récapitulatif de fin de séance (jambes regroupées) :
+        // chaque muscle brut du dataset est ramené à sa clé canonique, et les
+        // secondaires comptent pour moitié (ordre anatomique, pas décroissant).
+        setMuscles(
+          aggregateMuscleAmount(
+            rows.map((row) => ({
+              target: row.target,
+              muscle_group: row.muscle_group,
+              secondary: parseSecondaryMuscles(row.secondary_muscles),
+              amount: row.series ?? 0,
+            }))
+          )
+        );
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -109,7 +117,7 @@ export default function GroupStatsScreen({ route }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Appear>
           <SectionTitle
-            hint={`${exercises.length} exercice${exercises.length > 1 ? 's' : ''}`}
+            hint={`en séries · ${exercises.length} exercice${exercises.length > 1 ? 's' : ''}`}
           >
             Répartition par muscle
           </SectionTitle>
@@ -120,15 +128,17 @@ export default function GroupStatsScreen({ route }: Props) {
             </Text>
           ) : (
             <>
-              <View style={styles.radarWrap}>
-                <MuscleRadarChart
-                  data={muscles.map((muscle) => ({ label: muscle.label, value: muscle.amount }))}
-                  size={radarSize}
-                />
-              </View>
+              {muscles.length >= 3 ? (
+                <View style={styles.radarWrap}>
+                  <MuscleRadarChart
+                    data={muscles.map((muscle) => ({ label: muscle.label, value: muscle.amount }))}
+                    size={radarSize}
+                  />
+                </View>
+              ) : null}
               <View style={styles.legend}>
                 {muscles.map((muscle) => (
-                  <View key={muscle.label} style={styles.legendRow}>
+                  <View key={muscle.key} style={styles.legendRow}>
                     <Text style={styles.legendLabel} numberOfLines={1}>
                       {muscle.label}
                     </Text>
@@ -140,13 +150,14 @@ export default function GroupStatsScreen({ route }: Props) {
                         ]}
                       />
                     </View>
-                    <Text style={styles.legendValue}>{formatReps(muscle.amount)}</Text>
+                    <Text style={styles.legendValue}>{formatSets(muscle.amount)}</Text>
                   </View>
                 ))}
               </View>
 
               <Text style={styles.caption}>
-                Séries prévues par muscle principal, sur l’ensemble des séances du groupe.
+                Séries prévues par groupe musculaire, sur l’ensemble des séances du split : tout
+                pour le muscle principal, la moitié pour chaque muscle secondaire.
               </Text>
             </>
           )}

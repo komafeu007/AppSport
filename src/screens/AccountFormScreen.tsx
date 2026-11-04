@@ -32,7 +32,7 @@ import {
   parseKeyList,
   type ProfileOption,
 } from '../domain/profile';
-import { MUSCLE_GROUPS } from '../domain/muscles';
+import { MUSCLE_AXES, collapseMuscleKeys, sameMuscleAxis } from '../domain/muscles';
 import { formatRest, rulesFor } from '../domain/workoutRules';
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
@@ -57,8 +57,12 @@ const FREQUENCY_OPTIONS: readonly ProfileOption[] = WEEKLY_FREQUENCIES.map((valu
   label: value === 1 ? '1 séance' : `${value} séances`,
 }));
 
-/** Groupes musculaires proposés comme points forts / points faibles. */
-const MUSCLE_OPTIONS: readonly ProfileOption[] = MUSCLE_GROUPS.map((group) => ({
+/**
+ * Points forts et points faibles partagent les mêmes axes que les radars,
+ * jambes regroupées. Cocher « Jambes » vise les quatre muscles du bas du corps
+ * d'un coup : le générateur éclate la clé (cf. `expandMuscleKeys`).
+ */
+const MUSCLE_OPTIONS: readonly ProfileOption[] = MUSCLE_AXES.map((group) => ({
   key: group.key,
   label: group.label,
 }));
@@ -139,8 +143,10 @@ export default function AccountFormScreen({ navigation, route }: Props) {
         setPoids(row.poids !== null ? String(row.poids) : '');
         setObjectif(row.objectif);
         setSexe(row.sexe);
-        setPointsForts(parseKeyList(row.points_forts));
-        setPointsFaibles(parseKeyList(row.points_faibles));
+        // Points forts / faibles stockés à la maille fine par les versions
+        // précédentes : les quatre muscles de jambe se replient sur « Jambes ».
+        setPointsForts(collapseMuscleKeys(parseKeyList(row.points_forts)));
+        setPointsFaibles(collapseMuscleKeys(parseKeyList(row.points_faibles)));
         setFrequence(row.sessions_per_week);
         setDuree(row.duree_seance);
         setFormat(row.format_seance);
@@ -164,7 +170,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
 
   /**
    * Un muscle ne peut pas être à la fois point fort et point faible : le dernier
-   * choix gagne, on retire la clé de la liste opposée.
+   * choix gagne, on retire de la liste opposée tout ce qui vise le même axe
+   * (« Jambes » côté faible écarte quadriceps, ischios, fessiers et mollets).
    */
   const toggleFocus = (
     setter: (updater: (prev: string[]) => string[]) => void,
@@ -172,7 +179,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
     key: string
   ) => {
     toggleMulti(setter)(key);
-    other((prev) => prev.filter((item) => item !== key));
+    other((prev) => prev.filter((item) => !sameMuscleAxis(item, key)));
   };
 
   const notify = (title: string, message: string) =>
@@ -192,8 +199,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
       poids: parseNumber(poids),
       objectif,
       sexe,
-      points_forts: pointsForts,
-      points_faibles: pointsFaibles,
+      points_forts: collapseMuscleKeys(pointsForts),
+      points_faibles: collapseMuscleKeys(pointsFaibles),
       sessions_per_week: frequence,
       duree_seance: duree,
       format_seance: format,
@@ -363,8 +370,8 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             Un point faible reçoit plus de séries et revient dans chaque séance qui travaille la
             même zone du corps. Un point fort est allégé (moins de séries, un seul exercice), et
             une séance entièrement dédiée à un point fort est raccourcie. Le programme garde son
-            découpage : on ne met pas des jambes un jour de haut du corps. Pour viser tout le bas du
-            corps, coche quadriceps, ischios, fessiers et mollets.
+            découpage : on ne met pas des jambes un jour de haut du corps. « Jambes » vise tout le
+            bas du corps d’un coup (quadriceps, ischios, fessiers et mollets).
           </Text>
         </Appear>
 

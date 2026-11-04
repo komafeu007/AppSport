@@ -30,7 +30,7 @@ import {
   zoneViolation,
   type CatalogExercise,
 } from './exerciseCatalog';
-import { muscleLabel } from './muscles';
+import { collapseMuscleKeys, muscleLabel } from './muscles';
 
 export interface GeneratorProfile {
   objectif: string | null;
@@ -1109,12 +1109,12 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   );
   if (weakPoints.size > 0) {
     rationale.push(
-      `Points faibles priorisés (${[...weakPoints].map((muscle) => muscleLabel(muscle)).join(', ')}) : +25 % de séries et un exercice de plus ; chaque groupe revient dans chaque séance qui travaille déjà la même zone du corps (jamais des jambes un jour de haut du corps).`
+      `Points faibles priorisés (${collapseMuscleKeys([...weakPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : +25 % de séries et un exercice de plus ; chaque groupe revient dans chaque séance qui travaille déjà la même zone du corps (jamais des jambes un jour de haut du corps).`
     );
   }
   if (strongPoints.size > 0) {
     rationale.push(
-      `Points forts allégés (${[...strongPoints].map((muscle) => muscleLabel(muscle)).join(', ')}) : −40 % de séries et un seul exercice par séance, pour laisser la place au reste.`
+      `Points forts allégés (${collapseMuscleKeys([...strongPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : −40 % de séries et un seul exercice par séance, pour laisser la place au reste.`
     );
   }
   if (cappedSessions.size > 0) {

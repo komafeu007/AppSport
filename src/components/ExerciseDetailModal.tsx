@@ -1,6 +1,14 @@
 import { Image } from 'expo-image';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ScrollView as ScrollViewType,
+} from 'react-native';
 
 import { exerciseImages } from '../data/exerciseImages';
 import { isEndurance } from '../domain/exerciseCatalog';
@@ -33,6 +41,11 @@ interface Props {
   alternatives?: AlternativesConfig;
 }
 
+/** Vitesse d'un geste vers le bas (points/ms) qui referme le tuto. */
+const DISMISS_VELOCITY = 0.5;
+/** Traction vers le bas (px, rebond iOS) qui referme le tuto. */
+const DISMISS_PULL = 64;
+
 /** Découpe le texte d'instructions en étapes numérotables (phrases). */
 function toSteps(value: string): string[] {
   return value
@@ -61,11 +74,62 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
   const [gifIndex, setGifIndex] = useState(0);
   const [gifFailed, setGifFailed] = useState(false);
 
+  const scrollRef = useRef<ScrollViewType>(null);
+  /** Le contenu est en haut : tirer vers le bas referme la fiche. */
+  const atTop = useRef(true);
+  /** Le geste en cours a commencé alors que le contenu était en haut. */
+  const draggedFromTop = useRef(false);
+  /** Plus grande traction vers le bas pendant le geste (rebond iOS, en px). */
+  const pulledDown = useRef(0);
+
   // Réinitialise l'état de chargement du GIF quand on change d'exercice.
   useEffect(() => {
     setGifIndex(0);
     setGifFailed(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    atTop.current = true;
   }, [exercise?.id]);
+
+  // Une nouvelle ouverture repart du haut : le geste de fermeture est actif.
+  useEffect(() => {
+    if (!visible) return;
+    atTop.current = true;
+    draggedFromTop.current = false;
+    pulledDown.current = 0;
+  }, [visible]);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offset = event.nativeEvent.contentOffset.y;
+    atTop.current = offset <= 0;
+    if (draggedFromTop.current && offset < 0) {
+      pulledDown.current = Math.max(pulledDown.current, -offset);
+    }
+  };
+
+  const handleScrollBeginDrag = () => {
+    draggedFromTop.current = atTop.current;
+    pulledDown.current = 0;
+  };
+
+  /*
+   * Fermeture au glissement vers le bas, **depuis le haut seulement**.
+   *
+   * Le geste est lu sur le `ScrollView` lui-même (`onScrollBeginDrag` /
+   * `onScrollEndDrag`) : un `PanResponder` ou les événements tactiles ne
+   * suffisent pas, car la vue défilante native prend la main dès les premiers
+   * pixels et annule le geste côté JS. À l'inverse, elle signale toujours le
+   * début et la fin du glissement, avec sa vitesse (points/ms) : un geste
+   * vers le bas qui part du haut n'a rien à faire défiler, il referme la fiche.
+   * Sur iOS le rebond du contenu donne en plus la distance tirée.
+   */
+  const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!draggedFromTop.current) return;
+    draggedFromTop.current = false;
+    const velocity = event.nativeEvent.velocity?.y ?? 0;
+    const pulled = pulledDown.current;
+    pulledDown.current = 0;
+    if (velocity > DISMISS_VELOCITY || pulled > DISMISS_PULL) onClose();
+  };
 
   const gifUrl = gifFailed ? undefined : gifUrls[gifIndex];
 
@@ -85,7 +149,17 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        scrollEventThrottle={16}
+        onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={handleScrollEndDrag}
+        // Android : pas de halo de survol au sommet (le geste referme la fiche).
+        overScrollMode="never"
+      >
         {exercise ? (
           <>
             {gifUrl ? (

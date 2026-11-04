@@ -10,6 +10,7 @@
 
 import type * as SQLite from 'expo-sqlite';
 
+import { expandMuscleKeys } from '../domain/muscles';
 import { parseKeyList } from '../domain/profile';
 import {
   generateProgram,
@@ -52,8 +53,11 @@ export function generatorProfileFromAccount(account: Account): GeneratorProfile 
     format: account.format_seance,
     materiel: parseKeyList(account.materiel),
     zonesDouloureuses: parseKeyList(account.douleurs_zones),
-    pointsForts: parseKeyList(account.points_forts),
-    pointsFaibles: parseKeyList(account.points_faibles),
+    // Points forts / faibles sont choisis sur les axes d'affichage : « Jambes »
+    // vaut quadriceps + ischios + fessiers + mollets pour le moteur de génération,
+    // qui raisonne muscle par muscle.
+    pointsForts: expandMuscleKeys(parseKeyList(account.points_forts)),
+    pointsFaibles: expandMuscleKeys(parseKeyList(account.points_faibles)),
   };
 }
 

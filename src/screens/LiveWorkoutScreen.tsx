@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
   type AppStateStatus,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,6 +26,7 @@ import {
   ConfirmSheet,
   IconButton,
   PressableScale,
+  Row,
   StateView,
   Thumb,
   type ConfirmRequest,
@@ -301,6 +303,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const [calc, setCalc] = useState<{ exIndex: number; setIndex: number } | null>(null);
   /** Exercice affiché en grand (image + tuto). */
   const [detail, setDetail] = useState<Exercise | null>(null);
+  /**
+   * Exercice terminé rouvert pour correction (null = tous les exercices finis
+   * restent repliés en ligne compacte, comme dans l'éditeur).
+   */
+  const [reopenedId, setReopenedId] = useState<number | null>(null);
   /** Carte de confirmation/erreur (remplace les `Alert.alert`). */
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
@@ -709,23 +716,32 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     const nextAllDone = liveExercises.map(
       (exercise) => exercise.sets.length > 0 && exercise.sets.every((set) => set.completed)
     );
+    let justDoneId: number | null = null;
     nextAllDone.forEach((done, index) => {
-      if (done && !allDoneRef.current[index]) scrollTo = index + 1;
+      if (done && !allDoneRef.current[index]) {
+        scrollTo = index + 1;
+        justDoneId = liveExercises[index].workoutExoId;
+      }
     });
+    // Un exercice qu'on vient de terminer se replie, même s'il avait été rouvert
+    // pour corriger une série.
+    if (justDoneId !== null) {
+      const doneId = justDoneId;
+      setReopenedId((prev) => (prev === doneId ? null : prev));
+    }
 
     completedRef.current = liveExercises.map((exercise) => exercise.sets.map((set) => set.completed));
     allDoneRef.current = nextAllDone;
 
     if (restFor !== null) startRest(restFor);
     if (scrollTo >= 0) {
-      const y = cardY.current[scrollTo];
-      if (y !== undefined) {
-        const timer = setTimeout(
-          () => scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true }),
-          260
-        );
-        return () => clearTimeout(timer);
-      }
+      // L'exercice terminé vient de se replier : on relit sa position après le
+      // nouveau rendu (la mesure d'avant repli est périmée).
+      const timer = setTimeout(() => {
+        const y = cardY.current[scrollTo];
+        if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+      }, 260);
+      return () => clearTimeout(timer);
     }
     return undefined;
   }, [liveExercises, ready]);
@@ -1043,6 +1059,19 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     (exercise) => exercise.sets.length === 0 || exercise.sets.some((set) => !set.completed)
   );
 
+  /** Exercice terminé : toutes ses séries sont validées. */
+  const isDone = (exercise: LiveExercise) =>
+    exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
+
+  /**
+   * Exercice affiché en ligne compacte : terminé et non rouvert. Il reprend sa
+   * carte pleine dès qu'on le touche pour corriger une série ou un poids.
+   */
+  const isFolded = (index: number) => {
+    const exercise = liveExercises[index];
+    return exercise !== undefined && isDone(exercise) && reopenedId !== exercise.workoutExoId;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
@@ -1073,42 +1102,110 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             // L'exercice en cours est le seul mis en carte pleine, comme prévu par
             // la DA : une carte maximum par écran, réservée à l'action principale.
             const isCurrent = currentIndex === exIndex;
-            const allDone = exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
+            const allDone = isDone(exercise);
             const best = exercise.bestSet;
             const recordBeaten =
               best !== null && exercise.sets.some((set) => set.reps > 0 && beatsSet(set, best));
+            const doneVolume = exercise.sets.reduce(
+              (total, set) => total + set.weight * set.reps,
+              0
+            );
+            const doneEffort = exercise.sets.reduce((total, set) => total + set.durationSec, 0);
+            const trackLayout = (event: LayoutChangeEvent) => {
+              cardY.current[exIndex] = event.nativeEvent.layout.y;
+            };
+
+            // Exercice terminé : ligne compacte (thumb, nom, résumé), comme dans
+            // l'éditeur. Un appui le rouvre en carte pleine pour corriger.
+            if (isFolded(exIndex)) {
+              return (
+                <View key={exercise.workoutExoId} onLayout={trackLayout} style={styles.foldedFrame}>
+                  <Row inset={false} last>
+                    <PressableScale
+                      onPress={() => setDetail(exercise.exercise)}
+                      accessibilityLabel="Voir l’exercice"
+                      scaleTo={0.94}
+                    >
+                      <Thumb
+                        source={
+                          exercise.exercise.image
+                            ? exerciseImages[exercise.exercise.image]
+                            : undefined
+                        }
+                        size={40}
+                      />
+                    </PressableScale>
+                    <PressableScale
+                      style={styles.doneBody}
+                      onPress={() => setReopenedId(exercise.workoutExoId)}
+                      accessibilityLabel={`Rouvrir ${exercise.exercise.nom}`}
+                      scaleTo={0.99}
+                    >
+                      <Text style={styles.doneTitle} numberOfLines={1}>
+                        {exercise.exercise.nom}
+                      </Text>
+                      <Text style={styles.doneMeta}>
+                        {exercise.sets.length} série{exercise.sets.length > 1 ? 's' : ''} ·{' '}
+                        {exercise.endurance
+                          ? `${formatDuration(doneEffort)} d’effort`
+                          : formatKg(doneVolume)}
+                      </Text>
+                    </PressableScale>
+                    {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
+                    <CheckToggle
+                      checked={allDone}
+                      accessibilityLabel={`Décocher les séries de ${exercise.exercise.nom}`}
+                      onPress={() => toggleAllSets(exIndex)}
+                    />
+                  </Row>
+                </View>
+              );
+            }
+
             return (
-              <View
-                key={exercise.workoutExoId}
-                onLayout={(event) => {
-                  cardY.current[exIndex] = event.nativeEvent.layout.y;
-                }}
-              >
+              <View key={exercise.workoutExoId} onLayout={trackLayout}>
                 <Appear>
                   <Card
-                    tone={isCurrent ? 'accent' : 'default'}
+                    tone={isCurrent || reopenedId === exercise.workoutExoId ? 'accent' : 'default'}
                     style={[
                       styles.card,
-                      !isCurrent && styles.cardFlat,
+                      !isCurrent && reopenedId !== exercise.workoutExoId && styles.cardFlat,
                       exercise.supersetGroup != null && styles.cardSuperset,
                     ]}
                   >
                     <View style={styles.cardHeader}>
-                      <PressableScale
-                        style={styles.cardTitleBlock}
-                        onPress={() => setDetail(exercise.exercise)}
-                        accessibilityLabel="Voir l’exercice"
-                      >
-                        <Thumb
-                          source={
-                            exercise.exercise.image
-                              ? exerciseImages[exercise.exercise.image]
-                              : undefined
-                          }
-                          size={44}
-                        />
-                        <Text style={styles.cardTitle}>{exercise.exercise.nom}</Text>
-                      </PressableScale>
+                      <View style={styles.cardTitleBlock}>
+                        <PressableScale
+                          onPress={() => setDetail(exercise.exercise)}
+                          accessibilityLabel="Voir l’exercice"
+                          scaleTo={0.94}
+                        >
+                          <Thumb
+                            source={
+                              exercise.exercise.image
+                                ? exerciseImages[exercise.exercise.image]
+                                : undefined
+                            }
+                            size={44}
+                          />
+                        </PressableScale>
+                        {allDone ? (
+                          <PressableScale
+                            style={styles.cardTitleTap}
+                            onPress={() => setReopenedId(null)}
+                            accessibilityLabel={`Replier ${exercise.exercise.nom}`}
+                            scaleTo={0.99}
+                          >
+                            <Text style={styles.cardTitle} numberOfLines={1}>
+                              {exercise.exercise.nom}
+                            </Text>
+                          </PressableScale>
+                        ) : (
+                          <Text style={[styles.cardTitle, styles.cardTitleStatic]} numberOfLines={1}>
+                            {exercise.exercise.nom}
+                          </Text>
+                        )}
+                      </View>
                       {exercise.endurance ? <Badge label="Endurance" tone="neutral" /> : null}
                       {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
                       <CheckToggle
@@ -1377,6 +1474,33 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.action,
   },
+  /** Ligne compacte d'un exercice terminé (même esprit que l'éditeur). */
+  doneBody: {
+    flex: 1,
+    rowGap: 2,
+    justifyContent: 'center',
+  },
+  doneTitle: {
+    ...text.subtitle,
+    color: theme.colors.text,
+  },
+  doneMeta: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+  },
+  /**
+   * Cadre de l'exercice replié : même contour que la carte ouverte (2 px
+   * `action`) et même écart sous lui, pour que le passage ouvert ↔ replié ne
+   * fasse bouger que la hauteur.
+   */
+  foldedFrame: {
+    marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: theme.colors.action,
+    borderRadius: radius.card,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: spacing.md,
+  },
   recordHint: {
     ...text.caption,
     color: theme.colors.textMuted,
@@ -1399,6 +1523,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm + 2,
     paddingRight: spacing.sm,
+  },
+  /** Zone du titre : elle plie/déplie un exercice terminé (le tuto est sur l'image). */
+  cardTitleTap: {
+    flex: 1,
+  },
+  cardTitleStatic: {
+    flex: 1,
   },
   cardTitle: {
     ...text.subtitle,
