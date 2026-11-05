@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   type StyleProp,
@@ -98,12 +99,14 @@ const createStyles = (theme: Theme) =>
       borderRadius: radius.button,
     },
     label: text.button,
-    sm: { minHeight: 44, paddingHorizontal: spacing.xl },
+    // Cible tactile : 48 dp sur Android, 44 pt sur iOS (règle de la plateforme).
+    sm: { minHeight: Platform.OS === 'android' ? touch.min : 44, paddingHorizontal: spacing.xl },
     md: { minHeight: touch.min, paddingHorizontal: spacing.xxl },
     lg: { minHeight: touch.session, paddingHorizontal: spacing.xxl },
-    label_sm: { fontSize: 14 },
-    label_md: { fontSize: 16 },
-    label_lg: { fontSize: 16 },
+    // Aucune taille en dur : le libellé suit l'échelle typographique.
+    label_sm: text.label,
+    label_md: text.button,
+    label_lg: text.button,
     primary: {
       borderWidth: 0,
       backgroundColor: theme.colors.action,

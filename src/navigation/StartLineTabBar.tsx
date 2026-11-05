@@ -3,12 +3,20 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Icon, { type IconName } from '../components/ui/Icon';
 import PressableScale from '../components/ui/PressableScale';
+import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
 import { duration, easing, spacing, spring, text } from '../theme/tokens';
 
 /** Largeur du trait de ligne de départ (§8.9). */
 const START_LINE_WIDTH = 40;
+
+/** Icône de chaque onglet (DA §8.9 : icône 24 px + libellé 12/500). */
+const TAB_ICONS: Record<string, IconName> = {
+  Main: 'home',
+  Seance: 'sessions',
+};
 
 /**
  * Barre d'onglets « ligne de départ » (§8.9) : fond surface, filet supérieur de
@@ -21,6 +29,8 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(createStyles);
+  // Le trait glisse d'un onglet à l'autre ; mouvement réduit = il saute d'un coup.
+  const reduceMotion = useReduceMotion();
   const [barWidth, setBarWidth] = useState(0);
   const labels = useRef(
     state.routes.map((_, position) => new Animated.Value(position === state.index ? 1 : 0))
@@ -32,16 +42,20 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
     state.routes.forEach((_, index) => {
       Animated.timing(labels[index], {
         toValue: index === state.index ? 1 : 0,
-        duration: duration.fast,
+        duration: reduceMotion ? 0 : duration.fast,
         easing: easing.enter,
         useNativeDriver: false,
       }).start();
     });
-  }, [labels, state.index, state.routes]);
+  }, [labels, reduceMotion, state.index, state.routes]);
 
   useEffect(() => {
+    if (reduceMotion) {
+      position.setValue(state.index);
+      return;
+    }
     Animated.spring(position, { toValue: state.index, useNativeDriver: true, ...spring }).start();
-  }, [position, state.index]);
+  }, [position, reduceMotion, state.index]);
 
   const count = state.routes.length;
   const slot = count > 0 ? barWidth / count : 0;
@@ -102,19 +116,36 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
             style={styles.tab}
           >
             {!canSlide && focused ? <View style={styles.startLine} /> : null}
-            <Animated.Text
-              style={[
-                styles.label,
-                {
-                  color: labels[index].interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [theme.colors.textMuted, theme.colors.action],
-                  }),
-                },
-              ]}
-            >
-              {label}
-            </Animated.Text>
+            <View style={styles.tabContent}>
+              <View style={styles.iconWrap}>
+                <Animated.View
+                  style={{
+                    opacity: labels[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 0],
+                    }),
+                  }}
+                >
+                  <Icon name={TAB_ICONS[route.name] ?? 'dot'} size={24} color={theme.colors.textMuted} />
+                </Animated.View>
+                <Animated.View style={[styles.iconOverlay, { opacity: labels[index] }]}>
+                  <Icon name={TAB_ICONS[route.name] ?? 'dot'} size={24} color={theme.colors.action} />
+                </Animated.View>
+              </View>
+              <Animated.Text
+                style={[
+                  styles.label,
+                  {
+                    color: labels[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [theme.colors.textMuted, theme.colors.action],
+                    }),
+                  },
+                ]}
+              >
+                {label}
+              </Animated.Text>
+            </View>
           </PressableScale>
         );
       })}
@@ -132,7 +163,9 @@ const createStyles = (theme: Theme) =>
     },
     tab: {
       flex: 1,
-      height: 56,
+      // Hauteur minimale : le libellé suit la taille de texte du système.
+      minHeight: 56,
+      paddingVertical: spacing.xs,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: spacing.sm,
@@ -144,5 +177,22 @@ const createStyles = (theme: Theme) =>
       height: 3,
       backgroundColor: theme.colors.action,
     },
-    label: text.label,
+    tabContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    iconWrap: {
+      width: 24,
+      height: 24,
+    },
+    iconOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    // DA §8.9 : libellé 12 / 500, toujours visible sous l'icône de 24 px.
+    label: text.caption,
   });

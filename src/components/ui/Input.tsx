@@ -49,15 +49,21 @@ const createStyles = (theme: Theme) =>
       backgroundColor: theme.colors.surface,
       borderRadius: radius.control,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      // Bordure de contrôle (3:1) : un champ se voit sans dépendre du contraste
+      // entre la surface blanche et la dalle.
+      borderColor: theme.colors.borderStrong,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.md,
       ...text.body,
       color: theme.colors.text,
     },
     focused: {
+      // La bordure s'épaissit **vers l'intérieur** : le texte ne bouge pas d'un
+      // pixel au focus (pas de saut de mise en page).
       borderWidth: 2,
       borderColor: theme.colors.action,
+      paddingHorizontal: spacing.md - 1,
+      paddingVertical: spacing.md - 1,
     },
     emphasis: {
       ...text.numM,

@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   ConfirmSheet,
+  Icon,
   IconButton,
   Input,
   Row,
@@ -42,7 +43,7 @@ import {
   setActiveGroupId,
   setGroupHidden,
 } from '../services/preferences';
-import { useThemedStyles, type Theme } from '../theme';
+import { useThemedStyles, useTheme, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 
 interface SessionSection {
@@ -86,9 +87,11 @@ function DragHandle({
     })
   ).current;
 
+  const theme = useTheme();
+
   return (
     <View style={dragHandleStyles.handle} {...pan.panHandlers}>
-      <Text style={dragHandleStyles.glyph}>≡</Text>
+      <Icon name="grip" size={20} color={theme.colors.textMuted} />
     </View>
   );
 }
@@ -100,14 +103,11 @@ const dragHandleStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glyph: {
-    fontSize: 20,
-    color: '#999',
-  },
 });
 
 export default function SessionListScreen() {
   const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   // Séance mise de côté : on réserve la hauteur de la bulle de reprise.
   const hasActiveWorkout = useActiveWorkout() !== null;
   const navigation = useNavigation<SessionListNavigation>();
@@ -352,12 +352,12 @@ export default function SessionListScreen() {
                     )}/${block.weeks} · ${block.sessionsDone} séance${
                       block.sessionsDone > 1 ? 's' : ''
                     } faite${block.sessionsDone > 1 ? 's' : ''}${
-                      block.due ? ' → un nouveau bloc est proposé' : ''
+                      block.due ? ' · un nouveau bloc est proposé' : ''
                     }`
                   : 'Séances calculées à partir de ton profil (objectif, sexe, matériel, durée), avec aperçu et régénération avant enregistrement.'}
               </Text>
             </View>
-            <Text style={styles.chevron}>›</Text>
+            <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
           </View>
         </Card>
       </Appear>
@@ -398,7 +398,8 @@ export default function SessionListScreen() {
                   section.group ? (
                     <View style={styles.sectionActions}>
                       <Button
-                        label="+ Séance"
+                        label="Séance"
+                        leading={<Icon name="plus" size={16} color={theme.colors.action} />}
                         variant="tertiary"
                         size="sm"
                         onPress={() =>
@@ -406,7 +407,7 @@ export default function SessionListScreen() {
                         }
                       />
                       <IconButton
-                        glyph="⋯"
+                        icon="more"
                         accessibilityLabel={`Options du groupe ${section.title}`}
                         onPress={() => setMenuGroup(section.group)}
                       />
@@ -460,12 +461,12 @@ export default function SessionListScreen() {
                     </Text>
                   </View>
                   <IconButton
-                    glyph="×"
+                    icon="close"
                     tone="danger"
                     accessibilityLabel={`Supprimer ${item.nom_seance}`}
                     onPress={() => confirmDeleteProgram(item)}
                   />
-                  <Text style={styles.chevron}>›</Text>
+                  <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
                 </Row>
               </View>
             );
@@ -497,7 +498,7 @@ export default function SessionListScreen() {
           />
         </View>
         <Text style={styles.footerHint}>
-          Glisser ≡ pour réordonner · appui long ou × supprime une séance · ⋯ renomme ou supprime un groupe
+          Glisse une séance pour la réordonner · appui long ou bouton supprimer · menu du groupe pour renommer
         </Text>
       </View>
 
@@ -521,6 +522,7 @@ export default function SessionListScreen() {
             autoFocus
             returnKeyType="done"
             onSubmitEditing={saveGroup}
+            accessibilityLabel="Nom du groupe"
           />
           <View style={styles.modalActions}>
             <Button
@@ -603,10 +605,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
-  chevron: {
-    ...text.title,
-    color: theme.colors.textMuted,
-  },
   footer: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
@@ -615,7 +613,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
   },
   footerButton: {
     flex: 1,

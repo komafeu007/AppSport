@@ -6,9 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MainScreenNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { abandonActiveWorkout, loadActiveWorkout, useActiveWorkout } from '../services/activeWorkout';
-import { useThemedStyles, type Theme } from '../theme';
-import { duration, easing, radius, spacing, spring, text, touch, fontFamily } from '../theme/tokens';
-import { ConfirmSheet, PressableScale, type ConfirmRequest } from './ui';
+import { useReduceMotion } from '../theme/motion';
+import { useThemedStyles, useTheme, type Theme } from '../theme';
+import { duration, easing, radius, spacing, spring, text, touch } from '../theme/tokens';
+import { ConfirmSheet, Icon, PressableScale, type ConfirmRequest } from './ui';
 
 /** Hauteur de la barre d'onglets (§8.9) : la bulle flotte juste au-dessus. */
 const TAB_BAR_HEIGHT = 56;
@@ -27,9 +28,11 @@ export const ACTIVE_WORKOUT_BUBBLE_SPACE = touch.session + spacing.md * 2;
  */
 export default function ActiveWorkoutBubble() {
   const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<MainScreenNavigation>();
   const { accountId } = useAccount();
+  const reduceMotion = useReduceMotion();
   const draft = useActiveWorkout();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
@@ -51,6 +54,16 @@ export default function ActiveWorkoutBubble() {
   const slide = useRef(new Animated.Value(visible ? 0 : 1)).current;
 
   useEffect(() => {
+    // Mouvement réduit : la bulle prend sa place sans glisser.
+    if (reduceMotion) {
+      if (visible) {
+        setRendered(true);
+        slide.setValue(0);
+      } else {
+        setRendered(false);
+      }
+      return;
+    }
     if (visible) {
       setRendered(true);
       Animated.spring(slide, { toValue: 0, useNativeDriver: true, ...spring }).start();
@@ -64,7 +77,7 @@ export default function ActiveWorkoutBubble() {
     }).start(({ finished }) => {
       if (finished) setRendered(false);
     });
-  }, [slide, visible]);
+  }, [reduceMotion, slide, visible]);
 
   const shown = rendered ? lastDraft.current : null;
   const total = shown?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
@@ -130,7 +143,7 @@ export default function ActiveWorkoutBubble() {
               scaleTo={0.9}
               hitSlop={8}
             >
-              <Text style={styles.closeGlyph}>×</Text>
+              <Icon name="close" size={18} color={theme.colors.onAction} />
             </PressableScale>
           </PressableScale>
         </Animated.View>
@@ -178,12 +191,5 @@ const createStyles = (theme: Theme) =>
       height: 32,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    closeGlyph: {
-      // Même glyphe que `IconButton` : le × reste dans la police de texte.
-      fontFamily: fontFamily.textBold,
-      fontSize: 18,
-      lineHeight: 22,
-      color: theme.colors.onAction,
     },
   });

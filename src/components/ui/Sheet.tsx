@@ -22,6 +22,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, type Theme } from '../../theme';
 import { duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 
@@ -63,6 +64,10 @@ export function useSheetDrag(): SheetDrag | null {
 export default function Sheet({ visible, onClose, onDismissed, title, children, style }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(createStyles);
+  // « Réduire les animations » : la feuille apparaît et disparaît sans glisser,
+  // mais elle reste pilotée par la même animation (durée nulle) pour que le
+  // montage/démontage et `onDismissed` gardent leur ordre.
+  const motionDuration = useReduceMotion() ? 0 : duration.slow;
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   // Décalage du glissement en cours (feuille tirée vers le bas).
@@ -82,7 +87,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
           // retour à zéro la ferait remonter juste avant de disparaître.
           Animated.timing(dragY, {
             toValue: 1200,
-            duration: 180,
+            duration: motionDuration === 0 ? 0 : 180,
             easing: easing.exit,
             useNativeDriver: true,
           }).start(({ finished }) => {
@@ -93,7 +98,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
         Animated.spring(dragY, { toValue: 0, useNativeDriver: true, ...spring }).start();
       },
     }),
-    [dragY]
+    [dragY, motionDuration]
   );
 
   useEffect(() => {
@@ -102,7 +107,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
       dragY.setValue(0);
       const opening = Animated.timing(progress, {
         toValue: 1,
-        duration: duration.slow,
+        duration: motionDuration,
         easing: easing.enter,
         useNativeDriver: true,
       });
@@ -112,7 +117,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
 
     const closing = Animated.timing(progress, {
       toValue: 0,
-      duration: duration.slow,
+      duration: motionDuration,
       easing: easing.exit,
       useNativeDriver: true,
     });
@@ -122,7 +127,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
       dismissed.current?.();
     });
     return () => closing.stop();
-  }, [dragY, progress, visible]);
+  }, [dragY, motionDuration, progress, visible]);
 
   if (!mounted) return null;
 

@@ -13,17 +13,6 @@ interface Props {
   size: number;
 }
 
-const PALETTE = [
-  '#2347D6',
-  '#FFD60A',
-  '#187A41',
-  '#D1273B',
-  '#5B6478',
-  '#0D1B4C',
-  '#7A8699',
-  '#B0B7C3',
-];
-
 function sectorPath(cx: number, cy: number, r: number, start: number, end: number): string {
   const x1 = cx + r * Math.cos(start);
   const y1 = cy + r * Math.sin(start);
@@ -50,7 +39,8 @@ export default function MusclePieChart({ data, size }: Props) {
     return {
       ...slice,
       path: sectorPath(center, center, radius, start, end),
-      color: PALETTE[index % PALETTE.length],
+      // Les teintes viennent du thème : elles suivent le mode clair/sombre.
+      color: theme.chartSeries[index % theme.chartSeries.length],
     };
   });
 

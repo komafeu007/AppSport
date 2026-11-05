@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg';
 
+import { useReduceMotion } from '../theme/motion';
 import { useTheme } from '../theme';
 import { duration, easing, fontFamily } from '../theme/tokens';
 
@@ -28,9 +29,14 @@ const LABEL_PAD = 74;
  */
 export default function MuscleRadarChart({ data, size }: Props) {
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
   const grow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      grow.setValue(1);
+      return;
+    }
     const animation = Animated.timing(grow, {
       toValue: 1,
       duration: duration.slow,
@@ -39,7 +45,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
     });
     animation.start();
     return () => animation.stop();
-  }, [grow]);
+  }, [grow, reduceMotion]);
 
   const count = data.length;
   if (count < 3) return null;
@@ -72,6 +78,10 @@ export default function MuscleRadarChart({ data, size }: Props) {
 
   return (
     <Animated.View
+      // Le radar double la légende textuelle juste en dessous : il reste hors
+      // de l'arbre d'accessibilité pour ne pas lire deux fois la même chose.
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       style={[
         styles.wrap,
         {
@@ -135,7 +145,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
               y={at.y + 4}
               fill={theme.colors.text}
               fontFamily={fontFamily.textSemiBold}
-              fontSize={11}
+              fontSize={12}
               textAnchor={anchor}
             >
               {point.label}

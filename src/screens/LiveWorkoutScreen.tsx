@@ -26,6 +26,7 @@ import {
   Button,
   Card,
   ConfirmSheet,
+  Icon,
   IconButton,
   PopIn,
   PressableScale,
@@ -87,8 +88,9 @@ import {
   presentRestDoneNow,
   scheduleRestDone,
 } from '../services/restAlert';
+import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { duration, easing, fontFamily, radius, spacing, spring, text } from '../theme/tokens';
+import { duration, easing, radius, spacing, spring, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -150,16 +152,9 @@ function isLastOfSuperset(exercises: LiveExercise[], index: number): boolean {
   return exercises[index + 1]?.supersetGroup !== group;
 }
 
-/** Petit logo haltère dessiné (remplace les boutons − / +). */
+/** Haltère du jeu d'icônes unique (ouvre le calculateur de disques). */
 function BarbellIcon({ color }: { color: string }) {
-  const styles = useThemedStyles(createStyles);
-  return (
-    <View style={styles.barbell}>
-      <View style={[styles.barbellPlate, { backgroundColor: color }]} />
-      <View style={[styles.barbellRod, { backgroundColor: color }]} />
-      <View style={[styles.barbellPlate, { backgroundColor: color }]} />
-    </View>
-  );
+  return <Icon name="dumbbell" size={22} color={color} />;
 }
 
 /**
@@ -170,10 +165,12 @@ function WeightField({
   value,
   onChange,
   onOpenCalculator,
+  accessibilityLabel,
 }: {
   value: number;
   onChange: (value: number) => void;
   onOpenCalculator: () => void;
+  accessibilityLabel: string;
 }) {
   const styles = useThemedStyles(createStyles);
   const theme = useTheme();
@@ -202,6 +199,7 @@ function WeightField({
         keyboardType="decimal-pad"
         selectTextOnFocus
         returnKeyType="done"
+        accessibilityLabel={accessibilityLabel}
       />
       <PressableScale
         style={styles.calcButton}
@@ -220,7 +218,8 @@ function CheckToggle({
   checked,
   onPress,
   accessibilityLabel,
-  width = 36,
+  // 44 pt de largeur tactile : une coche de série se valide au pouce, en séance.
+  width = 44,
 }: {
   checked: boolean;
   onPress: () => void;
@@ -229,15 +228,20 @@ function CheckToggle({
 }) {
   const styles = useThemedStyles(createStyles);
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
   const progress = useRef(new Animated.Value(checked ? 1 : 0)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      progress.setValue(checked ? 1 : 0);
+      return;
+    }
     Animated.spring(progress, {
       toValue: checked ? 1 : 0,
       useNativeDriver: false,
       ...spring,
     }).start();
-  }, [checked, progress]);
+  }, [checked, progress, reduceMotion]);
 
   const backgroundColor = progress.interpolate({
     inputRange: [0, 1],
@@ -247,9 +251,9 @@ function CheckToggle({
     inputRange: [0, 1],
     outputRange: [theme.colors.border, theme.colors.action],
   });
-  const color = progress.interpolate({
+  const mutedOpacity = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.colors.textMuted, theme.colors.background],
+    outputRange: [1, 0],
   });
   const scale = progress.interpolate({
     inputRange: [0, 0.7, 1],
@@ -260,14 +264,19 @@ function CheckToggle({
     <PressableScale
       onPress={onPress}
       scaleTo={0.9}
-      accessibilityRole="button"
+      accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       accessibilityLabel={accessibilityLabel}
     >
       <Animated.View
         style={[styles.check, { width, backgroundColor, borderColor, transform: [{ scale }] }]}
       >
-        <Animated.Text style={[styles.checkText, { color }]}>✓</Animated.Text>
+        <Animated.View style={{ opacity: mutedOpacity }}>
+          <Icon name="check" size={18} color={theme.colors.textMuted} />
+        </Animated.View>
+        <Animated.View style={[styles.checkOverlay, { opacity: progress }]}>
+          <Icon name="check" size={18} color={theme.colors.background} />
+        </Animated.View>
       </Animated.View>
     </PressableScale>
   );
@@ -280,11 +289,12 @@ function CheckToggle({
  */
 function SetRow({ completed, children }: { completed: boolean; children: ReactNode }) {
   const styles = useThemedStyles(createStyles);
+  const reduceMotion = useReduceMotion();
   const flash = useRef(new Animated.Value(0)).current;
   const wasCompleted = useRef(completed);
 
   useEffect(() => {
-    if (completed && !wasCompleted.current) {
+    if (!reduceMotion && completed && !wasCompleted.current) {
       flash.setValue(1);
       Animated.timing(flash, {
         toValue: 0,
@@ -294,7 +304,7 @@ function SetRow({ completed, children }: { completed: boolean; children: ReactNo
       }).start();
     }
     wasCompleted.current = completed;
-  }, [completed, flash]);
+  }, [completed, flash, reduceMotion]);
 
   return (
     <View style={styles.setRow}>
@@ -1121,13 +1131,30 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         <Appear>
           <Card style={styles.header}>
             <Text style={styles.headerTitle}>{nom}</Text>
-            <View style={styles.headerMetrics}>
-              <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
-              <Text style={styles.headerTotal}>
-                {volume > 0 || effortSeconds === 0
-                  ? formatKg(volume)
-                  : `${formatDuration(effortSeconds)} d’effort`}
-              </Text>
+            {/* Deux chiffres sans légende ne se lisent pas : chacun porte son nom. */}
+            <View
+              style={styles.headerMetrics}
+              accessible
+              accessibilityLabel={`Temps ${formatClock(elapsed)}. ${
+                volume > 0 || effortSeconds === 0
+                  ? `Volume ${formatKg(volume)}`
+                  : `Effort ${formatDuration(effortSeconds)}`
+              }.`}
+            >
+              <View style={styles.headerMetric}>
+                <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
+                <Text style={styles.headerMetricLabel}>temps</Text>
+              </View>
+              <View style={styles.headerMetric}>
+                <Text style={styles.headerTotal}>
+                  {volume > 0 || effortSeconds === 0
+                    ? formatKg(volume)
+                    : formatDuration(effortSeconds)}
+                </Text>
+                <Text style={styles.headerMetricLabel}>
+                  {volume > 0 || effortSeconds === 0 ? 'volume' : 'effort'}
+                </Text>
+              </View>
             </View>
           </Card>
         </Appear>
@@ -1142,6 +1169,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             // la DA : une carte maximum par écran, réservée à l'action principale.
             const isCurrent = currentIndex === exIndex;
             const allDone = isDone(exercise);
+            // L'exercice suivant est-il replié ? Sert à poser un écart plus large
+            // autour de la carte ouverte, pour qu'elle se détache des lignes
+            // terminées (et seulement d'elles).
+            const nextFolded = isFolded(exIndex + 1);
             const best = exercise.bestSet;
             const recordBeaten =
               best !== null && exercise.sets.some((set) => set.reps > 0 && beatsSet(set, best));
@@ -1158,7 +1189,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             // l'éditeur. Un appui le rouvre en carte pleine pour corriger.
             if (isFolded(exIndex)) {
               return (
-                <View key={exercise.workoutExoId} onLayout={trackLayout} style={styles.foldedFrame}>
+                <View
+                  key={exercise.workoutExoId}
+                  onLayout={trackLayout}
+                  style={[styles.foldedFrame, !nextFolded && styles.aroundCard]}
+                >
                   <Row inset={false} last>
                     <PressableScale
                       onPress={() => setDetail(exercise.exercise)}
@@ -1217,6 +1252,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                       styles.card,
                       !isCurrent && reopenedId !== exercise.workoutExoId && styles.cardFlat,
                       exercise.supersetGroup != null && styles.cardSuperset,
+                      nextFolded && styles.aroundCard,
                     ]}
                   >
                     <View style={styles.cardHeader}>
@@ -1263,14 +1299,16 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                       ) : null}
                       <CheckToggle
                         checked={allDone}
-                        width={40}
                         accessibilityLabel={`Valider toutes les séries de ${exercise.exercise.nom}`}
                         onPress={() => toggleAllSets(exIndex)}
                       />
                     </View>
 
                     {best !== null ? (
-                      <Text style={[styles.recordHint, recordBeaten && styles.recordHintNew]}>
+                      <Text
+                        style={[styles.recordHint, recordBeaten && styles.recordHintNew]}
+                        accessibilityLiveRegion={recordBeaten ? 'polite' : 'none'}
+                      >
                         {recordBeaten
                           ? 'Nouveau record'
                           : `Record à battre : ${formatPerformance(best)}`}
@@ -1279,8 +1317,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
                     {exercise.endurance ? (
                       <Text style={styles.recordHint}>
-                        Au temps · cible {formatDuration(exercise.durationSec)} par série — ▶ lance
-                        le chrono, ■ l’arrête et enregistre
+                        Au temps · cible {formatDuration(exercise.durationSec)} par série — lance
+                        le chrono, puis arrête-le pour enregistrer la durée
                       </Text>
                     ) : null}
 
@@ -1308,7 +1346,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                           {exercise.endurance ? (
                             <>
                               <IconButton
-                                glyph={running ? '■' : '▶'}
+                                icon={running ? 'stop' : 'play'}
                                 tone={running ? 'danger' : 'accent'}
                                 active={running}
                                 size={40}
@@ -1333,6 +1371,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 value={set.weight}
                                 onChange={(value) => changeWeight(exIndex, setIndex, value)}
                                 onOpenCalculator={() => setCalc({ exIndex, setIndex })}
+                                accessibilityLabel={`Poids de la série ${setIndex + 1}, en kilos`}
                               />
 
                               <TextInput
@@ -1343,6 +1382,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 placeholderTextColor={theme.colors.textMuted}
                                 keyboardType="number-pad"
                                 returnKeyType="done"
+                                accessibilityLabel={`Répétitions de la série ${setIndex + 1}`}
                               />
                             </>
                           )}
@@ -1360,14 +1400,16 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
                     <View style={styles.setActions}>
                       <Button
-                        label="− Série"
+                        label="Retirer"
+                        leading={<Icon name="minus" size={16} color={theme.colors.action} />}
                         variant="secondary"
                         size="sm"
                         style={styles.setActionButton}
                         onPress={() => removeSet(exIndex)}
                       />
                       <Button
-                        label="+ Série"
+                        label="Ajouter"
+                        leading={<Icon name="plus" size={16} color={theme.colors.action} />}
                         variant="secondary"
                         size="sm"
                         style={styles.setActionButton}
@@ -1600,8 +1642,16 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   headerMetrics: {
     flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: spacing.lg - 2,
+    alignItems: 'flex-end',
+    columnGap: spacing.md,
+  },
+  headerMetric: {
+    alignItems: 'flex-end',
+  },
+  headerMetricLabel: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+    marginTop: -spacing.xs,
   },
   headerTime: {
     ...text.numL,
@@ -1613,7 +1663,15 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.action,
   },
   card: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  /**
+   * Écart autour de la carte ouverte (exercice en cours ou rouvert) : plus large
+   * que celui des lignes terminées, pour que la carte se détache de la pile des
+   * exercices déjà faits.
+   */
+  aroundCard: {
+    marginBottom: spacing.xxxl,
   },
   // Un exercice déjà terminé passe à plat : seule la carte de l'exercice en
   // cours reste pleine (une carte maximum par écran, §8.4).
@@ -1622,7 +1680,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderWidth: 0,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    borderRadius: 0,
+    borderRadius: radius.none,
     paddingHorizontal: 0,
   },
   cardSuperset: {
@@ -1645,11 +1703,11 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   /**
    * Cadre de l'exercice replié : même contour que la carte ouverte (2 px
-   * `action`) et même écart sous lui, pour que le passage ouvert ↔ replié ne
-   * fasse bouger que la hauteur.
+   * `action`), mais un écart plus serré entre deux lignes terminées qu'autour de
+   * la carte ouverte (voir `aroundCard`).
    */
   foldedFrame: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xl,
     borderWidth: 2,
     borderColor: theme.colors.action,
     borderRadius: radius.card,
@@ -1676,7 +1734,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
     paddingRight: spacing.sm,
   },
   /** Zone du titre : elle plie/déplie un exercice terminé (le tuto est sur l'image). */
@@ -1730,7 +1788,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: radius.control,
-    height: 48,
+    minHeight: 48,
     paddingLeft: 2,
   },
   weightInput: {
@@ -1746,24 +1804,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  barbell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  barbellPlate: {
-    width: 3,
-    height: 16,
-    borderRadius: 1.5,
-  },
-  barbellRod: {
-    width: 13,
-    height: 3,
-    borderRadius: 1.5,
-    marginHorizontal: 1,
-  },
   repsInput: {
     width: 56,
-    height: 48,
     minHeight: 48,
     textAlign: 'center',
     ...text.title,
@@ -1774,19 +1816,24 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderRadius: radius.control,
   },
   check: {
-    height: 48,
+    minHeight: 48,
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
-  checkText: {
-    fontFamily: fontFamily.textBold,
-    fontSize: 18,
+  checkOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   setActions: {
     flexDirection: 'row',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
   setActionButton: {

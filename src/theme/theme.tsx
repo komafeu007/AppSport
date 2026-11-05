@@ -2,6 +2,8 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme, type ViewStyle } from 'react-native';
 
 import {
+  chartSeriesDark,
+  chartSeriesLight,
   darkPalette,
   palette,
   zonesBorderDark,
@@ -35,8 +37,13 @@ export interface ThemeColors {
   selectedSurface: string;
   /** Encre posée sur la surface de sélection. */
   onSelected: string;
-  /** Filets et bordures (1 px). */
+  /** Filets et bordures décoratives (1 px). */
   border: string;
+  /**
+   * Bordure d'un **contrôle** (champ, bouton d'icône) : 3:1 minimum contre le
+   * fond, pour qu'il se distingue sans dépendre de sa couleur de surface.
+   */
+  borderStrong: string;
   /** Texte principal. */
   text: string;
   /** Texte secondaire, mentions. */
@@ -69,6 +76,8 @@ export interface Theme {
   colors: ThemeColors;
   /** Rampe des zones d'effort, Z1 → Z5. */
   zones: readonly string[];
+  /** Teintes d'un graphique catégoriel (une couleur par série). */
+  chartSeries: readonly string[];
   /** Filet qui entoure la barre de zones. */
   zoneBorder: string;
   /** Ombre unique de l'app : réservée aux feuilles modales (§7.6). */
@@ -81,10 +90,11 @@ export const lightTheme: Theme = {
   colors: {
     background: palette.dalle,
     surface: palette.blanc,
-    surfaceAlt: palette.craie,
+    surfaceAlt: palette.craieClaire,
     selectedSurface: palette.marine,
     onSelected: palette.blanc,
     border: palette.craie,
+    borderStrong: palette.ardoiseControle,
     text: palette.marine,
     textMuted: palette.ardoise,
     action: palette.bleuCourt,
@@ -99,6 +109,7 @@ export const lightTheme: Theme = {
     overlay: 'rgba(13, 27, 76, 0.4)',
   },
   zones: zonesLight,
+  chartSeries: chartSeriesLight,
   zoneBorder: zonesBorderLight,
   shadow: {
     shadowColor: palette.marine,
@@ -119,6 +130,7 @@ export const darkTheme: Theme = {
     selectedSurface: darkPalette.action,
     onSelected: darkPalette.encre,
     border: darkPalette.filet,
+    borderStrong: darkPalette.filetControle,
     text: darkPalette.texte,
     textMuted: darkPalette.texteSecondaire,
     action: darkPalette.action,
@@ -133,9 +145,10 @@ export const darkTheme: Theme = {
     overlay: 'rgba(4, 9, 26, 0.6)',
   },
   zones: zonesDark,
+  chartSeries: chartSeriesDark,
   zoneBorder: zonesBorderDark,
   shadow: {
-    shadowColor: '#000000',
+    shadowColor: darkPalette.fond,
     shadowOpacity: 0.5,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: -8 },

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 
+import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
 import { duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 import PressableScale from './PressableScale';
@@ -25,6 +26,7 @@ interface Props {
 export default function Chip({ label, selected, onPress, onLongPress, accessibilityLabel }: Props) {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
+  const reduceMotion = useReduceMotion();
   const progress = useRef(new Animated.Value(selected ? 1 : 0)).current;
   /** Rebond de sélection (0 = repos, 1 = puce gonflée). */
   const pop = useRef(new Animated.Value(0)).current;
@@ -42,6 +44,12 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
   // Pas de rebond au montage (les puces cochées d'un formulaire ne doivent pas
   // toutes sauter en arrivant sur l'écran) : seulement au passage à « cochée ».
   useEffect(() => {
+    // Le rebond est du mouvement : il disparaît quand les animations sont réduites
+    // (la sélection reste lisible par la couleur et `accessibilityState`).
+    if (reduceMotion) {
+      wasSelected.current = selected;
+      return;
+    }
     if (selected && !wasSelected.current) {
       pop.setValue(0);
       Animated.sequence([
@@ -50,7 +58,7 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
       ]).start();
     }
     wasSelected.current = selected;
-  }, [pop, selected]);
+  }, [pop, reduceMotion, selected]);
 
   const backgroundColor = progress.interpolate({
     inputRange: [0, 1],
@@ -70,7 +78,8 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}
-      hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+      // 36 px visuels + 6 px de chaque côté = 48 dp de cible (Android).
+      hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel}
@@ -93,7 +102,10 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
 const createStyles = (_theme: Theme) =>
   StyleSheet.create({
     chip: {
-      height: 36,
+      // `minHeight` (et non `height`) : le libellé peut grandir avec la taille
+      // de texte système sans être coupé.
+      minHeight: 36,
+      paddingVertical: spacing.xs,
       justifyContent: 'center',
       borderWidth: 1,
       borderRadius: radius.sm,

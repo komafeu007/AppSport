@@ -356,7 +356,7 @@ const createStyles = (theme: Theme) =>
     meta: {
       ...text.meta,
       color: theme.colors.textMuted,
-      marginTop: spacing.md - 2,
+      marginTop: spacing.sm,
     },
     sectionTitle: {
       ...text.cardTitle,

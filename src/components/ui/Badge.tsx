@@ -37,8 +37,11 @@ const createStyles = (theme: Theme) =>
     marker: { backgroundColor: theme.colors.marker },
     success: { backgroundColor: theme.colors.success },
     danger: { backgroundColor: theme.colors.danger },
-    label: { ...text.caption, fontSize: 11, lineHeight: 15 },
-    label_neutral: { color: theme.colors.textMuted },
+    // 12 px minimum : une étiquette porte une information (« Record », « Poly »),
+    // pas une mention décorative. Le neutre garde l'encre principale (4,2:1 en
+    // texte secondaire sur la craie ne suffisait pas).
+    label: text.caption,
+    label_neutral: { color: theme.colors.text },
     label_action: { color: theme.colors.onAction },
     label_marker: { color: theme.colors.onMarker },
     label_success: { color: theme.colors.onSuccess },

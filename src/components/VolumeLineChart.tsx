@@ -60,8 +60,23 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
 
   const ticks = [0, 0.5, 1];
 
+  // Le dessin ne dit rien à un lecteur d'écran : on lui donne la tendance en
+  // une phrase, plutôt que de lui laisser traverser des dizaines de nœuds SVG.
+  const summary =
+    count === 0
+      ? 'Aucune séance dans l’historique.'
+      : `Évolution du volume sur ${count} séance${count > 1 ? 's' : ''}, de ${formatCompact(
+          points[0].value
+        )} à ${formatCompact(points[count - 1].value)} kg.`;
+
   return (
-    <View style={[styles.wrap, { height }]} onLayout={onLayout}>
+    <View
+      style={[styles.wrap, { height }]}
+      onLayout={onLayout}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={summary}
+    >
       {width > 0 && count > 0 ? (
         <Svg width={width} height={height}>
           {ticks.map((ratio) => {
@@ -88,7 +103,7 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
                 y={lineY + 3.5}
                 fill={theme.colors.textMuted}
                 fontFamily={fontFamily.textMedium}
-                fontSize={10}
+                fontSize={11}
                 textAnchor="end"
               >
                 {formatCompact(value)}
@@ -123,7 +138,7 @@ export default function VolumeLineChart({ points, height = 170 }: Props) {
                 y={height - 8}
                 fill={theme.colors.textMuted}
                 fontFamily={fontFamily.textMedium}
-                fontSize={10}
+                fontSize={11}
                 textAnchor="middle"
               >
                 {point.label}

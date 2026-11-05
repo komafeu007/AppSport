@@ -1,7 +1,8 @@
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
-import { useThemedStyles, type Theme } from '../../theme';
+import { useTheme, useThemedStyles, type Theme } from '../../theme';
 import { radius } from '../../theme/tokens';
+import Icon from './Icon';
 
 interface Props {
   source?: ImageSourcePropType;
@@ -11,15 +12,20 @@ interface Props {
 }
 
 /**
- * Vignette d'exercice : image carrée arrondie, ou cadre neutre si le catalogue
- * n'a pas d'image. Utilisée partout où un exercice est listé.
+ * Vignette d'exercice : image carrée arrondie, ou cadre neutre avec l'haltère
+ * du jeu d'icônes si le catalogue n'a pas d'image (jamais un cadre vide).
  */
 export default function Thumb({ source, size = 56, accessibilityLabel }: Props) {
+  const theme = useTheme();
   const styles = useThemedStyles(createStyles);
   const style = { width: size, height: size };
 
   if (!source) {
-    return <View style={[styles.thumb, styles.placeholder, style]} />;
+    return (
+      <View style={[styles.thumb, styles.placeholder, styles.center, style]}>
+        <Icon name="dumbbell" size={Math.round(size * 0.4)} color={theme.colors.textMuted} />
+      </View>
+    );
   }
 
   return (
@@ -40,5 +46,9 @@ const createStyles = (theme: Theme) =>
     placeholder: {
       borderWidth: 1,
       borderColor: theme.colors.border,
+    },
+    center: {
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });

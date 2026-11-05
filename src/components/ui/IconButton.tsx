@@ -1,12 +1,13 @@
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { fontFamily, radius } from '../../theme/tokens';
+import { radius } from '../../theme/tokens';
+import Icon, { type IconName } from './Icon';
 import PressableScale from './PressableScale';
 
 interface Props {
-  /** Glyphe affiché (×, ⋯, ✓…). Pas d'icônes externes dans l'app. */
-  glyph: string;
+  /** Icône du jeu unique de l'app (voir `Icon`). */
+  icon: IconName;
   onPress: () => void;
   /** `danger` = suppression, `accent` = validation. */
   tone?: 'neutral' | 'danger' | 'accent';
@@ -18,7 +19,7 @@ interface Props {
 
 /** Bouton compact pour les actions de ligne (supprimer, valider, menu). */
 export default function IconButton({
-  glyph,
+  icon,
   onPress,
   tone = 'neutral',
   active = false,
@@ -35,7 +36,7 @@ export default function IconButton({
         ? theme.colors.action
         : theme.colors.selectedSurface;
 
-  const glyphColor = active
+  const iconColor = active
     ? tone === 'danger'
       ? theme.colors.onDanger
       : tone === 'accent'
@@ -60,7 +61,7 @@ export default function IconButton({
         active && { backgroundColor: fillColor, borderColor: fillColor },
       ]}
     >
-      <Text style={[styles.glyph, { color: glyphColor }]}>{glyph}</Text>
+      <Icon name={icon} size={Math.round(size * 0.5)} color={iconColor} />
     </PressableScale>
   );
 }
@@ -71,13 +72,9 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      // Un bouton d'icône est un contrôle : sa limite doit se lire (3:1).
+      borderColor: theme.colors.borderStrong,
       backgroundColor: theme.colors.surfaceAlt,
       borderRadius: radius.sm,
-    },
-    glyph: {
-      fontFamily: fontFamily.textBold,
-      fontSize: 18,
-      lineHeight: 22,
     },
   });

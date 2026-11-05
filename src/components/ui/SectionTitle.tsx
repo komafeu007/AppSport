@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
 import { spacing, text } from '../../theme/tokens';
+import PressableScale from './PressableScale';
 
 interface Props {
   children: string;
@@ -23,9 +24,11 @@ export default function SectionTitle({ children, hint, right, style, onPress }: 
   const styles = useThemedStyles(createStyles);
 
   const title = onPress ? (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    // Un titre cliquable obéit à la même règle que le reste : il répond au
+    // doigt (100 ms), sinon on ne sait pas que l'appui a été pris.
+    <PressableScale onPress={onPress} accessibilityRole="button" scaleTo={0.98}>
       <Text style={styles.title}>{children}</Text>
-    </Pressable>
+    </PressableScale>
   ) : (
     <Text style={styles.title}>{children}</Text>
   );

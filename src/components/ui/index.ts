@@ -5,6 +5,7 @@ export { default as Card, type CardTone } from './Card';
 export { default as Chip } from './Chip';
 export { default as ConfirmSheet, type ConfirmRequest } from './ConfirmSheet';
 export { default as CountUp } from './CountUp';
+export { default as Icon, type IconName } from './Icon';
 export { default as IconButton } from './IconButton';
 export { default as Input } from './Input';
 export { default as PopIn } from './PopIn';

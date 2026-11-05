@@ -1,6 +1,7 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Appear, Button, Card, IconButton, SectionTitle, StateView, Thumb } from '../components/ui';
 import { exerciseImages } from '../data/exerciseImages';
@@ -53,7 +54,7 @@ function ExerciseRow({
       </View>
       {onReroll ? (
         <IconButton
-          glyph={rerolling ? '⋯' : '↻'}
+          icon={rerolling ? 'more' : 'refresh'}
           tone="neutral"
           size={36}
           accessibilityLabel="Proposer un autre exercice"
@@ -71,6 +72,7 @@ function ExerciseRow({
  */
 export default function ProgramGeneratorScreen({ navigation, route }: Props) {
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const { accountId: activeAccountId, account: activeAccount, select } = useAccount();
 
@@ -234,7 +236,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
                 </SectionTitle>
                 {plan.rationale.map((line) => (
                   <View key={line} style={styles.bulletRow}>
-                    <Text style={styles.bulletDot}>•</Text>
+                    <View style={styles.bulletDot} />
                     <Text style={styles.bullet}>{line}</Text>
                   </View>
                 ))}
@@ -292,7 +294,8 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
             <Text style={styles.note}>
               Le programme démarre sur tes charges habituelles et se règle en séance : dès que tu
               atteins le haut de la fourchette de répétitions, tu montes le poids et tu repars au
-              minimum. Un exercice qui ne te convient pas ? Appuie sur ↻ pour en proposer un autre,
+              minimum. Un exercice qui ne te convient pas ? Appuie sur le bouton de régénération
+              pour en proposer un autre,
               et tout reste modifiable dans l’éditeur de séance.
             </Text>
 
@@ -301,32 +304,35 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Button
-          label="Régénérer"
-          variant="secondary"
-          onPress={() => setSeed(newSeed())}
-          disabled={saving || loading}
-          style={styles.footerButton}
-        />
-        <Button
-          label="Enregistrer ce programme"
-          onPress={handleSave}
-          loading={saving}
-          disabled={!plan || loading}
-          style={styles.footerButton}
-        />
-      </View>
+      {/* Les barres d'action fixes réservent la zone système du bas. */}
+      <View style={{ paddingBottom: insets.bottom + spacing.md }}>
+        <View style={styles.footer}>
+          <Button
+            label="Régénérer"
+            variant="secondary"
+            onPress={() => setSeed(newSeed())}
+            disabled={saving || loading}
+            style={styles.footerButton}
+          />
+          <Button
+            label="Enregistrer ce programme"
+            onPress={handleSave}
+            loading={saving}
+            disabled={!plan || loading}
+            style={styles.footerButton}
+          />
+        </View>
 
-      {fromOnboarding ? (
-        <Button
-          label="Plus tard — je crée mes séances moi-même"
-          variant="tertiary"
-          onPress={handleSkip}
-          disabled={saving}
-          style={styles.skip}
-        />
-      ) : null}
+        {fromOnboarding ? (
+          <Button
+            label="Plus tard — je crée mes séances moi-même"
+            variant="tertiary"
+            onPress={handleSkip}
+            disabled={saving}
+            style={styles.skip}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -345,12 +351,17 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   bulletRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
   bulletDot: {
-    ...text.body,
-    color: theme.colors.action,
+    width: 6,
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: theme.colors.action,
+    // Centre la puce sur la première ligne de texte (24 px).
+    marginTop: 9,
   },
   bullet: {
     ...text.body,
@@ -378,7 +389,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.xs,
     borderRadius: radius.sm,
     backgroundColor: theme.colors.surface,
     borderWidth: 1,

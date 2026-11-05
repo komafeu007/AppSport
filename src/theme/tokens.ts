@@ -35,6 +35,8 @@ export const spacing = {
 
 /** Rayons : `control` pour les champs/boutons, `card` pour les surfaces (§7.5). */
 export const radius = {
+  /** Aucun arrondi : une ligne de liste qui se fond dans le fond. */
+  none: 0,
   xs: 4,
   sm: 8,
   control: 12,
@@ -83,8 +85,11 @@ export const text = {
   meta: { fontFamily: fontFamily.text, fontSize: 14, lineHeight: 20 },
   /** Légende : axes, unités, mentions. Jamais une information essentielle. */
   caption: { fontFamily: fontFamily.textMedium, fontSize: 12, lineHeight: 16 },
-  /** Mention très discrète (aide sous un champ). */
-  micro: { fontFamily: fontFamily.text, fontSize: 11, lineHeight: 14 },
+  /**
+   * Mention très discrète (aide sous un champ). Plancher à 12 px : en dessous,
+   * l'information devient illisible sur un téléphone, même secondaire.
+   */
+  micro: { fontFamily: fontFamily.text, fontSize: 12, lineHeight: 16 },
 } satisfies Record<string, TextStyle>;
 
 /** Durées d'animation en ms (§11.2). */

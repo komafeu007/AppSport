@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DurationField from '../components/DurationField';
 import ExerciseDetailModal from '../components/ExerciseDetailModal';
@@ -24,6 +24,7 @@ import {
   Card,
   Chip,
   ConfirmSheet,
+  Icon,
   IconButton,
   Input,
   PressableScale,
@@ -65,7 +66,7 @@ import {
   type Exercise,
   type SessionGroup,
 } from '../services/database';
-import { useThemedStyles, type Theme } from '../theme';
+import { useThemedStyles, useTheme, type Theme } from '../theme';
 import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionEditor'>;
@@ -119,6 +120,7 @@ function StepperField({
   snap?: boolean;
 }) {
   const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const [text, setText] = useState(() => String(value));
 
   useEffect(() => {
@@ -151,7 +153,7 @@ function StepperField({
           onPress={() => adjust(-1)}
           accessibilityLabel={`Diminuer ${label}`}
         >
-          <Text style={styles.stepButtonText}>−</Text>
+          <Icon name="minus" size={20} color={theme.colors.action} />
         </PressableScale>
         <TextInput
           style={styles.stepInput}
@@ -167,7 +169,7 @@ function StepperField({
           onPress={() => adjust(1)}
           accessibilityLabel={`Augmenter ${label}`}
         >
-          <Text style={styles.stepButtonText}>+</Text>
+          <Icon name="plus" size={20} color={theme.colors.action} />
         </PressableScale>
       </View>
       {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
@@ -203,9 +205,11 @@ function DragHandle({
     })
   ).current;
 
+  const theme = useTheme();
+
   return (
     <View style={dragHandleStyles.handle} {...pan.panHandlers}>
-      <Text style={dragHandleStyles.glyph}>≡</Text>
+      <Icon name="grip" size={20} color={theme.colors.textMuted} />
     </View>
   );
 }
@@ -217,14 +221,12 @@ const dragHandleStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glyph: {
-    fontSize: 20,
-    color: '#999',
-  },
 });
 
 export default function SessionEditorScreen({ navigation, route }: Props) {
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const db = useSQLiteContext();
   const { accountId } = useAccount();
   const programId = route.params?.programId;
@@ -708,7 +710,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                       />
                     </PressableScale>
                     <IconButton
-                      glyph="×"
+                      icon="close"
                       tone="danger"
                       accessibilityLabel={`Retirer ${item.exercise.nom}`}
                       onPress={() => removeExercise(item.key)}
@@ -815,7 +817,11 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                       {index < items.length - 1 ? (
                         <View style={styles.supersetRow}>
                           <Chip
-                            label={item.superset ? '⇄ Superset avec le suivant' : 'Marquer en superset'}
+                            label={
+                              item.superset
+                                ? 'Superset avec le suivant'
+                                : 'Marquer en superset'
+                            }
                             selected={item.superset}
                             onPress={() => updateItem(item.key, { superset: !item.superset })}
                           />
@@ -831,7 +837,8 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         )}
 
         <Button
-          label="+ Ajouter un exercice"
+          label="Ajouter un exercice"
+          leading={<Icon name="plus" size={18} color={theme.colors.action} />}
           variant="secondary"
           size="lg"
           style={styles.addButton}
@@ -839,7 +846,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         />
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Button
           label="Enregistrer la séance"
           size="lg"
@@ -1048,7 +1055,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs + 2,
+    gap: spacing.xs,
   },
   stepButton: {
     width: 36,
@@ -1057,11 +1064,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surfaceAlt,
-  },
-  stepButtonText: {
-    ...text.title,
-    color: theme.colors.action,
-    lineHeight: 24,
   },
   stepInput: {
     flex: 1,

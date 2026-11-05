@@ -177,16 +177,9 @@ export default function AccountSelectScreen({ navigation }: Props) {
           kind="empty"
           title="Aucun profil"
           message="Crée ton profil pour définir ton objectif, ton matériel et tes séances."
-          action={
-            <View style={styles.emptyActions}>
-              <Button label="Créer mon profil" size="lg" onPress={() => openForm()} />
-              <Button
-                label="Réinitialiser toutes les données"
-                variant="tertiary"
-                onPress={resetAll}
-              />
-            </View>
-          }
+          // Un écran vide propose **une** action : créer le profil. La remise à
+          // zéro vit plus bas, dans « Zone sensible », une fois des données là.
+          action={<Button label="Créer mon profil" size="lg" onPress={() => openForm()} />}
         />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
@@ -218,7 +211,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
                     </Text>
                   </View>
                   <IconButton
-                    glyph="⋯"
+                    icon="more"
                     accessibilityLabel={`Options de ${account.prenom}`}
                     onPress={() => setMenuAccount(account)}
                   />
@@ -286,9 +279,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   danger: {
     marginTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  emptyActions: {
     gap: spacing.sm,
   },
   dangerText: {

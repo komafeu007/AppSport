@@ -9,11 +9,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   Appear,
   Button,
-  Card,
   Chip,
   ConfirmSheet,
   Input,
@@ -102,6 +102,7 @@ function ChipGroup({
 
 export default function AccountFormScreen({ navigation, route }: Props) {
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const { accountId, select, reload } = useAccount();
   const editingId = route.params?.accountId ?? null;
@@ -268,6 +269,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             onChangeText={setPrenom}
             returnKeyType="done"
             autoFocus={editingId === null}
+            accessibilityLabel="Prénom du profil"
           />
 
           <View style={styles.row}>
@@ -280,6 +282,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
                 onChangeText={setAge}
                 keyboardType="numeric"
                 returnKeyType="done"
+                accessibilityLabel="Âge, en années"
               />
             </View>
             <View style={styles.col}>
@@ -291,6 +294,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
                 onChangeText={setTaille}
                 keyboardType="numeric"
                 returnKeyType="done"
+                accessibilityLabel="Taille, en centimètres"
               />
             </View>
             <View style={styles.col}>
@@ -302,6 +306,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
                 onChangeText={setPoids}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
+                accessibilityLabel="Poids, en kilos"
               />
             </View>
           </View>
@@ -399,11 +404,14 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             value={note}
             onChangeText={setNote}
             multiline
+            accessibilityLabel="Précisions sur les zones sensibles"
           />
         </Appear>
 
         <Appear style={styles.section}>
-          <Card>
+          {/* Information, pas action : elle reste à plat. La seule carte d'un
+              écran est réservée à ce qu'on peut faire. */}
+          <View>
             <SectionTitle>Règles de séries & repos</SectionTitle>
             <Text style={styles.rules}>
               Polyarticulaire (squat, développé, tirage…) : {polyRules.seriesRange[0]} à{' '}
@@ -418,11 +426,11 @@ export default function AccountFormScreen({ navigation, route }: Props) {
               Ces réglages sont préremplis automatiquement sur chaque exercice de séance, puis
               restent modifiables.
             </Text>
-          </Card>
+          </View>
         </Appear>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Button
           label={editingId !== null ? 'Enregistrer' : 'Créer mon profil'}
           size="lg"

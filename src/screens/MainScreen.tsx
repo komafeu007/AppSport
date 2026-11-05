@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Chip,
+  Icon,
   Row,
   ScreenHeader,
   SectionTitle,
@@ -28,11 +29,12 @@ import {
   type SessionGroup,
 } from '../services/database';
 import { getActiveGroupId, getHiddenGroupIds, setActiveGroupId } from '../services/preferences';
-import { useThemedStyles, type Theme } from '../theme';
+import { useThemedStyles, useTheme, type Theme } from '../theme';
 import { spacing, text } from '../theme/tokens';
 
 export default function MainScreen() {
   const styles = useThemedStyles(createStyles);
+  const theme = useTheme();
   const db = useSQLiteContext();
   const navigation = useNavigation<MainScreenNavigation>();
   const { accountId, account } = useAccount();
@@ -278,7 +280,7 @@ export default function MainScreen() {
                   {formatDuration(session.duration_sec ?? 0)}
                 </Text>
               </View>
-              <Text style={styles.chevron}>›</Text>
+              <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
             </Row>
           ))
         )}
@@ -306,8 +308,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   hero: {
     padding: spacing.xl,
   },
+  // Le nom de la prochaine séance est **l'information** de l'écran : il prend
+  // le titre de bloc, pas la taille d'une ligne de liste.
   heroTitle: {
-    ...text.cardTitle,
+    ...text.title,
     color: theme.colors.text,
   },
   heroTitleShort: {
@@ -324,10 +328,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     ...text.meta,
     color: theme.colors.textMuted,
     lineHeight: 20,
-    marginTop: spacing.sm - 2,
+    marginTop: spacing.xs,
   },
   heroButton: {
-    marginTop: spacing.lg + 2,
+    marginTop: spacing.lg,
   },
   section: {
     marginTop: spacing.xxl,
@@ -335,7 +339,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
   },
   historyEmpty: {
     ...text.meta,
@@ -367,9 +371,5 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.action,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
-  },
-  chevron: {
-    ...text.title,
-    color: theme.colors.textMuted,
   },
 });

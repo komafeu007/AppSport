@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import type { MuscleAmount } from '../domain/muscles';
+import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, type Theme } from '../theme';
 import { duration, easing, radius, spacing, text } from '../theme/tokens';
 
@@ -57,9 +58,14 @@ function LegendRow({
   delay: number;
 }) {
   const styles = useThemedStyles(createStyles);
+  const reduceMotion = useReduceMotion();
   const grow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      grow.setValue(1);
+      return;
+    }
     const animation = Animated.sequence([
       Animated.delay(delay),
       Animated.timing(grow, {
@@ -71,7 +77,7 @@ function LegendRow({
     ]);
     animation.start();
     return () => animation.stop();
-  }, [delay, grow]);
+  }, [delay, grow, reduceMotion]);
 
   return (
     <View style={styles.legendRow}>
