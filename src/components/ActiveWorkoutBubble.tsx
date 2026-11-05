@@ -1,13 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MainScreenNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { abandonActiveWorkout, loadActiveWorkout, useActiveWorkout } from '../services/activeWorkout';
 import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text, touch, fontFamily } from '../theme/tokens';
+import { duration, easing, radius, spacing, spring, text, touch, fontFamily } from '../theme/tokens';
 import { ConfirmSheet, PressableScale, type ConfirmRequest } from './ui';
 
 /** Hauteur de la barre d'onglets (§8.9) : la bulle flotte juste au-dessus. */
@@ -39,9 +39,37 @@ export default function ActiveWorkoutBubble() {
     if (accountId !== null) void loadActiveWorkout(accountId);
   }, [accountId]);
 
-  const total = draft?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
+  /*
+   * La bulle apparaît (et disparaît) en glissant depuis le bas, pour ne pas
+   * surgir d'un coup sous les yeux. Elle garde son dernier contenu pendant la
+   * sortie : le brouillon est déjà effacé quand l'animation démarre.
+   */
+  const visible = draft !== null;
+  const [rendered, setRendered] = useState(visible);
+  const lastDraft = useRef(draft);
+  if (draft !== null) lastDraft.current = draft;
+  const slide = useRef(new Animated.Value(visible ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setRendered(true);
+      Animated.spring(slide, { toValue: 0, useNativeDriver: true, ...spring }).start();
+      return;
+    }
+    Animated.timing(slide, {
+      toValue: 1,
+      duration: duration.fast,
+      easing: easing.exit,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setRendered(false);
+    });
+  }, [slide, visible]);
+
+  const shown = rendered ? lastDraft.current : null;
+  const total = shown?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
   const done =
-    draft?.exercises.reduce(
+    shown?.exercises.reduce(
       (sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length,
       0
     ) ?? 0;
@@ -62,30 +90,50 @@ export default function ActiveWorkoutBubble() {
 
   return (
     <>
-      {draft !== null ? (
-        <PressableScale
-          style={[styles.bubble, { bottom: TAB_BAR_HEIGHT + insets.bottom + spacing.md }]}
-          onPress={() => navigation.navigate('LiveWorkout', { programId: draft.program_id })}
-          accessibilityRole="button"
-          accessibilityLabel={`Reprendre la séance ${draft.nom}`}
+      {shown !== null ? (
+        <Animated.View
+          pointerEvents={visible ? 'auto' : 'none'}
+          style={[
+            styles.wrap,
+            {
+              bottom: TAB_BAR_HEIGHT + insets.bottom + spacing.md,
+              opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+              transform: [
+                {
+                  // Glisse sous la barre d'onglets en disparaissant.
+                  translateY: slide.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, touch.session],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          <View style={styles.labels}>
-            <Text style={styles.title}>Reprendre la séance</Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {draft.nom} · {done}/{total} série{total > 1 ? 's' : ''}
-            </Text>
-          </View>
           <PressableScale
-            style={styles.close}
-            onPress={abandon}
+            style={styles.bubble}
+            onPress={() => navigation.navigate('LiveWorkout', { programId: shown.program_id })}
             accessibilityRole="button"
-            accessibilityLabel="Abandonner la séance en cours"
-            scaleTo={0.9}
-            hitSlop={8}
+            accessibilityLabel={`Reprendre la séance ${shown.nom}`}
           >
-            <Text style={styles.closeGlyph}>×</Text>
+            <View style={styles.labels}>
+              <Text style={styles.title}>Reprendre la séance</Text>
+              <Text style={styles.meta} numberOfLines={1}>
+                {shown.nom} · {done}/{total} série{total > 1 ? 's' : ''}
+              </Text>
+            </View>
+            <PressableScale
+              style={styles.close}
+              onPress={abandon}
+              accessibilityRole="button"
+              accessibilityLabel="Abandonner la séance en cours"
+              scaleTo={0.9}
+              hitSlop={8}
+            >
+              <Text style={styles.closeGlyph}>×</Text>
+            </PressableScale>
           </PressableScale>
-        </PressableScale>
+        </Animated.View>
       ) : null}
 
       {/* Hors du test sur `draft` : la feuille garde son animation de fermeture
@@ -97,10 +145,12 @@ export default function ActiveWorkoutBubble() {
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
-    bubble: {
+    wrap: {
       position: 'absolute',
       left: spacing.xl,
       right: spacing.xl,
+    },
+    bubble: {
       minHeight: touch.session,
       flexDirection: 'row',
       alignItems: 'center',

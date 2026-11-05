@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -8,7 +8,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollView as ScrollViewType,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { exerciseImages } from '../data/exerciseImages';
 import { isEndurance } from '../domain/exerciseCatalog';
@@ -20,7 +23,7 @@ import { fontFamily, radius, spacing, text } from '../theme/tokens';
 import ExerciseAlternatives from './ExerciseAlternatives';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import Sheet from './ui/Sheet';
+import Sheet, { useSheetDrag } from './ui/Sheet';
 
 interface AlternativesConfig {
   /** Catalogue complet dans lequel chercher les substituts. */
@@ -41,10 +44,12 @@ interface Props {
   alternatives?: AlternativesConfig;
 }
 
-/** Vitesse d'un geste vers le bas (points/ms) qui referme le tuto. */
-const DISMISS_VELOCITY = 0.5;
-/** Traction vers le bas (px, rebond iOS) qui referme le tuto. */
-const DISMISS_PULL = 64;
+/** Distance tirée vers le bas (px) qui referme le tuto. */
+const DISMISS_DISTANCE = 72;
+/** Vitesse du geste (px/s) qui referme le tuto. */
+const DISMISS_VELOCITY = 700;
+/** Déplacement (px) avant que le glissement ne prenne la main sur le défilement. */
+const DRAG_START = 8;
 
 /** Découpe le texte d'instructions en étapes numérotables (phrases). */
 function toSteps(value: string): string[] {
@@ -75,61 +80,19 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
   const [gifFailed, setGifFailed] = useState(false);
 
   const scrollRef = useRef<ScrollViewType>(null);
-  /** Le contenu est en haut : tirer vers le bas referme la fiche. */
-  const atTop = useRef(true);
-  /** Le geste en cours a commencé alors que le contenu était en haut. */
-  const draggedFromTop = useRef(false);
-  /** Plus grande traction vers le bas pendant le geste (rebond iOS, en px). */
-  const pulledDown = useRef(0);
 
   // Réinitialise l'état de chargement du GIF quand on change d'exercice.
   useEffect(() => {
     setGifIndex(0);
     setGifFailed(false);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-    atTop.current = true;
   }, [exercise?.id]);
 
   // Une nouvelle ouverture repart du haut : le geste de fermeture est actif.
   useEffect(() => {
     if (!visible) return;
-    atTop.current = true;
-    draggedFromTop.current = false;
-    pulledDown.current = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [visible]);
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offset = event.nativeEvent.contentOffset.y;
-    atTop.current = offset <= 0;
-    if (draggedFromTop.current && offset < 0) {
-      pulledDown.current = Math.max(pulledDown.current, -offset);
-    }
-  };
-
-  const handleScrollBeginDrag = () => {
-    draggedFromTop.current = atTop.current;
-    pulledDown.current = 0;
-  };
-
-  /*
-   * Fermeture au glissement vers le bas, **depuis le haut seulement**.
-   *
-   * Le geste est lu sur le `ScrollView` lui-même (`onScrollBeginDrag` /
-   * `onScrollEndDrag`) : un `PanResponder` ou les événements tactiles ne
-   * suffisent pas, car la vue défilante native prend la main dès les premiers
-   * pixels et annule le geste côté JS. À l'inverse, elle signale toujours le
-   * début et la fin du glissement, avec sa vitesse (points/ms) : un geste
-   * vers le bas qui part du haut n'a rien à faire défiler, il referme la fiche.
-   * Sur iOS le rebond du contenu donne en plus la distance tirée.
-   */
-  const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!draggedFromTop.current) return;
-    draggedFromTop.current = false;
-    const velocity = event.nativeEvent.velocity?.y ?? 0;
-    const pulled = pulledDown.current;
-    pulledDown.current = 0;
-    if (velocity > DISMISS_VELOCITY || pulled > DISMISS_PULL) onClose();
-  };
 
   const gifUrl = gifFailed ? undefined : gifUrls[gifIndex];
 
@@ -149,16 +112,10 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <ScrollView
-        ref={scrollRef}
+      <DragScroll
+        scrollRef={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        scrollEventThrottle={16}
-        onScroll={handleScroll}
-        onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={handleScrollEndDrag}
-        // Android : pas de halo de survol au sommet (le geste referme la fiche).
-        overScrollMode="never"
       >
         {exercise ? (
           <>
@@ -247,12 +204,98 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
             ) : null}
           </>
         ) : null}
-      </ScrollView>
+      </DragScroll>
 
       <View style={styles.footer}>
         <Button label="Fermer" onPress={onClose} size="lg" />
       </View>
     </Sheet>
+  );
+}
+
+interface DragScrollProps {
+  scrollRef: RefObject<ScrollViewType | null>;
+  style: StyleProp<ViewStyle>;
+  contentContainerStyle: StyleProp<ViewStyle>;
+  children: ReactNode;
+}
+
+/**
+ * `ScrollView` de la feuille qui **suit le doigt**.
+ *
+ * Le geste est un `Pan` de Gesture Handler composé *simultanément* avec le
+ * geste natif de défilement (`Gesture.Native`) : la vue défilante garde la main
+ * sur le scroll, et le pan ne prend le relais que si le contenu est déjà tout en
+ * haut — un glissement vers le bas y est alors une fermeture, pas un défilement.
+ * C'est la seule façon d'obtenir ce suivi : un `PanResponder` (ou les
+ * événements tactiles) est annulé par la vue défilante native dès les premiers
+ * pixels, et ses rappels de défilement ne donnent que la vitesse, jamais la
+ * position du doigt.
+ */
+function DragScroll({ scrollRef, style, contentContainerStyle, children }: DragScrollProps) {
+  const sheetDrag = useSheetDrag();
+  /** Le contenu est tout en haut. */
+  const atTop = useRef(true);
+  /** Le geste en cours a commencé alors que le contenu était en haut. */
+  const fromTop = useRef(false);
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Simultaneous(
+        Gesture.Native(),
+        Gesture.Pan()
+          // Reanimated n'est pas installé : les rappels restent sur le fil JS.
+          .runOnJS(true)
+          // S'active en descendant seulement : tirer vers le haut défile.
+          .activeOffsetY([-100000, DRAG_START])
+          .failOffsetY([-16, 100000])
+          .failOffsetX([-24, 24])
+          .onStart(() => {
+            fromTop.current = atTop.current;
+          })
+          .onUpdate((event) => {
+            if (!fromTop.current) return;
+            // On retire le seuil d'activation : la feuille ne saute pas de
+            // 8 px au moment où le geste prend la main.
+            sheetDrag?.follow(Math.max(0, event.translationY - DRAG_START));
+          })
+          .onEnd((event) => {
+            if (!fromTop.current) return;
+            fromTop.current = false;
+            const dismiss =
+              event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+            sheetDrag?.release(dismiss);
+          })
+          .onFinalize((_event, success) => {
+            // Geste interrompu (appel entrant, doigt levé hors zone…) : la
+            // feuille reprend sa place au lieu de rester à mi-chemin.
+            if (success || !fromTop.current) return;
+            fromTop.current = false;
+            sheetDrag?.release(false);
+          })
+      ),
+    [sheetDrag]
+  );
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    atTop.current = event.nativeEvent.contentOffset.y <= 0;
+  };
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <ScrollView
+        ref={scrollRef}
+        style={style}
+        contentContainerStyle={contentContainerStyle}
+        scrollEventThrottle={16}
+        onScroll={handleScroll}
+        // Pas de rebond : c'est la feuille qui suit le doigt, pas le contenu.
+        bounces={false}
+        overScrollMode="never"
+      >
+        {children}
+      </ScrollView>
+    </GestureDetector>
   );
 }
 

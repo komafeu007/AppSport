@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -11,10 +19,11 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { duration, easing, radius, spacing, text } from '../../theme/tokens';
+import { duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 
 interface Props {
   visible: boolean;
@@ -28,6 +37,25 @@ interface Props {
 }
 
 /**
+ * Pilotage du glissement de la feuille, fourni aux contenus défilants (voir
+ * `useSheetDrag`). Le contenu décide *quand* le geste compte (par exemple
+ * seulement quand son défilement est en haut), puis la feuille suit le doigt.
+ */
+export interface SheetDrag {
+  /** La feuille suit le doigt : `dy` = distance vers le bas, en px. */
+  follow: (dy: number) => void;
+  /** Fin du geste : ferme la feuille si `dismiss`, sinon elle reprend sa place. */
+  release: (dismiss: boolean) => void;
+}
+
+const SheetDragContext = createContext<SheetDrag | null>(null);
+
+/** Glissement de la feuille la plus proche (null hors d'une feuille). */
+export function useSheetDrag(): SheetDrag | null {
+  return useContext(SheetDragContext);
+}
+
+/**
  * Feuille basse commune à toutes les modales de l'app (§8.10) : coins à 20,
  * poignée 36 × 4, voile d'encre, **seule ombre autorisée** de l'app, et
  * fermeture en touchant à côté de la feuille.
@@ -37,13 +65,41 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
   const styles = useThemedStyles(createStyles);
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  // Décalage du glissement en cours (feuille tirée vers le bas).
+  const dragY = useRef(new Animated.Value(0)).current;
   // Évite de relancer l'animation quand le parent repasse une nouvelle fonction.
   const dismissed = useRef(onDismissed);
   dismissed.current = onDismissed;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  const drag = useMemo<SheetDrag>(
+    () => ({
+      follow: (dy) => dragY.setValue(Math.max(0, dy)),
+      release: (dismiss) => {
+        if (dismiss) {
+          // La feuille finit sa course hors de l'écran avant de fermer : un
+          // retour à zéro la ferait remonter juste avant de disparaître.
+          Animated.timing(dragY, {
+            toValue: 1200,
+            duration: 180,
+            easing: easing.exit,
+            useNativeDriver: true,
+          }).start(({ finished }) => {
+            if (finished) closeRef.current();
+          });
+          return;
+        }
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, ...spring }).start();
+      },
+    }),
+    [dragY]
+  );
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      dragY.setValue(0);
       const opening = Animated.timing(progress, {
         toValue: 1,
         duration: duration.slow,
@@ -66,44 +122,66 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
       dismissed.current?.();
     });
     return () => closing.stop();
-  }, [progress, visible]);
+  }, [dragY, progress, visible]);
 
   if (!mounted) return null;
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
-          <Pressable
-            style={styles.backdropPress}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Fermer"
-          />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.sheet,
-            { paddingBottom: insets.bottom },
-            style,
-            {
-              transform: [
-                {
-                  translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [64, 0] }),
-                },
-              ],
-            },
-          ]}
+      {/* `Modal` ouvre une racine native séparée : Gesture Handler a besoin de
+          son propre point d'ancrage à l'intérieur pour les gestes du contenu. */}
+      <GestureHandlerRootView style={styles.root}>
+        <KeyboardAvoidingView
+          style={styles.root}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
         >
-          <View style={styles.handle} />
-          {title ? <Text style={styles.title}>{title}</Text> : null}
-          {children}
-        </Animated.View>
-      </KeyboardAvoidingView>
+          <Animated.View
+            style={[
+              styles.backdrop,
+              {
+                // Le voile s'éclaircit à mesure que la feuille descend.
+                opacity: Animated.multiply(
+                  progress,
+                  dragY.interpolate({
+                    inputRange: [0, 320],
+                    outputRange: [1, 0.25],
+                    extrapolate: 'clamp',
+                  })
+                ),
+              },
+            ]}
+          >
+            <Pressable
+              style={styles.backdropPress}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Fermer"
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.sheet,
+              { paddingBottom: insets.bottom },
+              style,
+              {
+                transform: [
+                  {
+                    translateY: Animated.add(
+                      progress.interpolate({ inputRange: [0, 1], outputRange: [64, 0] }),
+                      dragY
+                    ),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.handle} />
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+            <SheetDragContext.Provider value={drag}>{children}</SheetDragContext.Provider>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

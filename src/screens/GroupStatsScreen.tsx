@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 import { Appear, SectionTitle, StateView } from '../components/ui';
+import MuscleLegend from '../components/MuscleLegend';
 import MuscleRadarChart from '../components/MuscleRadarChart';
 import {
   aggregateMuscleAmount,
@@ -15,7 +16,7 @@ import {
 import type { RootStackParamList } from '../navigation/types';
 import { getGroupPlanExercises, type GroupPlanExercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupStats'>;
 
@@ -136,24 +137,7 @@ export default function GroupStatsScreen({ route }: Props) {
                   />
                 </View>
               ) : null}
-              <View style={styles.legend}>
-                {muscles.map((muscle) => (
-                  <View key={muscle.key} style={styles.legendRow}>
-                    <Text style={styles.legendLabel} numberOfLines={1}>
-                      {muscle.label}
-                    </Text>
-                    <View style={styles.legendTrack}>
-                      <View
-                        style={[
-                          styles.legendFill,
-                          { width: `${Math.max(4, (muscle.amount / muscleMax) * 100)}%` },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.legendValue}>{formatSets(muscle.amount)}</Text>
-                  </View>
-                ))}
-              </View>
+              <MuscleLegend muscles={muscles} max={muscleMax} format={formatSets} valueWidth={32} />
 
               <Text style={styles.caption}>
                 Séries prévues par groupe musculaire, sur l’ensemble des séances du split : tout
@@ -180,38 +164,6 @@ const createStyles = (theme: Theme) =>
     radarWrap: {
       alignItems: 'center',
       marginBottom: spacing.lg,
-    },
-    legend: {
-      gap: spacing.sm,
-    },
-    legendRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    legendLabel: {
-      ...text.label,
-      color: theme.colors.text,
-      width: 88,
-    },
-    legendTrack: {
-      flex: 1,
-      height: 8,
-      borderRadius: radius.pill,
-      backgroundColor: theme.colors.surfaceAlt,
-      overflow: 'hidden',
-    },
-    legendFill: {
-      height: 8,
-      borderRadius: radius.pill,
-      backgroundColor: theme.colors.action,
-    },
-    legendValue: {
-      ...text.caption,
-      color: theme.colors.textMuted,
-      minWidth: 32,
-      textAlign: 'right',
-      fontVariant: ['tabular-nums'],
     },
     caption: {
       ...text.caption,

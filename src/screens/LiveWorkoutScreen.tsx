@@ -1,10 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   AppState,
+  Easing,
+  LayoutAnimation,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +27,7 @@ import {
   Card,
   ConfirmSheet,
   IconButton,
+  PopIn,
   PressableScale,
   Row,
   StateView,
@@ -85,7 +88,7 @@ import {
   scheduleRestDone,
 } from '../services/restAlert';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { fontFamily, radius, spacing, spring, text } from '../theme/tokens';
+import { duration, easing, fontFamily, radius, spacing, spring, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -267,6 +270,37 @@ function CheckToggle({
         <Animated.Text style={[styles.checkText, { color }]}>✓</Animated.Text>
       </Animated.View>
     </PressableScale>
+  );
+}
+
+/**
+ * Ligne de série : elle **s'éclaire** brièvement quand elle passe à « validée »
+ * (une bande de surface qui s'efface), en plus du ressort de la coche. L'effet
+ * ne joue que sur la transition non validée → validée, pas au montage.
+ */
+function SetRow({ completed, children }: { completed: boolean; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  const flash = useRef(new Animated.Value(0)).current;
+  const wasCompleted = useRef(completed);
+
+  useEffect(() => {
+    if (completed && !wasCompleted.current) {
+      flash.setValue(1);
+      Animated.timing(flash, {
+        toValue: 0,
+        duration: duration.slow,
+        easing: easing.exit,
+        useNativeDriver: true,
+      }).start();
+    }
+    wasCompleted.current = completed;
+  }, [completed, flash]);
+
+  return (
+    <View style={styles.setRow}>
+      <Animated.View pointerEvents="none" style={[styles.setFlash, { opacity: flash }]} />
+      {children}
+    </View>
   );
 }
 
@@ -727,6 +761,9 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     // pour corriger une série.
     if (justDoneId !== null) {
       const doneId = justDoneId;
+      // Le repli de la carte est animé : le défilement qui suit reste calé sur
+      // la nouvelle hauteur (la mesure est relue après le rendu).
+      animateNextLayout();
       setReopenedId((prev) => (prev === doneId ? null : prev));
     }
 
@@ -883,6 +920,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   const addSet = (exIndex: number) => {
     planDirty.current = true;
+    animateNextLayout();
     setLiveExercises((prev) =>
       prev.map((exercise, i) => {
         if (i !== exIndex) return exercise;
@@ -906,6 +944,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
   const removeSet = (exIndex: number) => {
     planDirty.current = true;
+    animateNextLayout();
     if (chrono !== null && chrono.exIndex === exIndex) setChrono(null);
     setLiveExercises((prev) =>
       prev.map((exercise, i) =>
@@ -1137,7 +1176,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     </PressableScale>
                     <PressableScale
                       style={styles.doneBody}
-                      onPress={() => setReopenedId(exercise.workoutExoId)}
+                      onPress={() => {
+                        animateNextLayout();
+                        setReopenedId(exercise.workoutExoId);
+                      }}
                       accessibilityLabel={`Rouvrir ${exercise.exercise.nom}`}
                       scaleTo={0.99}
                     >
@@ -1151,7 +1193,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                           : formatKg(doneVolume)}
                       </Text>
                     </PressableScale>
-                    {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
+                    {recordBeaten ? (
+                      <PopIn>
+                        <Badge label="Record" tone="marker" />
+                      </PopIn>
+                    ) : null}
                     <CheckToggle
                       checked={allDone}
                       accessibilityLabel={`Décocher les séries de ${exercise.exercise.nom}`}
@@ -1192,7 +1238,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                         {allDone ? (
                           <PressableScale
                             style={styles.cardTitleTap}
-                            onPress={() => setReopenedId(null)}
+                            onPress={() => {
+                              animateNextLayout();
+                              setReopenedId(null);
+                            }}
                             accessibilityLabel={`Replier ${exercise.exercise.nom}`}
                             scaleTo={0.99}
                           >
@@ -1207,7 +1256,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                         )}
                       </View>
                       {exercise.endurance ? <Badge label="Endurance" tone="neutral" /> : null}
-                      {recordBeaten ? <Badge label="Record" tone="marker" /> : null}
+                      {recordBeaten ? (
+                        <PopIn>
+                          <Badge label="Record" tone="marker" />
+                        </PopIn>
+                      ) : null}
                       <CheckToggle
                         checked={allDone}
                         width={40}
@@ -1242,7 +1295,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                           ? Math.max(0, Math.floor((chronoNow - chrono.startedAt) / 1000))
                           : 0;
                       return (
-                        <View key={set.key} style={styles.setRow}>
+                        <SetRow key={set.key} completed={set.completed}>
                           <Text style={styles.setLabel}>{setIndex + 1}</Text>
                           <Text style={styles.previousText}>
                             {previous
@@ -1301,7 +1354,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                               running ? toggleChrono(exIndex, setIndex) : toggleSet(exIndex, setIndex)
                             }
                           />
-                        </View>
+                        </SetRow>
                       );
                     })}
 
@@ -1329,55 +1382,13 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         )}
       </ScrollView>
 
-      {restRemaining > 0 ? (
-        <View style={styles.restBar}>
-          <View style={styles.restRow}>
-            <Text style={styles.restLabel}>
-              Repos <Text style={styles.restTime}>{formatClock(restRemaining)}</Text>
-            </Text>
-            <View style={styles.restActions}>
-              <Button
-                label="−15 s"
-                variant="secondary"
-                size="sm"
-                style={styles.restButton}
-                onPress={() => shiftRest(-15)}
-              />
-              <Button
-                label="Passer"
-                variant="secondary"
-                size="sm"
-                style={styles.restButton}
-                onPress={skipRest}
-              />
-              <Button
-                label="+15 s"
-                variant="secondary"
-                size="sm"
-                style={styles.restButton}
-                onPress={() => shiftRest(15)}
-              />
-            </View>
-          </View>
-          <View style={styles.restTrack}>
-            <View
-              style={[
-                styles.restFill,
-                {
-                  width: `${Math.min(
-                    100,
-                    restTotal.current > 0 ? (restRemaining / restTotal.current) * 100 : 0
-                  )}%`,
-                },
-              ]}
-            />
-          </View>
-        </View>
-      ) : restDone ? (
-        <View style={styles.restBar}>
-          <Text style={styles.restDoneText}>Repos terminé — enchaîne !</Text>
-        </View>
-      ) : null}
+      <RestPanel
+        remaining={restRemaining}
+        total={restTotal.current}
+        done={restDone}
+        onShift={shiftRest}
+        onSkip={skipRest}
+      />
 
       <View style={styles.footer}>
         <Button
@@ -1417,6 +1428,150 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
       <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </SafeAreaView>
+  );
+}
+
+/**
+ * Anime le **changement de hauteur** qui suit (repli/dépliage d'un exercice,
+ * ajout ou retrait d'une série). `LayoutAnimation` suffit : Fabric l'applique
+ * sans réglage, et la durée reste celle des autres transitions.
+ */
+function animateNextLayout() {
+  LayoutAnimation.configureNext({
+    duration: duration.base,
+    update: { type: LayoutAnimation.Types.easeInEaseOut },
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
+}
+
+interface RestPanelProps {
+  /** Secondes restantes (0 = repos fini). */
+  remaining: number;
+  /** Durée initiale du repos (jauge). */
+  total: number;
+  /** Repos écoulé : affiche « enchaîne ! » à la place du décompte. */
+  done: boolean;
+  onShift: (deltaSeconds: number) => void;
+  onSkip: () => void;
+}
+
+/**
+ * Bandeau de repos : il **glisse depuis le bas** quand un repos démarre (il
+ * arrive sous le doigt juste après la coche d'une série) et repart de même, puis
+ * sa jauge se vide en continu au lieu de sauter d'un cran chaque seconde.
+ */
+function RestPanel({ remaining, total, done, onShift, onSkip }: RestPanelProps) {
+  const styles = useThemedStyles(createStyles);
+  const active = remaining > 0;
+  const visible = active || done;
+  const [rendered, setRendered] = useState(visible);
+  const slide = useRef(new Animated.Value(visible ? 0 : 1)).current;
+  const fill = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setRendered(true);
+      Animated.timing(slide, {
+        toValue: 0,
+        duration: duration.base,
+        easing: easing.enter,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    Animated.timing(slide, {
+      toValue: 1,
+      duration: duration.fast,
+      easing: easing.exit,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setRendered(false);
+    });
+  }, [slide, visible]);
+
+  /*
+   * Jauge : `scaleX` (origine à gauche) pilotée nativement, recalée à chaque
+   * battement du décompte (250 ms). Une largeur animée obligerait à passer par
+   * le fil JS ; ici le rail se vide sans à-coups, même pendant un « +15 s ».
+   */
+  useEffect(() => {
+    if (total <= 0) return;
+    if (remaining >= total) {
+      fill.setValue(1);
+      return;
+    }
+    Animated.timing(fill, {
+      toValue: Math.max(0, Math.min(1, remaining / total)),
+      duration: 280,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+  }, [fill, remaining, total]);
+
+  if (!rendered) return null;
+
+  return (
+    <Animated.View
+      style={[
+        styles.restBar,
+        {
+          opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+          transform: [
+            {
+              translateY: slide.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, spacing.xxl],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {active ? (
+        <>
+          <View style={styles.restRow}>
+            <Text style={styles.restLabel}>
+              Repos <Text style={styles.restTime}>{formatClock(remaining)}</Text>
+            </Text>
+            <View style={styles.restActions}>
+              <Button
+                label="−15 s"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={() => onShift(-15)}
+              />
+              <Button
+                label="Passer"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={onSkip}
+              />
+              <Button
+                label="+15 s"
+                variant="secondary"
+                size="sm"
+                style={styles.restButton}
+                onPress={() => onShift(15)}
+              />
+            </View>
+          </View>
+          <View style={styles.restTrack}>
+            <Animated.View style={[styles.restFill, { transform: [{ scaleX: fill }] }]} />
+          </View>
+        </>
+      ) : (
+        <Text style={styles.restDoneText}>Repos terminé — enchaîne !</Text>
+      )}
+    </Animated.View>
   );
 }
 
@@ -1541,6 +1696,17 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
     columnGap: spacing.sm,
+    // Le halo de validation déborde un peu de la ligne (voir `setFlash`).
+    position: 'relative',
+  },
+  setFlash: {
+    position: 'absolute',
+    top: -spacing.xs,
+    bottom: -spacing.xs,
+    left: -spacing.sm,
+    right: -spacing.sm,
+    borderRadius: radius.control,
+    backgroundColor: theme.colors.surfaceAlt,
   },
   setLabel: {
     ...text.label,
@@ -1679,6 +1845,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   restFill: {
     height: 6,
+    width: '100%',
+    // La jauge se vide en `scaleX` depuis la gauche (pas de marge animée).
+    transformOrigin: 'left',
     borderRadius: radius.pill,
     backgroundColor: theme.colors.marker,
   },

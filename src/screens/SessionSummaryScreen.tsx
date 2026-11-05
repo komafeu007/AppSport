@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import MuscleLegend from '../components/MuscleLegend';
 import MuscleRadarChart from '../components/MuscleRadarChart';
 import VolumeLineChart, { type VolumeLinePoint } from '../components/VolumeLineChart';
 import {
@@ -17,6 +18,7 @@ import {
   Badge,
   Button,
   Card,
+  CountUp,
   SectionTitle,
   StateView,
   Thumb,
@@ -36,7 +38,7 @@ import {
   type SessionSetDetail,
 } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionSummary'>;
 
@@ -230,30 +232,40 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
 
             <View style={styles.stats}>
               <View style={styles.stat}>
-                <Text style={[styles.statValue, styles.statVolume]}>
-                  {formatNumber(totalVolume)}
-                </Text>
+                <CountUp
+                  style={[styles.statValue, styles.statVolume]}
+                  value={totalVolume}
+                  format={formatNumber}
+                />
                 <Text style={styles.statLabel}>kg soulevés</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={[styles.statValue, styles.statTime]}>
-                  {formatDuration(durationSec)}
-                </Text>
+                <CountUp
+                  style={[styles.statValue, styles.statTime]}
+                  value={durationSec}
+                  format={formatDuration}
+                />
                 <Text style={styles.statLabel}>temps</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
                 {totalReps > 0 ? (
                   <>
-                    <Text style={styles.statValue}>{totalReps}</Text>
+                    <CountUp
+                      style={styles.statValue}
+                      value={totalReps}
+                      format={formatNumber}
+                    />
                     <Text style={styles.statLabel}>répétitions</Text>
                   </>
                 ) : (
                   <>
-                    <Text style={[styles.statValue, styles.statTime]}>
-                      {formatDuration(totalEffort)}
-                    </Text>
+                    <CountUp
+                      style={[styles.statValue, styles.statTime]}
+                      value={totalEffort}
+                      format={formatDuration}
+                    />
                     <Text style={styles.statLabel}>temps d’effort</Text>
                   </>
                 )}
@@ -284,24 +296,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                   </View>
                 ) : null}
 
-                <View style={styles.legend}>
-                  {muscles.map((muscle) => (
-                    <View key={muscle.key} style={styles.legendRow}>
-                      <Text style={styles.legendLabel} numberOfLines={1}>
-                        {muscle.label}
-                      </Text>
-                      <View style={styles.legendTrack}>
-                        <View
-                          style={[
-                            styles.legendFill,
-                            { width: `${Math.max(4, (muscle.amount / muscleMax) * 100)}%` },
-                          ]}
-                        />
-                      </View>
-                      <Text style={styles.legendValue}>{formatNumber(muscle.amount)}</Text>
-                    </View>
-                  ))}
-                </View>
+                <MuscleLegend muscles={muscles} max={muscleMax} format={formatNumber} />
               </>
             )}
           </View>
@@ -469,38 +464,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   radarWrap: {
     alignItems: 'center',
     marginBottom: spacing.lg,
-  },
-  legend: {
-    gap: spacing.sm,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  legendLabel: {
-    ...text.label,
-    color: theme.colors.text,
-    width: 88,
-  },
-  legendTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: theme.colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  legendFill: {
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: theme.colors.action,
-  },
-  legendValue: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    minWidth: 64,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
   },
   chartHint: {
     ...text.caption,

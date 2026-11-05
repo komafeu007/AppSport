@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet } from 'react-native';
 import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg';
 
 import { useTheme } from '../theme';
-import { fontFamily } from '../theme/tokens';
+import { duration, easing, fontFamily } from '../theme/tokens';
 
 export interface RadarPoint {
   label: string;
@@ -23,9 +24,23 @@ const LABEL_PAD = 74;
  * Graphique « araignée » (radar) des muscles travaillés : un axe par muscle,
  * la distance au centre est proportionnelle au volume. Rendu en SVG pur, sans
  * dépendance de charting. Repère en Craie, série en bleu d'action (§10.3).
+ * Il **se déploie** légèrement au premier affichage (échelle 0,9 → 1, fondu).
  */
 export default function MuscleRadarChart({ data, size }: Props) {
   const theme = useTheme();
+  const grow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.timing(grow, {
+      toValue: 1,
+      duration: duration.slow,
+      easing: easing.enter,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [grow]);
+
   const count = data.length;
   if (count < 3) return null;
 
@@ -56,7 +71,19 @@ export default function MuscleRadarChart({ data, size }: Props) {
     .join(' ');
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
+    <Animated.View
+      style={[
+        styles.wrap,
+        {
+          width: size,
+          height: size,
+          opacity: grow,
+          transform: [
+            { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+          ],
+        },
+      ]}
+    >
       <Svg width={size} height={size}>
         <G>
           {LEVELS.map((ratio) => (
@@ -116,7 +143,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
           );
         })}
       </Svg>
-    </View>
+    </Animated.View>
   );
 }
 
