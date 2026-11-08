@@ -1,3 +1,4 @@
+import { useHeaderHeight } from '@react-navigation/elements';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -6,7 +7,10 @@ import {
   Animated,
   AppState,
   Easing,
+  Keyboard,
+  KeyboardAvoidingView,
   LayoutAnimation,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -370,6 +374,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const restTotal = useRef(0);
   /** Bref indicateur « repos terminé » après la fin du temps d'attente. */
   const [restDone, setRestDone] = useState(false);
+  /** Clavier ouvert : affiche le chrono juste au-dessus. */
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  /** Hauteur de l'en-tête de pile (barre d'état comprise) : décalage du clavier. */
+  const headerHeight = useHeaderHeight();
   /** Identifiant de la notification de fin de repos programmée. */
   const restNotifId = useRef<string | null>(null);
   /** Identifie le cycle de repos courant : invalide une programmation « en vol ». */
@@ -524,6 +532,19 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Clavier ouvert : le bas de l'écran remonte avec lui et le chrono de la séance
+  // s'y affiche (l'en-tête, qui le porte d'habitude, a défilé hors de vue).
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   // Le chrono d'effort d'une série d'endurance rafraîchit son affichage en continu
@@ -1121,8 +1142,21 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
     return exercise !== undefined && isDone(exercise) && reopenedId !== exercise.workoutExoId;
   };
 
+  // Chrono affiché au-dessus du clavier : l'effort mesuré prime sur le temps de séance.
+  const keyboardClock =
+    chrono !== null
+      ? { label: 'Effort', seconds: Math.max(0, Math.floor((chronoNow - chrono.startedAt) / 1000)) }
+      : { label: 'Temps', seconds: elapsed };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Méthode de la doc Expo (Android bord à bord : la fenêtre ne rétrécit
+          plus) : `padding` sur les deux plateformes, décalé de l'en-tête. */}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior="padding"
+        keyboardVerticalOffset={headerHeight}
+      >
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}
@@ -1432,15 +1466,36 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         onSkip={skipRest}
       />
 
-      <View style={styles.footer}>
-        <Button
-          label="Arrêter la séance"
-          variant="danger"
-          size="lg"
-          loading={saving}
-          onPress={onStop}
-        />
-      </View>
+      {keyboardOpen ? (
+        // Pendant la saisie, le bouton d'arrêt cède la place à **un seul** chrono,
+        // juste au-dessus du clavier : le repos s'il tourne (son bandeau est déjà
+        // là), sinon l'effort de la série d'endurance, sinon le temps de séance.
+        // « OK » referme le pavé numérique (sans touche de validation sur iOS).
+        restRemaining > 0 || restDone ? null : (
+          <View
+            style={styles.keyboardClock}
+            accessible
+            accessibilityLabel={`${keyboardClock.label} ${formatClock(keyboardClock.seconds)}.`}
+          >
+            <Text style={styles.keyboardClockLabel}>
+              {keyboardClock.label}{' '}
+              <Text style={styles.keyboardClockTime}>{formatClock(keyboardClock.seconds)}</Text>
+            </Text>
+            <Button label="OK" variant="secondary" size="sm" onPress={Keyboard.dismiss} />
+          </View>
+        )
+      ) : (
+        <View style={styles.footer}>
+          <Button
+            label="Arrêter la séance"
+            variant="danger"
+            size="lg"
+            loading={saving}
+            onPress={onStop}
+          />
+        </View>
+      )}
+      </KeyboardAvoidingView>
 
       {/* Toujours monté : la feuille garde son animation de fermeture. */}
       <PlateCalculatorModal
@@ -1850,6 +1905,26 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.background,
+  },
+  keyboardClock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  keyboardClockLabel: {
+    ...text.meta,
+    color: theme.colors.textMuted,
+  },
+  keyboardClockTime: {
+    ...text.title,
+    color: theme.colors.action,
+    fontVariant: ['tabular-nums'],
   },
   restBar: {
     paddingHorizontal: spacing.xl,
