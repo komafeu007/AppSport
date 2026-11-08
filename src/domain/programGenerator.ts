@@ -1238,11 +1238,11 @@ function zoneLabel(zone: string): string {
 /** Nom affichable d'un exercice (réexporté pour l'UI) : toujours en anglais. */
 export { displayName as exerciseDisplayName };
 
-/** Résumé « 4 × 8–10 reps · repos 2 min 30 » d'un exercice planifié. */
+/** Résumé « 4 × 8–10 reps, repos 2 min 30 » d'un exercice planifié. */
 export function describePlannedExercise(planned: PlannedExercise): string {
   const minutes = Math.floor(planned.restTime / 60);
   const seconds = planned.restTime % 60;
   const rest =
     minutes === 0 ? `${seconds} s` : seconds === 0 ? `${minutes} min` : `${minutes} min ${seconds}`;
-  return `${planned.series} × ${planned.repsMin}–${planned.repsMax} reps · repos ${rest}`;
+  return `${planned.series} × ${planned.repsMin}–${planned.repsMax} reps, repos ${rest}`;
 }

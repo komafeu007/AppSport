@@ -61,7 +61,7 @@ export default function ExerciseAlternatives({
           const meta = [exercise.target, exercise.equipment]
             .filter((value): value is string => Boolean(value))
             .map(exerciseTermLabel)
-            .join(' · ');
+            .join(', ');
           return (
             <Row
               key={exercise.id}

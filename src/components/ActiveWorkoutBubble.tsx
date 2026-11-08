@@ -132,7 +132,7 @@ export default function ActiveWorkoutBubble() {
             <View style={styles.labels}>
               <Text style={styles.title}>Reprendre la séance</Text>
               <Text style={styles.meta} numberOfLines={1}>
-                {shown.nom} · {done}/{total} série{total > 1 ? 's' : ''}
+                {shown.nom}, {done} série{done > 1 ? 's' : ''} sur {total}
               </Text>
             </View>
             <PressableScale

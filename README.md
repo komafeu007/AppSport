@@ -19,7 +19,7 @@
 - [ ] Module 3 — Exercices volatils (ajouter un exercice non prévu en pleine séance)
 - [x] Module 4 — **Récapitulatif de fin de séance** : volume, durée, reps, **radar des muscles — réparti en répétitions (pas en kilos)**, courbe d'évolution, détail des exercices et **records** (SVG). *(À venir : 1RM estimé, progression par exercice.)*
 - [ ] Module 4 — Statistiques globales (progression par exercice, volume par semaine)
-- [x] Écran **Accueil** : carte de la séance à faire (nom + bouton **Démarrer**, ou **Reprendre** si cette séance est en cours ; bouton compact **Go** si le nom est court ; rotation par groupe), choix du groupe et historique des séances terminées. Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
+- [x] Écran **Accueil** : date du jour en toutes lettres, carte de la séance à faire (nom, aperçu des 3 premiers exercices au format « 4 × 8–12 », bouton **Commencer la séance**, ou **Reprendre la séance** si elle est en cours ; rotation par groupe), choix du groupe, **couloir « Cette semaine »** gradué selon la fréquence du profil (« 2 sur 4 ») et dernières séances (date en toutes lettres, volume ou temps d'effort à droite). Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
 - [x] Navigation : **2 onglets** (Accueil / Séances) + écrans empilés (éditeur, séance en cours, récapitulatif, profils)
 - [x] **Thème clair / sombre** qui suit le téléphone (DA « Foulée ») et les deux polices de la DA
 - [x] EAS configuré ([`eas.json`](eas.json)) : profil `preview` = **APK Android** autonome
@@ -157,7 +157,7 @@ src/
   screens/
     AccountSelectScreen.tsx # choix du profil (+ ⚙ gestion des profils)
     AccountFormScreen.tsx   # création / édition d'un profil et questionnaire
-    MainScreen.tsx          # accueil : séance à faire (nom + Démarrer/Reprendre) + historique
+    MainScreen.tsx          # accueil : date, séance à faire (aperçu + Commencer/Reprendre), semaine, historique
     SessionListScreen.tsx   # onglet Séances : groupes/splits + séances + génération
     ProgramGeneratorScreen.tsx # aperçu d'un programme généré (régénérer, enregistrer)
     SessionEditorScreen.tsx # création/édition de séance (fiche exercice, substitution)

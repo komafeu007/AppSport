@@ -195,11 +195,11 @@ export function parseDurationInput(input: string): number | null {
 
 /** Résumé court des règles conseillées, affiché sous chaque exercice. */
 export function describeRules(isPoly: number | boolean, endurance = false): string {
-  if (endurance) return 'Endurance · au temps : la durée remplace les répétitions';
+  if (endurance) return 'Endurance, au temps : la durée remplace les répétitions';
   const { seriesRange, restRange } = rulesFor(isPoly);
   const rest =
     restRange[0] === restRange[1] ? `${restRange[0]} s` : `${restRange[0]}–${restRange[1]} s`;
-  return `${isPoly ? 'Poly' : 'Mono'} · conseillé ${seriesRange[0]}–${seriesRange[1]} séries · repos ${rest}`;
+  return `${isPoly ? 'Poly' : 'Mono'}, conseillé ${seriesRange[0]} à ${seriesRange[1]} séries, repos ${rest}`;
 }
 
 /** Rappel de la double progression, affiché dans l'éditeur. */

@@ -273,7 +273,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
                   <View key={session.nom} style={styles.sessionCard}>
                     <Text style={styles.sessionName}>{session.nom}</Text>
                     <Text style={styles.sessionMeta}>
-                      {summary.exercises} exercices · {summary.sets} séries · ≈ {summary.minutes} min
+                      {summary.exercises} exercices, {summary.sets} séries, environ {summary.minutes} min
                     </Text>
                     {session.exercises.map((planned, exerciseIndex) => (
                       <ExerciseRow
@@ -325,7 +325,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
 
         {fromOnboarding ? (
           <Button
-            label="Plus tard — je crée mes séances moi-même"
+            label="Créer mes séances moi-même"
             variant="tertiary"
             onPress={handleSkip}
             disabled={saving}

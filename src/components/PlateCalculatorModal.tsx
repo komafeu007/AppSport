@@ -196,8 +196,8 @@ export default function PlateCalculatorModal({
               <Text style={styles.resultMuted}>Aucun disque disponible.</Text>
             )}
             <Text style={styles.resultLine}>
-              {formatWeight(breakdown.sideWeight)} kg / côté · total{' '}
-              {formatWeight(breakdown.total)} kg
+              {formatWeight(breakdown.sideWeight)} kg par côté, {formatWeight(breakdown.total)} kg
+              au total
             </Text>
             {breakdown.remainder > 0 ? (
               <Text style={styles.resultWarn}>

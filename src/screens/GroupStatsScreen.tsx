@@ -118,7 +118,7 @@ export default function GroupStatsScreen({ route }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Appear>
           <SectionTitle
-            hint={`en séries · ${exercises.length} exercice${exercises.length > 1 ? 's' : ''}`}
+            hint={`en séries, ${exercises.length} exercice${exercises.length > 1 ? 's' : ''}`}
           >
             Répartition par muscle
           </SectionTitle>

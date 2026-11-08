@@ -688,10 +688,10 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                         </Text>
                         <Text style={styles.itemSummary}>
                           {endurance
-                            ? `${item.series}×${Math.floor(item.duration_sec / 60)}:${String(
+                            ? `${item.series} × ${Math.floor(item.duration_sec / 60)}:${String(
                                 item.duration_sec % 60
-                              ).padStart(2, '0')} · ${formatRest(item.rest_time)}`
-                            : `${item.series}×${item.reps_min}-${item.reps_max} · ${formatRest(
+                              ).padStart(2, '0')}, repos ${formatRest(item.rest_time)}`
+                            : `${item.series} × ${item.reps_min}–${item.reps_max}, repos ${formatRest(
                                 item.rest_time
                               )}`}
                         </Text>

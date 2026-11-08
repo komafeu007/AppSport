@@ -415,11 +415,11 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             <SectionTitle>Règles de séries & repos</SectionTitle>
             <Text style={styles.rules}>
               Polyarticulaire (squat, développé, tirage…) : {polyRules.seriesRange[0]} à{' '}
-              {polyRules.seriesRange[1]} séries · repos {formatRest(polyRules.restRange[0])}.
+              {polyRules.seriesRange[1]} séries, repos {formatRest(polyRules.restRange[0])}.
             </Text>
             <Text style={styles.rules}>
               Monoarticulaire (curl, extension, élévations…) : {monoRules.seriesRange[0]} à{' '}
-              {monoRules.seriesRange[1]} séries · repos {formatRest(monoRules.restRange[0])} à{' '}
+              {monoRules.seriesRange[1]} séries, repos {formatRest(monoRules.restRange[0])} à{' '}
               {formatRest(monoRules.restRange[1])}.
             </Text>
             <Text style={styles.rulesHint}>

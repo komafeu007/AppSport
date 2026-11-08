@@ -107,7 +107,7 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
     ? [exercise.target, exercise.category, exercise.equipment]
         .filter((value): value is string => Boolean(value))
         .map(exerciseTermLabel)
-        .join(' · ')
+        .join(', ')
     : '';
 
   return (
@@ -147,7 +147,7 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
 
             {gifFailed ? (
               <Text style={styles.mediaHint}>
-                Démonstration animée indisponible — vignette statique affichée.
+                Démonstration animée indisponible : la vignette la remplace.
               </Text>
             ) : null}
 

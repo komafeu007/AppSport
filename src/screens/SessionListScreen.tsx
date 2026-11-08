@@ -342,17 +342,17 @@ export default function SessionListScreen() {
           <View style={styles.generatorRow}>
             <View style={styles.generatorText}>
               <Text style={styles.generatorTitle}>
-                {block?.due ? 'Bloc terminé — choisis le nouveau programme' : 'Générer un programme'}
+                {block?.due ? 'Bloc terminé : choisis le nouveau programme' : 'Générer un programme'}
               </Text>
               <Text style={styles.generatorMeta}>
                 {block
-                  ? `« ${block.group.nom} » · semaine ${Math.min(
+                  ? `« ${block.group.nom} », semaine ${Math.min(
                       block.elapsedWeeks + 1,
                       block.weeks
-                    )}/${block.weeks} · ${block.sessionsDone} séance${
+                    )} sur ${block.weeks}, ${block.sessionsDone} séance${
                       block.sessionsDone > 1 ? 's' : ''
-                    } faite${block.sessionsDone > 1 ? 's' : ''}${
-                      block.due ? ' · un nouveau bloc est proposé' : ''
+                    } faite${block.sessionsDone > 1 ? 's' : ''}.${
+                      block.due ? ' Un nouveau bloc est proposé.' : ''
                     }`
                   : 'Séances calculées à partir de ton profil (objectif, sexe, matériel, durée), avec aperçu et régénération avant enregistrement.'}
               </Text>
@@ -498,7 +498,7 @@ export default function SessionListScreen() {
           />
         </View>
         <Text style={styles.footerHint}>
-          Glisse une séance pour la réordonner · appui long ou bouton supprimer · menu du groupe pour renommer
+          Glisse une séance pour la réordonner. Appui long pour la supprimer, menu du groupe pour le renommer.
         </Text>
       </View>
 

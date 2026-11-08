@@ -27,7 +27,7 @@ import { exerciseImages } from '../data/exerciseImages';
 import { aggregateMuscleAmount, parseSecondaryMuscles } from '../domain/muscles';
 import { formatWeight } from '../domain/plates';
 import { beatsSet, formatPerformance, type SetPerformance } from '../domain/workoutRules';
-import { formatDuration, formatKg, formatNumber, formatShortDate } from '../lib/format';
+import { formatDuration, formatKg, formatLongDate, formatNumber, formatShortDate } from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
 import {
   getExerciseBestSetsBefore,
@@ -227,7 +227,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
           <View style={styles.hero}>
             <Text style={styles.heroTitle}>{sessionName}</Text>
             <Text style={styles.heroSub}>
-              Séance terminée{date ? ` · ${formatShortDate(date)}` : ''}
+              Séance terminée{date ? `, ${formatLongDate(date)}` : ''}
             </Text>
 
             <View style={styles.stats}>
@@ -372,19 +372,19 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
                       {isRecord(block) ? <Badge label="Record" tone="marker" /> : null}
                     </View>
                     <Text style={styles.exerciseMeta}>
-                      {block.sets.length} série{block.sets.length > 1 ? 's' : ''} ·{' '}
+                      {block.sets.length} série{block.sets.length > 1 ? 's' : ''},{' '}
                       {block.timed
                         ? `${formatDuration(block.duration)} d’effort`
-                        : `${block.reps} reps · ${formatKg(block.volume)}`}
+                        : `${block.reps} reps, ${formatKg(block.volume)}`}
                     </Text>
                     <Text style={styles.exerciseSets} numberOfLines={2}>
                       {block.sets
                         .map((set) =>
                           set.durationSec > 0
                             ? formatDuration(set.durationSec)
-                            : `${formatWeight(set.weight)}×${set.reps}`
+                            : `${formatWeight(set.weight)} × ${set.reps}`
                         )
-                        .join('  ·  ')}
+                        .join(', ')}
                     </Text>
                   </View>
                 </View>

@@ -84,7 +84,7 @@ function ExerciseRow({
           {[exercise.target, exercise.category, exercise.equipment]
             .filter((value): value is string => Boolean(value))
             .map(exerciseTermLabel)
-            .join(' · ')}
+            .join(', ')}
         </Text>
       </View>
       {selected ? <Text style={styles.added}>Ajouté</Text> : null}

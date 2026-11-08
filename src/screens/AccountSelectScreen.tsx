@@ -27,15 +27,15 @@ import { radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Accounts' | 'Welcome'>;
 
-/** Ligne d'aperçu d'un profil : objectif · fréquence · format. */
+/** Ligne d'aperçu d'un profil : objectif, fréquence, format. */
 function accountMeta(account: Account): string {
   const parts: string[] = [];
   const objectif = optionLabel(OBJECTIFS, account.objectif);
   if (objectif) parts.push(objectif);
-  if (account.sessions_per_week) parts.push(`${account.sessions_per_week} séance/sem.`);
+  if (account.sessions_per_week) parts.push(`${account.sessions_per_week} séance${account.sessions_per_week > 1 ? 's' : ''} par semaine`);
   const format = optionLabel(SESSION_FORMATS, account.format_seance);
   if (format) parts.push(format);
-  return parts.length > 0 ? parts.join(' · ') : 'Profil à compléter';
+  return parts.length > 0 ? parts.join(', ') : 'Profil à compléter';
 }
 
 /**
@@ -163,7 +163,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
           />
           <ScreenHeader
             title="Arny"
-            subtitle="Choisis ton profil — chaque compte garde ses séances et son historique."
+            subtitle="Choisis ton profil. Chaque compte garde ses séances et son historique."
           />
         </>
       ) : null}

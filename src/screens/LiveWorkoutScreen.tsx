@@ -1163,7 +1163,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <Appear>
-          <Card style={styles.header}>
+          {/* À plat : la seule carte de l'écran est l'exercice en cours (§8.4). */}
+          <View style={styles.header}>
             <Text style={styles.headerTitle}>{nom}</Text>
             {/* Deux chiffres sans légende ne se lisent pas : chacun porte son nom. */}
             <View
@@ -1190,7 +1191,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             </View>
-          </Card>
+          </View>
         </Appear>
 
         {liveExercises.length === 0 ? (
@@ -1351,8 +1352,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
 
                     {exercise.endurance ? (
                       <Text style={styles.recordHint}>
-                        Au temps · cible {formatDuration(exercise.durationSec)} par série — lance
-                        le chrono, puis arrête-le pour enregistrer la durée
+                        Au temps, cible {formatDuration(exercise.durationSec)} par série. Lance le
+                        chrono, puis arrête-le pour enregistrer la durée.
                       </Text>
                     ) : null}
 
@@ -1666,7 +1667,7 @@ function RestPanel({ remaining, total, done, onShift, onSkip }: RestPanelProps) 
           </View>
         </>
       ) : (
-        <Text style={styles.restDoneText}>Repos terminé — enchaîne !</Text>
+        <Text style={styles.restDoneText}>Repos terminé. Série suivante.</Text>
       )}
     </Animated.View>
   );
@@ -1688,7 +1689,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     justifyContent: 'space-between',
     columnGap: spacing.md,
     rowGap: 2,
-    marginBottom: spacing.lg,
+    paddingBottom: spacing.lg,
+    marginBottom: spacing.xxl,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   headerTitle: {
     ...text.title,

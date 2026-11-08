@@ -329,7 +329,7 @@ Un correctif dans une primitive se propage à tous les écrans. Ceux qui ont eu 
 | `elevation: 20` pendant le drag de feuille | Ombre dynamique liée au geste, pas une valeur de thème. Isolée dans `Sheet`. |
 | `text.micro` à 12 px | **Contredit la DA** (qui n'a pas de plancher explicite). Le skill impose un minimum lisible ; 11 px échouait. |
 | Réduction de mouvement | **Ajout absent de la DA**. Exigé par `pro-rules.md` §Accessibility. |
-| `MusclePieChart` inutilisé | Composant présent dans le repo mais monté par aucun écran. Refactoré par cohérence ; candidat à suppression si personne ne le branche. |
+| `MusclePieChart` inutilisé | Composant présent dans le repo mais monté par aucun écran. Refactoré par cohérence, puis **supprimé** (la DA §10.3 interdit le camembert). |
 | `LayoutAnimation` sur repli d'exercice | Reste actif sous réduction de mouvement (changement de hauteur, pas déplacement). À traiter si un test appareil montre une gêne. |
 | Pas de test 375 px / paysage / tablette | Pas d'émulateur dans l'environnement. Aucune largeur fixe introduite ; marges sur `spacing.xl`. |
 
