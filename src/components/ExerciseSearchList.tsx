@@ -14,7 +14,7 @@ import { exerciseTermLabel } from '../domain/exerciseLabels';
 import { buildExerciseSections, type ExerciseSection } from '../lib/exerciseSearch';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 import ExerciseDetailModal from './ExerciseDetailModal';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -70,24 +70,24 @@ function ExerciseRow({
       accessibilityLabel={selected ? `${exercise.nom} (déjà ajouté)` : exercise.nom}
     >
       <PressableScale onPress={onOpenDetail} accessibilityLabel="Voir l’exercice" scaleTo={0.92}>
-        <Thumb source={source} size={56} />
+        <Thumb source={source} size={48} />
       </PressableScale>
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
-          <Text style={styles.rowTitle}>{exercise.nom}</Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowTitle}>{exercise.nom}</Text>
           <Badge
             label={endurance ? 'Endurance' : exercise.is_poly === 1 ? 'Poly' : 'Mono'}
-            tone={endurance ? 'neutral' : exercise.is_poly === 1 ? 'action' : 'neutral'}
+            tone={endurance ? 'neutral' : 'outline'}
           />
         </View>
-        <Text style={styles.rowMeta}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowMeta}>
           {[exercise.target, exercise.category, exercise.equipment]
             .filter((value): value is string => Boolean(value))
             .map(exerciseTermLabel)
             .join(', ')}
         </Text>
       </View>
-      {selected ? <Text style={styles.added}>Ajouté</Text> : null}
+      {selected ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.added}>Ajouté</Text> : null}
     </Row>
   );
 }
@@ -233,11 +233,12 @@ const createStyles = (theme: Theme) =>
     },
     rowMeta: {
       ...text.caption,
+      fontSize: 11,
       color: theme.colors.textMuted,
       marginTop: spacing.xs,
     },
     added: {
-      ...text.caption,
+      ...text.label,
       color: theme.colors.success,
       marginLeft: spacing.sm,
     },

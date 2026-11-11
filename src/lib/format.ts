@@ -69,3 +69,41 @@ export function startOfWeek(now = new Date()): Date {
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
   return start;
 }
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+/** Date technique de la DA « Terminal » : « 07.11 » (jour.mois). */
+export function formatDotDate(value: string | Date): string {
+  const date = parseDate(value);
+  if (date === null) return '—';
+  return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}`;
+}
+
+/** Date technique avec l'année : « 09.11.26 ». */
+export function formatDotDateYear(value: string | Date): string {
+  const date = parseDate(value);
+  if (date === null) return '—';
+  return `${formatDotDate(date)}.${pad2(date.getFullYear() % 100)}`;
+}
+
+/** Jour de la semaine abrégé en capitales : « LUN ». */
+export function formatWeekdayShort(value: string | Date): string {
+  const date = parseDate(value);
+  if (date === null) return '—';
+  return WEEKDAYS[date.getDay()].slice(0, 3).toUpperCase();
+}
+
+/** Numéro de semaine ISO 8601 (« SEM. 46 »). */
+export function isoWeekNumber(value: string | Date = new Date()): number {
+  const date = parseDate(value) ?? new Date();
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/** Index de référence à largeur fixe : padIndex(3) → « 03 », padIndex(9, 3) → « 009 ». */
+export function padIndex(value: number, width = 2): string {
+  return String(value).padStart(width, '0');
+}

@@ -1,25 +1,28 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { radius, spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
 
-export type BadgeTone = 'neutral' | 'action' | 'marker' | 'success' | 'danger';
+export type BadgeTone = 'neutral' | 'outline' | 'action' | 'marker' | 'success' | 'danger';
 
 interface Props {
   label: string;
   tone?: BadgeTone;
+  /** Placement dans le parent (ex. `alignSelf: 'center'` dans une ligne). */
+  style?: StyleProp<ViewStyle>;
 }
 
 /**
- * Étiquette compacte (§7.5 « pastilles » : rayon 8). Casse de phrase, jamais de
- * capitales : la DA interdit les libellés en majuscules espacées.
+ * Étiquette compacte de la DA « Terminal » : angles vifs, mono en capitales.
+ * Au trait (`neutral`, `outline`) pour une nature, en aplat pour un statut
+ * (`success` = validé, `marker` = record, `action` = prochaine séance).
  */
-export default function Badge({ label, tone = 'neutral' }: Props) {
+export default function Badge({ label, tone = 'neutral', style }: Props) {
   const styles = useThemedStyles(createStyles);
 
   return (
-    <View style={[styles.badge, styles[tone]]}>
-      <Text style={[styles.label, styles[`label_${tone}`]]}>{label}</Text>
+    <View style={[styles.badge, styles[tone], style]}>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.label, styles[`label_${tone}`]]} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -27,21 +30,31 @@ export default function Badge({ label, tone = 'neutral' }: Props) {
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     badge: {
-      borderRadius: radius.sm,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 2,
+      borderRadius: radius.xs,
+      borderWidth: 1,
+      borderColor: 'transparent',
+      paddingHorizontal: spacing.xs + 2,
+      paddingVertical: 1,
       alignSelf: 'flex-start',
     },
-    neutral: { backgroundColor: theme.colors.surfaceAlt },
+    // Étiquette au trait (« ANNULÉ ») : filet gris, encre secondaire.
+    neutral: { borderColor: theme.colors.borderStrong },
+    // Étiquette au trait kaki (« POLY », « MONO ») : nature d'un exercice.
+    outline: { borderColor: theme.colors.success },
     action: { backgroundColor: theme.colors.action },
     marker: { backgroundColor: theme.colors.marker },
     success: { backgroundColor: theme.colors.success },
     danger: { backgroundColor: theme.colors.danger },
-    // 12 px minimum : une étiquette porte une information (« Record », « Poly »),
-    // pas une mention décorative. Le neutre garde l'encre principale (4,2:1 en
-    // texte secondaire sur la craie ne suffisait pas).
-    label: text.caption,
-    label_neutral: { color: theme.colors.text },
+    label: {
+      ...text.caption,
+      fontFamily: fontFamily.monoBold,
+      fontSize: 11,
+      lineHeight: 15,
+      letterSpacing: 1,
+      textAlign: 'center',
+    },
+    label_neutral: { color: theme.colors.textMuted },
+    label_outline: { color: theme.colors.success },
     label_action: { color: theme.colors.onAction },
     label_marker: { color: theme.colors.onMarker },
     label_success: { color: theme.colors.onSuccess },

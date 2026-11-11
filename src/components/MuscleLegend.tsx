@@ -4,7 +4,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import type { MuscleAmount } from '../domain/muscles';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, type Theme } from '../theme';
-import { duration, easing, radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, radius, spacing, text } from '../theme/tokens';
 
 interface Props {
   muscles: readonly MuscleAmount[];
@@ -81,7 +81,7 @@ function LegendRow({
 
   return (
     <View style={styles.legendRow}>
-      <Text style={styles.legendLabel} numberOfLines={1}>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.legendLabel} numberOfLines={1}>
         {label}
       </Text>
       <View style={styles.legendTrack}>
@@ -92,7 +92,7 @@ function LegendRow({
           ]}
         />
       </View>
-      <Text style={[styles.legendValue, { minWidth: valueWidth }]}>{value}</Text>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.legendValue, { minWidth: valueWidth }]}>{value}</Text>
     </View>
   );
 }
@@ -108,25 +108,25 @@ const createStyles = (theme: Theme) =>
       gap: spacing.sm,
     },
     legendLabel: {
-      ...text.label,
+      ...text.caption,
       color: theme.colors.text,
       width: 88,
     },
     legendTrack: {
       flex: 1,
       height: 8,
-      borderRadius: radius.pill,
+      borderRadius: radius.xs,
       backgroundColor: theme.colors.surfaceAlt,
       overflow: 'hidden',
     },
     legendFill: {
       height: 8,
-      borderRadius: radius.pill,
+      borderRadius: radius.xs,
       backgroundColor: theme.colors.action,
     },
     legendValue: {
-      ...text.caption,
-      color: theme.colors.textMuted,
+      ...text.monoValue,
+      color: theme.colors.text,
       textAlign: 'right',
       fontVariant: ['tabular-nums'],
     },

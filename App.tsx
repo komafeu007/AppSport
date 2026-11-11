@@ -1,13 +1,15 @@
+import { ChakraPetch_600SemiBold, ChakraPetch_700Bold } from '@expo-google-fonts/chakra-petch';
 import {
-  BigShouldersDisplay_700Bold,
-  BigShouldersDisplay_800ExtraBold,
-} from '@expo-google-fonts/big-shoulders-display';
+  IBMPlexMono_400Regular,
+  IBMPlexMono_500Medium,
+  IBMPlexMono_600SemiBold,
+} from '@expo-google-fonts/ibm-plex-mono';
 import {
-  PublicSans_400Regular,
-  PublicSans_500Medium,
-  PublicSans_600SemiBold,
-  PublicSans_700Bold,
-} from '@expo-google-fonts/public-sans';
+  IBMPlexSansCondensed_400Regular,
+  IBMPlexSansCondensed_500Medium,
+  IBMPlexSansCondensed_600SemiBold,
+  IBMPlexSansCondensed_700Bold,
+} from '@expo-google-fonts/ibm-plex-sans-condensed';
 import { useFonts } from 'expo-font';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
@@ -23,17 +25,20 @@ import { DATABASE_NAME, migrateDbIfNeeded } from './src/services/database';
 import { ThemeProvider, useTheme } from './src/theme';
 
 /**
- * Polices de la DA « Foulée » (§6.1) : Big Shoulders Display pour les chiffres
- * et les titres, Public Sans pour le texte. La graisse est portée par le nom de
- * famille (voir `fontFamily` dans `theme/tokens.ts`).
+ * Polices de la DA « Terminal » : Chakra Petch (titres, chiffres), IBM Plex
+ * Sans Condensed (texte) et IBM Plex Mono (libellés techniques). La graisse est
+ * portée par le nom de famille (voir `fontFamily` dans `theme/tokens.ts`).
  */
 const FONTS = {
-  BigShouldersDisplay_700Bold,
-  BigShouldersDisplay_800ExtraBold,
-  PublicSans_400Regular,
-  PublicSans_500Medium,
-  PublicSans_600SemiBold,
-  PublicSans_700Bold,
+  ChakraPetch_600SemiBold,
+  ChakraPetch_700Bold,
+  IBMPlexMono_400Regular,
+  IBMPlexMono_500Medium,
+  IBMPlexMono_600SemiBold,
+  IBMPlexSansCondensed_400Regular,
+  IBMPlexSansCondensed_500Medium,
+  IBMPlexSansCondensed_600SemiBold,
+  IBMPlexSansCondensed_700Bold,
 } as const;
 
 /** Contenu de l'app, une fois le thème actif (couleurs + barre d'état). */

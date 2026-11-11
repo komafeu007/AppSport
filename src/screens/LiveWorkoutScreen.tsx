@@ -36,6 +36,7 @@ import {
   PressableScale,
   Row,
   StateView,
+  StatTiles,
   Thumb,
   type ConfirmRequest,
 } from '../components/ui';
@@ -53,7 +54,7 @@ import {
   REPS_RANGE,
   WEIGHT_RANGE,
 } from '../domain/workoutRules';
-import { formatDuration, formatKg } from '../lib/format';
+import { formatDuration, formatKg, padIndex } from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
 import { useAccount } from '../services/account';
 import {
@@ -94,7 +95,7 @@ import {
 } from '../services/restAlert';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { duration, easing, radius, spacing, spring, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -194,7 +195,7 @@ function WeightField({
 
   return (
     <View style={styles.weightBox}>
-      <TextInput
+      <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
         style={styles.weightInput}
         value={draft}
         onChangeText={setDraft}
@@ -249,11 +250,11 @@ function CheckToggle({
 
   const backgroundColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.colors.surfaceAlt, theme.colors.action],
+    outputRange: [theme.colors.surfaceAlt, theme.colors.success],
   });
   const borderColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.colors.border, theme.colors.action],
+    outputRange: [theme.colors.borderStrong, theme.colors.success],
   });
   const mutedOpacity = progress.interpolate({
     inputRange: [0, 1],
@@ -279,7 +280,7 @@ function CheckToggle({
           <Icon name="check" size={18} color={theme.colors.textMuted} />
         </Animated.View>
         <Animated.View style={[styles.checkOverlay, { opacity: progress }]}>
-          <Icon name="check" size={18} color={theme.colors.background} />
+          <Icon name="check" size={18} color={theme.colors.onSuccess} />
         </Animated.View>
       </Animated.View>
     </PressableScale>
@@ -1087,7 +1088,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const onStop = () => {
     setConfirm({
       title: 'Arrêter la séance',
-      message: 'Enregistrer les séries réalisées et terminer la séance ?',
+      message: 'Terminer et enregistrer la séance ?',
       confirmLabel: 'Terminer',
       cancelLabel: 'Continuer',
       destructive: true,
@@ -1121,6 +1122,12 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
   const effortSeconds = liveExercises.reduce(
     (total, exercise) =>
       total + exercise.sets.reduce((sum, set) => sum + (set.completed ? set.durationSec : 0), 0),
+    0
+  );
+
+  const totalSets = liveExercises.reduce((total, exercise) => total + exercise.sets.length, 0);
+  const doneSets = liveExercises.reduce(
+    (total, exercise) => total + exercise.sets.filter((set) => set.completed).length,
     0
   );
 
@@ -1165,37 +1172,37 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
         <Appear>
           {/* À plat : la seule carte de l'écran est l'exercice en cours (§8.4). */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{nom}</Text>
-            {/* Deux chiffres sans légende ne se lisent pas : chacun porte son nom. */}
-            <View
-              style={styles.headerMetrics}
-              accessible
-              accessibilityLabel={`Temps ${formatClock(elapsed)}. ${
-                volume > 0 || effortSeconds === 0
-                  ? `Volume ${formatKg(volume)}`
-                  : `Effort ${formatDuration(effortSeconds)}`
-              }.`}
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.headerKicker}>
+              {`// SÉANCE EN COURS · RÉF. ARN-SE-${padIndex(programId, 3)}`}
+            </Text>
+            <Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={styles.headerTitle}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
             >
-              <View style={styles.headerMetric}>
-                <Text style={styles.headerTime}>{formatClock(elapsed)}</Text>
-                <Text style={styles.headerMetricLabel}>temps</Text>
-              </View>
-              <View style={styles.headerMetric}>
-                <Text style={styles.headerTotal}>
-                  {volume > 0 || effortSeconds === 0
-                    ? formatKg(volume)
-                    : formatDuration(effortSeconds)}
-                </Text>
-                <Text style={styles.headerMetricLabel}>
-                  {volume > 0 || effortSeconds === 0 ? 'volume' : 'effort'}
-                </Text>
-              </View>
-            </View>
+              {nom}
+            </Text>
+            <StatTiles
+              centered
+              style={styles.headerTiles}
+              tiles={[
+                { label: 'T.01 Temps', value: formatClock(elapsed), accent: true },
+                {
+                  label: 'S.02 Séries',
+                  value: `${doneSets}/${totalSets}`,
+                },
+                volume > 0 || effortSeconds === 0
+                  ? { label: 'V.03 Volume', value: formatKg(volume) }
+                  : { label: 'V.03 Effort', value: formatDuration(effortSeconds) },
+              ]}
+            />
           </View>
         </Appear>
 
         {liveExercises.length === 0 ? (
-          <Text style={styles.emptyText}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptyText}>
             Cette séance n’a pas d’exercice. Modifie-la depuis « Mes séances ».
           </Text>
         ) : (
@@ -1253,10 +1260,17 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                       accessibilityLabel={`Rouvrir ${exercise.exercise.nom}`}
                       scaleTo={0.99}
                     >
-                      <Text style={styles.doneTitle} numberOfLines={1}>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exCode}>{`EX-${padIndex(exIndex + 1)}`}</Text>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.doneTitle} numberOfLines={1}>
                         {exercise.exercise.nom}
                       </Text>
-                      <Text style={styles.doneMeta}>
+                      <Text
+                        maxFontSizeMultiplier={MAX_FONT_SCALE}
+                        style={styles.doneMeta}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
                         {exercise.sets.length} série{exercise.sets.length > 1 ? 's' : ''} ·{' '}
                         {exercise.endurance
                           ? `${formatDuration(doneEffort)} d’effort`
@@ -1265,9 +1279,10 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     </PressableScale>
                     {recordBeaten ? (
                       <PopIn>
-                        <Badge label="Record" tone="marker" />
+                        <Badge label="Record" tone="marker" style={styles.badgeInRow} />
                       </PopIn>
                     ) : null}
+                    <Badge label="Validé" tone="success" style={styles.badgeInRow} />
                     <CheckToggle
                       checked={allDone}
                       accessibilityLabel={`Décocher les séries de ${exercise.exercise.nom}`}
@@ -1285,7 +1300,9 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     tone={isCurrent || reopenedId === exercise.workoutExoId ? 'accent' : 'default'}
                     style={[
                       styles.card,
-                      !isCurrent && reopenedId !== exercise.workoutExoId && styles.cardFlat,
+                      isCurrent || reopenedId === exercise.workoutExoId
+                        ? styles.cardOpen
+                        : styles.cardFlat,
                       exercise.supersetGroup != null && styles.cardSuperset,
                       nextFolded && styles.aroundCard,
                     ]}
@@ -1306,6 +1323,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                             size={44}
                           />
                         </PressableScale>
+                        <View style={styles.cardTitleStack}>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exCode}>{`EX-${padIndex(exIndex + 1)}`}</Text>
                         {allDone ? (
                           <PressableScale
                             style={styles.cardTitleTap}
@@ -1316,20 +1335,21 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                             accessibilityLabel={`Replier ${exercise.exercise.nom}`}
                             scaleTo={0.99}
                           >
-                            <Text style={styles.cardTitle} numberOfLines={1}>
+                            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.cardTitle} numberOfLines={1}>
                               {exercise.exercise.nom}
                             </Text>
                           </PressableScale>
                         ) : (
-                          <Text style={[styles.cardTitle, styles.cardTitleStatic]} numberOfLines={1}>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.cardTitle, styles.cardTitleStatic]} numberOfLines={1}>
                             {exercise.exercise.nom}
                           </Text>
                         )}
+                        </View>
                       </View>
-                      {exercise.endurance ? <Badge label="Endurance" tone="neutral" /> : null}
+                      {exercise.endurance ? <Badge label="Endurance" tone="neutral" style={styles.badgeInRow} /> : null}
                       {recordBeaten ? (
                         <PopIn>
-                          <Badge label="Record" tone="marker" />
+                          <Badge label="Record" tone="marker" style={styles.badgeInRow} />
                         </PopIn>
                       ) : null}
                       <CheckToggle
@@ -1340,7 +1360,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     </View>
 
                     {best !== null ? (
-                      <Text
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE}
                         style={[styles.recordHint, recordBeaten && styles.recordHintNew]}
                         accessibilityLiveRegion={recordBeaten ? 'polite' : 'none'}
                       >
@@ -1351,11 +1371,25 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     ) : null}
 
                     {exercise.endurance ? (
-                      <Text style={styles.recordHint}>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordHint}>
                         Au temps, cible {formatDuration(exercise.durationSec)} par série. Lance le
                         chrono, puis arrête-le pour enregistrer la durée.
                       </Text>
                     ) : null}
+
+                    <View style={styles.tableHead}>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.colHead, styles.colSet]}>N°</Text>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.colHead, styles.colPrev]}>Préc.</Text>
+                      {exercise.endurance ? (
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.colHead, styles.colFlex]}>Durée</Text>
+                      ) : (
+                        <>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.colHead, styles.colFlex, styles.colWeight]}>Kg</Text>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.colHead, styles.colReps]}>Reps</Text>
+                        </>
+                      )}
+                      <View style={styles.colCheck} />
+                    </View>
 
                     {exercise.sets.map((set, setIndex) => {
                       const previous = exercise.previous[setIndex];
@@ -1369,8 +1403,8 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                           : 0;
                       return (
                         <SetRow key={set.key} completed={set.completed}>
-                          <Text style={styles.setLabel}>{setIndex + 1}</Text>
-                          <Text style={styles.previousText}>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.setLabel, !set.completed && setIndex === exercise.sets.findIndex((entry) => !entry.completed) && styles.setLabelCurrent]}>{padIndex(setIndex + 1)}</Text>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.previousText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                             {previous
                               ? exercise.endurance
                                 ? formatDuration(previous.durationSec)
@@ -1395,7 +1429,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 onChange={(seconds) => changeDuration(exIndex, setIndex, seconds)}
                                 placeholder={formatDuration(exercise.durationSec)}
                                 style={styles.durationField}
-                                inputStyle={styles.repsInput}
+                                inputStyle={styles.durationInput}
                                 editable={!running}
                                 accessibilityLabel={`Durée de la série ${setIndex + 1}`}
                               />
@@ -1409,7 +1443,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 accessibilityLabel={`Poids de la série ${setIndex + 1}, en kilos`}
                               />
 
-                              <TextInput
+                              <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
                                 style={styles.repsInput}
                                 value={set.reps > 0 ? String(set.reps) : ''}
                                 onChangeText={(value) => changeReps(exIndex, setIndex, value)}
@@ -1478,11 +1512,11 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             accessible
             accessibilityLabel={`${keyboardClock.label} ${formatClock(keyboardClock.seconds)}.`}
           >
-            <Text style={styles.keyboardClockLabel}>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.keyboardClockLabel}>
               {keyboardClock.label}{' '}
-              <Text style={styles.keyboardClockTime}>{formatClock(keyboardClock.seconds)}</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.keyboardClockTime}>{formatClock(keyboardClock.seconds)}</Text>
             </Text>
-            <Button label="OK" variant="secondary" size="sm" onPress={Keyboard.dismiss} />
+            <Button label="OK" variant="secondary" size="sm" code="OK" onPress={Keyboard.dismiss} />
           </View>
         )
       ) : (
@@ -1491,6 +1525,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
             label="Arrêter la séance"
             variant="danger"
             size="lg"
+            code="STOP"
             loading={saving}
             onPress={onStop}
           />
@@ -1635,31 +1670,36 @@ function RestPanel({ remaining, total, done, onShift, onSkip }: RestPanelProps) 
       {active ? (
         <>
           <View style={styles.restRow}>
-            <Text style={styles.restLabel}>
-              Repos <Text style={styles.restTime}>{formatClock(remaining)}</Text>
-            </Text>
+            {/* Libellé au-dessus du décompte : sur une seule ligne avec les trois
+                boutons, le bandeau dépassait de l'écran (~470 dp pour ~400). */}
+            <View style={styles.restClock}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restLabel}>REPOS</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restTime} numberOfLines={1}>
+                {formatClock(remaining)}
+              </Text>
+            </View>
             <View style={styles.restActions}>
-              <Button
-                label="−15 s"
-                variant="secondary"
-                size="sm"
+              <PressableScale
                 style={styles.restButton}
                 onPress={() => onShift(-15)}
-              />
-              <Button
-                label="Passer"
-                variant="secondary"
-                size="sm"
+                accessibilityLabel="Retirer 15 secondes"
+              >
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restButtonText} numberOfLines={1}>−15 s</Text>
+              </PressableScale>
+              <PressableScale
                 style={styles.restButton}
                 onPress={onSkip}
-              />
-              <Button
-                label="+15 s"
-                variant="secondary"
-                size="sm"
+                accessibilityLabel="Passer le repos"
+              >
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restButtonText} numberOfLines={1}>Passer</Text>
+              </PressableScale>
+              <PressableScale
                 style={styles.restButton}
                 onPress={() => onShift(15)}
-              />
+                accessibilityLabel="Ajouter 15 secondes"
+              >
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restButtonText} numberOfLines={1}>+15 s</Text>
+              </PressableScale>
             </View>
           </View>
           <View style={styles.restTrack}>
@@ -1667,11 +1707,16 @@ function RestPanel({ remaining, total, done, onShift, onSkip }: RestPanelProps) 
           </View>
         </>
       ) : (
-        <Text style={styles.restDoneText}>Repos terminé. Série suivante.</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.restDoneText}>Repos terminé. Série suivante.</Text>
       )}
     </Animated.View>
   );
 }
+
+/** Largeurs des colonnes du tableau des séries (en-tête et lignes alignés). */
+const SET_COL = 24;
+const PREV_COL = 52;
+const CALC_COL = 30;
 
 const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
@@ -1683,43 +1728,23 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   header: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    columnGap: spacing.md,
-    rowGap: 2,
+    gap: spacing.sm,
     paddingBottom: spacing.lg,
     marginBottom: spacing.xxl,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+  },
+  headerKicker: {
+    ...text.kicker,
+    color: theme.colors.action,
+  },
+  headerTiles: {
+    marginTop: spacing.sm,
   },
   headerTitle: {
-    ...text.title,
+    ...text.screenTitle,
+    fontSize: 36,
+    lineHeight: 40,
     color: theme.colors.text,
     maxWidth: '100%',
-  },
-  headerMetrics: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    columnGap: spacing.md,
-  },
-  headerMetric: {
-    alignItems: 'flex-end',
-  },
-  headerMetricLabel: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    marginTop: -spacing.xs,
-  },
-  headerTime: {
-    ...text.numL,
-    color: theme.colors.action,
-    fontVariant: ['tabular-nums'],
-  },
-  headerTotal: {
-    ...text.subtitle,
-    color: theme.colors.action,
   },
   card: {
     marginBottom: spacing.xl,
@@ -1736,12 +1761,45 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   // cours reste pleine (une carte maximum par écran, §8.4).
   cardFlat: {
     backgroundColor: 'transparent',
-    borderWidth: 0,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    borderRadius: radius.none,
-    paddingHorizontal: 0,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
   },
+  cardOpen: {
+    borderWidth: 2,
+    borderColor: theme.colors.action,
+  },
+  exCode: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+  },
+  cardTitleStack: {
+    flex: 1,
+  },
+  tableHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: spacing.sm,
+    paddingBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  colHead: {
+    ...text.caption,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+  },
+  colSet: { width: SET_COL },
+  colPrev: { width: PREV_COL },
+  colFlex: { flex: 1 },
+  // Le chiffre du poids est centré dans sa case, à gauche du bouton des disques :
+  // l'en-tête « Kg » se décale d'autant pour rester au-dessus du chiffre.
+  /** Une étiquette dans une ligne : centrée verticalement (la pastille se cale en haut par défaut). */
+  badgeInRow: { alignSelf: 'center' },
+  colWeight: { paddingRight: CALC_COL },
+  colReps: { width: 56 },
+  colCheck: { width: 44 },
   cardSuperset: {
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.action,
@@ -1767,8 +1825,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
    */
   foldedFrame: {
     marginBottom: spacing.xl,
-    borderWidth: 2,
-    borderColor: theme.colors.action,
+    borderWidth: 1,
+    borderColor: theme.colors.success,
     borderRadius: radius.card,
     backgroundColor: theme.colors.surface,
     paddingHorizontal: spacing.md,
@@ -1824,17 +1882,25 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     right: -spacing.sm,
     borderRadius: radius.control,
     backgroundColor: theme.colors.surfaceAlt,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.marker,
   },
   setLabel: {
     ...text.label,
     color: theme.colors.textMuted,
-    width: 16,
+    width: SET_COL,
     textAlign: 'center',
   },
+  setLabelCurrent: {
+    color: theme.colors.action,
+  },
   previousText: {
-    ...text.micro,
+    ...text.caption,
+    fontSize: 11,
+    letterSpacing: 0,
     color: theme.colors.textMuted,
-    minWidth: 40,
+    width: PREV_COL,
+    textAlign: 'center',
   },
   durationField: {
     flex: 1,
@@ -1843,22 +1909,26 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.borderStrong,
     borderRadius: radius.control,
     minHeight: 48,
     paddingLeft: 2,
   },
   weightInput: {
     flex: 1,
+    minWidth: 0,
     textAlign: 'center',
-    ...text.title,
+    ...text.numS,
     color: theme.colors.text,
+    // Android ajoute ~10 px de marge interne de chaque côté : sans ça, « 62,5 »
+    // ne tient pas dans la case.
     paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   calcButton: {
-    width: 40,
+    width: CALC_COL,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1867,12 +1937,27 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     width: 56,
     minHeight: 48,
     textAlign: 'center',
-    ...text.title,
+    ...text.numS,
     color: theme.colors.text,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.borderStrong,
     borderRadius: radius.control,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  /** Durée d'une série d'endurance : même case que les reps, sur toute la largeur restante. */
+  durationInput: {
+    minHeight: 48,
+    textAlign: 'center',
+    ...text.numS,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.borderStrong,
+    borderRadius: radius.control,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   check: {
     minHeight: 48,
@@ -1922,19 +2007,19 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   keyboardClockLabel: {
-    ...text.meta,
+    ...text.label,
     color: theme.colors.textMuted,
   },
   keyboardClockTime: {
-    ...text.title,
+    ...text.numM,
     color: theme.colors.action,
     fontVariant: ['tabular-nums'],
   },
   restBar: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.marker,
   },
   restRow: {
     flexDirection: 'row',
@@ -1942,39 +2027,54 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  restClock: {
+    flexShrink: 0,
+  },
   restActions: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: spacing.sm,
   },
   restButton: {
-    paddingHorizontal: 10,
+    flexShrink: 1,
+    minHeight: 36,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.onMarker,
+  },
+  restButtonText: {
+    ...text.caption,
+    color: theme.colors.marker,
   },
   restDoneText: {
-    ...text.bodyStrong,
-    color: theme.colors.success,
+    ...text.label,
+    color: theme.colors.onMarker,
   },
   restLabel: {
-    ...text.meta,
-    color: theme.colors.textMuted,
+    ...text.label,
+    color: theme.colors.onMarker,
   },
   restTime: {
-    ...text.title,
-    color: theme.colors.action,
+    ...text.numM,
+    color: theme.colors.onMarker,
     fontVariant: ['tabular-nums'],
   },
   restTrack: {
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: theme.colors.surfaceAlt,
+    height: 4,
+    borderRadius: radius.none,
+    borderWidth: 1,
+    borderColor: theme.colors.onMarker,
     overflow: 'hidden',
   },
   restFill: {
-    height: 6,
+    height: 4,
     width: '100%',
     // La jauge se vide en `scaleX` depuis la gauche (pas de marge animée).
     transformOrigin: 'left',
-    borderRadius: radius.pill,
-    backgroundColor: theme.colors.marker,
+    borderRadius: radius.none,
+    backgroundColor: theme.colors.onMarker,
   },
 });

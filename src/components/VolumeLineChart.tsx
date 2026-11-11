@@ -1,9 +1,7 @@
-import { useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../theme';
-import { fontFamily } from '../theme/tokens';
+import { useThemedStyles, type Theme } from '../theme';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 export interface VolumeLinePoint {
   label: string;
@@ -12,148 +10,135 @@ export interface VolumeLinePoint {
 
 interface Props {
   points: VolumeLinePoint[];
-  height?: number;
+  /** Nombre maximal de lignes affichées (les plus récentes). */
+  maxRows?: number;
 }
 
-const PAD = { left: 40, right: 14, top: 16, bottom: 24 };
-
-/** Volume compact pour l'axe : 1250 → « 1,3k ». */
-function formatCompact(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(1).replace('.', ',')}k`;
-  return String(Math.round(value));
+/** 6915 → « 6 915 » (espaces fins). */
+function group(value: number): string {
+  return String(Math.round(Math.abs(value))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 /**
- * Courbe d'évolution du volume total d'une séance à l'autre (§10.3) : trait de
- * 2,5 px en bleu d'action, lignes de repère en Craie, axes en légende Ardoise.
- * La largeur est mesurée au rendu pour rester responsive ; SVG pur.
+ * Évolution du volume d'une séance à l'autre : une ligne par séance (date
+ * mono, barre, valeur), la dernière en orange. Cadre au trait, sans carte.
  */
-export default function VolumeLineChart({ points, height = 170 }: Props) {
-  const theme = useTheme();
-  const [width, setWidth] = useState(0);
-
-  const onLayout = (event: LayoutChangeEvent) => {
-    const next = event.nativeEvent.layout.width;
-    if (next !== width) setWidth(next);
-  };
-
+export default function VolumeLineChart({ points, maxRows = 6 }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const rows = points.slice(-maxRows);
   const count = points.length;
-  const values = points.map((point) => point.value);
-  const rawMin = Math.min(...values);
-  const rawMax = Math.max(...values);
-  const span = rawMax - rawMin;
-  const pad = span > 0 ? span * 0.18 : Math.max(rawMax * 0.1, 1);
-  const min = Math.max(0, rawMin - pad);
-  const max = rawMax + pad;
+  if (count === 0) return null;
 
-  const plotW = Math.max(0, width - PAD.left - PAD.right);
-  const plotH = Math.max(0, height - PAD.top - PAD.bottom);
+  const max = Math.max(...rows.map((point) => point.value), 1);
+  const delta = points[count - 1].value - points[0].value;
+  const sign = delta < 0 ? '−' : '+';
 
-  const x = (index: number) =>
-    count <= 1 ? PAD.left + plotW / 2 : PAD.left + (plotW * index) / (count - 1);
-  const y = (value: number) =>
-    max === min ? PAD.top + plotH / 2 : PAD.top + plotH * (1 - (value - min) / (max - min));
-
-  const line = points.map((point, index) => `${x(index)},${y(point.value)}`).join(' ');
-  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(index)} ${y(point.value)}`).join(' ');
-  const area = `${path} L${x(count - 1)} ${PAD.top + plotH} L${x(0)} ${PAD.top + plotH} Z`;
-
-  const ticks = [0, 0.5, 1];
-
-  // Le dessin ne dit rien à un lecteur d'écran : on lui donne la tendance en
-  // une phrase, plutôt que de lui laisser traverser des dizaines de nœuds SVG.
-  const summary =
-    count === 0
-      ? 'Aucune séance dans l’historique.'
-      : `Évolution du volume sur ${count} séance${count > 1 ? 's' : ''}, de ${formatCompact(
-          points[0].value
-        )} à ${formatCompact(points[count - 1].value)} kg.`;
+  const summary = `Évolution du volume sur ${count} séance${count > 1 ? 's' : ''}, de ${group(
+    points[0].value
+  )} à ${group(points[count - 1].value)} kg.`;
 
   return (
-    <View
-      style={[styles.wrap, { height }]}
-      onLayout={onLayout}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={summary}
-    >
-      {width > 0 && count > 0 ? (
-        <Svg width={width} height={height}>
-          {ticks.map((ratio) => {
-            const lineY = PAD.top + plotH * (1 - ratio);
-            return (
-              <Line
-                key={ratio}
-                x1={PAD.left}
-                y1={lineY}
-                x2={width - PAD.right}
-                y2={lineY}
-                stroke={theme.colors.border}
-                strokeWidth={1}
+    <View style={styles.box} accessible accessibilityRole="image" accessibilityLabel={summary}>
+      <View style={styles.head}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>Évolution du volume</Text>
+        {count > 1 ? (
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.delta}>
+            Δ {sign}
+            {group(delta)} KG
+          </Text>
+        ) : null}
+      </View>
+      {rows.map((point, index) => {
+        const last = index === rows.length - 1;
+        return (
+          <View key={`${point.label}-${index}`} style={styles.row}>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.date}>{point.label}</Text>
+            <View style={styles.track}>
+              <View
+                style={[
+                  styles.fill,
+                  { width: `${(point.value / max) * 100}%` },
+                  last ? styles.fillLast : null,
+                ]}
               />
-            );
-          })}
-          {ticks.map((ratio) => {
-            const value = min + (max - min) * ratio;
-            const lineY = PAD.top + plotH * (1 - ratio);
-            return (
-              <SvgText
-                key={`label-${ratio}`}
-                x={PAD.left - 6}
-                y={lineY + 3.5}
-                fill={theme.colors.textMuted}
-                fontFamily={fontFamily.textMedium}
-                fontSize={11}
-                textAnchor="end"
-              >
-                {formatCompact(value)}
-              </SvgText>
-            );
-          })}
-
-          {count > 1 ? <Path d={area} fill={theme.colors.action} fillOpacity={0.12} /> : null}
-          {count > 1 ? (
-            <Path d={path} fill="none" stroke={theme.colors.action} strokeWidth={2.5} />
-          ) : null}
-
-          {points.map((point, index) => (
-            <Circle
-              key={line + index}
-              cx={x(index)}
-              cy={y(point.value)}
-              r={index === count - 1 ? 5 : 3.5}
-              fill={index === count - 1 ? theme.colors.action : theme.colors.surface}
-              stroke={theme.colors.action}
-              strokeWidth={2}
-            />
-          ))}
-
-          {points.map((point, index) => {
-            const everyOther = count > 7 && index % 2 === 1 && index !== count - 1;
-            if (everyOther) return null;
-            return (
-              <SvgText
-                key={`date-${index}`}
-                x={x(index)}
-                y={height - 8}
-                fill={theme.colors.textMuted}
-                fontFamily={fontFamily.textMedium}
-                fontSize={11}
-                textAnchor="middle"
-              >
-                {point.label}
-              </SvgText>
-            );
-          })}
-        </Svg>
-      ) : null}
+            </View>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.value, last ? styles.valueLast : null]}>
+              {group(point.value)} KG
+            </Text>
+          </View>
+        );
+      })}
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.caption}>
+        {count > 1
+          ? `${count} DERNIÈRES SÉANCES · ANCIEN → RÉCENT`
+          : 'PREMIÈRE FOIS · REFAIS CETTE SÉANCE POUR COMPARER'}
+      </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    width: '100%',
-    justifyContent: 'center',
-  },
-});
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    box: {
+      borderWidth: 1,
+      borderColor: theme.colors.borderStrong,
+      backgroundColor: theme.colors.surface,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    head: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      marginBottom: spacing.xs,
+    },
+    title: {
+      ...text.sectionTitle,
+      color: theme.colors.text,
+      flexShrink: 1,
+    },
+    delta: {
+      ...text.monoValue,
+      color: theme.colors.action,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    date: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+      width: 44,
+    },
+    track: {
+      flex: 1,
+      height: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.borderStrong,
+    },
+    fill: {
+      height: 10,
+      backgroundColor: theme.colors.textMuted,
+    },
+    fillLast: {
+      backgroundColor: theme.colors.action,
+    },
+    value: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+      minWidth: 84,
+      textAlign: 'right',
+    },
+    valueLast: {
+      ...text.monoValue,
+      color: theme.colors.text,
+      minWidth: 84,
+    },
+    caption: {
+      ...text.caption,
+      color: theme.colors.textMuted,
+      marginTop: spacing.xs,
+    },
+  });

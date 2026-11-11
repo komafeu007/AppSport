@@ -3,6 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
 import { spacing } from '../../theme/tokens';
+import DashedLine from './DashedLine';
 import PressableScale from './PressableScale';
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
 
 /**
  * Ligne de liste à plat (§8.5) : hauteur minimale 64, titre à gauche, valeur à
- * droite, séparée par un filet de 1 px qui commence à la marge de 20 px. C'est
+ * droite, séparée par un filet pointillé de 1 px tenu dans les marges de 20 px. C'est
  * le remplacement des cartes pour tout ce qui n'est pas l'action principale :
  * la DA n'autorise qu'une carte par écran (§8.4).
  */
@@ -56,7 +57,7 @@ export default function Row({
   return (
     <View>
       {body}
-      {last ? null : <View style={[styles.divider, inset ? null : styles.dividerBleed]} />}
+      {last ? null : <DashedLine style={[styles.divider, inset ? null : styles.dividerBleed]} />}
     </View>
   );
 }
@@ -78,11 +79,9 @@ const createStyles = (theme: Theme) =>
       backgroundColor: theme.colors.surfaceAlt,
     },
     divider: {
-      height: 1,
-      marginLeft: spacing.xl,
-      backgroundColor: theme.colors.border,
+      marginHorizontal: spacing.xl,
     },
     dividerBleed: {
-      marginLeft: 0,
+      marginHorizontal: 0,
     },
   });

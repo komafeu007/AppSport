@@ -111,7 +111,7 @@ export async function presentRestDoneNow(): Promise<void> {
 
 const REST_CONTENT: Notifications.NotificationContentInput = {
   title: 'Repos terminé',
-  body: 'Enchaîne la série suivante 💪',
+  body: 'Enchaîne la série suivante.',
   sound: 'default',
 };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 import Button from './Button';
 import Sheet from './Sheet';
 
@@ -53,8 +53,9 @@ export default function ConfirmSheet({ request, onClose }: Props) {
   return (
     <Sheet visible={request !== null} onClose={onClose}>
       <View style={styles.body}>
-        <Text style={styles.title}>{current.title}</Text>
-        {current.message ? <Text style={styles.message}>{current.message}</Text> : null}
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.kicker}>{current.destructive === true ? '// CONFIRMATION' : '// INFO'}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>{current.title}</Text>
+        {current.message ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.message}>{current.message}</Text> : null}
 
         <View style={styles.actions}>
           <Button
@@ -84,8 +85,13 @@ const createStyles = (theme: Theme) =>
       paddingBottom: spacing.lg,
     },
     title: {
-      ...text.cardTitle,
+      ...text.title,
       color: theme.colors.text,
+    },
+    kicker: {
+      ...text.kicker,
+      color: theme.colors.action,
+      marginBottom: spacing.xs,
     },
     message: {
       ...text.meta,

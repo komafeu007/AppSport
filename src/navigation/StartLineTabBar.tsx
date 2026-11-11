@@ -3,27 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Icon, { type IconName } from '../components/ui/Icon';
 import PressableScale from '../components/ui/PressableScale';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { duration, easing, spacing, spring, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, spacing, spring, text } from '../theme/tokens';
 
-/** Largeur du trait de ligne de départ (§8.9). */
-const START_LINE_WIDTH = 40;
-
-/** Icône de chaque onglet (DA §8.9 : icône 24 px + libellé 12/500). */
-const TAB_ICONS: Record<string, IconName> = {
-  Main: 'home',
-  Seance: 'sessions',
-};
 
 /**
- * Barre d'onglets « ligne de départ » (§8.9) : fond surface, filet supérieur de
- * 1 px, hauteur 56 + zone de sécurité basse. L'onglet actif est en bleu court et
- * porte un trait de 3 px en haut, à la manière d'une ligne de départ. Ce trait
- * **glisse** d'un onglet à l'autre au lieu de sauter. Ni pastille flottante ni
- * ombre : l'app n'a qu'une carte et qu'une ombre (les feuilles).
+ * Barre d'onglets de la DA « Terminal » : deux moitiés séparées par un filet,
+ * chacune avec son numéro mono (« 01 ») et son libellé en Chakra Petch
+ * capitales. L'onglet actif passe en crème, son numéro en orange suivi d'un
+ * point, et porte un trait orange de 3 px sur toute sa largeur, qui **glisse**
+ * d'un onglet à l'autre. Pas d'icône : le numéro fait office de repère.
  */
 export default function StartLineTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const theme = useTheme();
@@ -74,14 +65,12 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
           style={[
             styles.startLine,
             {
+              width: slot,
               transform: [
                 {
                   translateX: position.interpolate({
                     inputRange: [0, count - 1],
-                    outputRange: [
-                      slot / 2 - START_LINE_WIDTH / 2,
-                      barWidth - slot / 2 - START_LINE_WIDTH / 2,
-                    ],
+                    outputRange: [0, barWidth - slot],
                   }),
                 },
               ],
@@ -113,39 +102,37 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
             scaleTo={0.96}
             accessibilityRole="button"
             accessibilityState={focused ? { selected: true } : {}}
-            style={styles.tab}
+            style={[styles.tab, index > 0 ? styles.tabDivided : null]}
           >
-            {!canSlide && focused ? <View style={styles.startLine} /> : null}
-            <View style={styles.tabContent}>
-              <View style={styles.iconWrap}>
-                <Animated.View
-                  style={{
-                    opacity: labels[index].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 0],
-                    }),
-                  }}
-                >
-                  <Icon name={TAB_ICONS[route.name] ?? 'dot'} size={24} color={theme.colors.textMuted} />
-                </Animated.View>
-                <Animated.View style={[styles.iconOverlay, { opacity: labels[index] }]}>
-                  <Icon name={TAB_ICONS[route.name] ?? 'dot'} size={24} color={theme.colors.action} />
-                </Animated.View>
-              </View>
-              <Animated.Text
-                style={[
-                  styles.label,
-                  {
-                    color: labels[index].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [theme.colors.textMuted, theme.colors.action],
-                    }),
-                  },
-                ]}
-              >
-                {label}
-              </Animated.Text>
-            </View>
+            {!canSlide && focused ? <View style={[styles.startLine, styles.startLineStatic]} /> : null}
+            <Animated.Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[
+                styles.number,
+                {
+                  color: labels[index].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [theme.colors.textMuted, theme.colors.action],
+                  }),
+                },
+              ]}
+            >
+              {`${String(index + 1).padStart(2, '0')}${focused ? ' •' : ''}`}
+            </Animated.Text>
+            <Animated.Text
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              style={[
+                styles.label,
+                {
+                  color: labels[index].interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [theme.colors.textMuted, theme.colors.text],
+                  }),
+                },
+              ]}
+            >
+              {label}
+            </Animated.Text>
           </PressableScale>
         );
       })}
@@ -157,42 +144,41 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     wrap: {
       flexDirection: 'row',
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.background,
       borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      borderTopColor: theme.colors.borderStrong,
     },
     tab: {
       flex: 1,
       // Hauteur minimale : le libellé suit la taille de texte du système.
-      minHeight: 56,
-      paddingVertical: spacing.xs,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: spacing.sm,
-    },
-    startLine: {
-      position: 'absolute',
-      top: 0,
-      width: START_LINE_WIDTH,
-      height: 3,
-      backgroundColor: theme.colors.action,
-    },
-    tabContent: {
-      alignItems: 'center',
+      minHeight: 72,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.xl,
       justifyContent: 'center',
       gap: 2,
     },
-    iconWrap: {
-      width: 24,
-      height: 24,
+    tabDivided: {
+      borderLeftWidth: 1,
+      borderLeftColor: theme.colors.borderStrong,
     },
-    iconOverlay: {
+    startLine: {
       position: 'absolute',
-      top: 0,
+      top: -1,
       left: 0,
-      right: 0,
-      bottom: 0,
+      height: 3,
+      backgroundColor: theme.colors.action,
+      zIndex: 1,
     },
-    // DA §8.9 : libellé 12 / 500, toujours visible sous l'icône de 24 px.
-    label: text.caption,
+    startLineStatic: {
+      right: 0,
+    },
+    number: {
+      ...text.caption,
+      fontSize: 11,
+    },
+    label: {
+      ...text.sectionTitle,
+      fontSize: 22,
+      lineHeight: 26,
+    },
   });

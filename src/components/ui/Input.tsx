@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { radius, spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
 
 interface Props extends TextInputProps {
   /** Agrandit le texte (champ mis en avant, ex. poids total). */
@@ -26,7 +26,7 @@ export default function Input({ emphasis = false, style, onFocus, onBlur, ...res
   const [focused, setFocused] = useState(false);
 
   return (
-    <TextInput
+    <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
       placeholderTextColor={theme.colors.textMuted}
       onFocus={(event) => {
         setFocused(true);
@@ -44,26 +44,25 @@ export default function Input({ emphasis = false, style, onFocus, onBlur, ...res
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
+    // Champ « terminal » : bloc acier à angles vifs, souligné d'un filet qui
+    // passe à 2 px orange au focus.
     input: {
-      minHeight: 56,
-      backgroundColor: theme.colors.surface,
+      minHeight: 52,
+      backgroundColor: theme.colors.surfaceAlt,
       borderRadius: radius.control,
-      borderWidth: 1,
-      // Bordure de contrôle (3:1) : un champ se voit sans dépendre du contraste
-      // entre la surface blanche et la dalle.
-      borderColor: theme.colors.borderStrong,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderStrong,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.md,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
       ...text.body,
+      fontFamily: fontFamily.mono,
       color: theme.colors.text,
     },
     focused: {
-      // La bordure s'épaissit **vers l'intérieur** : le texte ne bouge pas d'un
-      // pixel au focus (pas de saut de mise en page).
-      borderWidth: 2,
-      borderColor: theme.colors.action,
-      paddingHorizontal: spacing.md - 1,
-      paddingVertical: spacing.md - 1,
+      borderBottomWidth: 2,
+      borderBottomColor: theme.colors.action,
+      paddingBottom: spacing.md - 1,
     },
     emphasis: {
       ...text.numM,

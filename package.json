@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@expo-google-fonts/big-shoulders-display": "^0.2.3",
-    "@expo-google-fonts/public-sans": "^0.4.2",
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
+    "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
+    "@expo-google-fonts/ibm-plex-sans-condensed": "^0.4.1",
     "@react-navigation/bottom-tabs": "^7.21.0",
     "@react-navigation/elements": "^2.9.45",
     "@react-navigation/native": "^7.5.1",

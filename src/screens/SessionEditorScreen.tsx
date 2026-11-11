@@ -23,6 +23,7 @@ import {
   Button,
   Card,
   Chip,
+  DashedLine,
   ConfirmSheet,
   Icon,
   IconButton,
@@ -55,6 +56,7 @@ import {
   type NumericRange,
 } from '../domain/workoutRules';
 import type { RootStackParamList } from '../navigation/types';
+import { padIndex } from '../lib/format';
 import { useAccount } from '../services/account';
 import {
   getAllExercises,
@@ -67,7 +69,7 @@ import {
   type SessionGroup,
 } from '../services/database';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionEditor'>;
 
@@ -146,7 +148,7 @@ function StepperField({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.fieldLabel}>{label}</Text>
       <View style={styles.fieldRow}>
         <PressableScale
           style={styles.stepButton}
@@ -155,7 +157,7 @@ function StepperField({
         >
           <Icon name="minus" size={20} color={theme.colors.action} />
         </PressableScale>
-        <TextInput
+        <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
           style={styles.stepInput}
           value={text}
           onChangeText={setText}
@@ -172,7 +174,7 @@ function StepperField({
           <Icon name="plus" size={20} color={theme.colors.action} />
         </PressableScale>
       </View>
-      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+      {hint ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.fieldHint}>{hint}</Text> : null}
     </View>
   );
 }
@@ -465,7 +467,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
   const onSave = async () => {
     const name = nom.trim();
     if (!name) {
-      notify('Nom requis', 'Donne un nom à la séance avant d’enregistrer.');
+      notify('Nom requis', 'Donne un nom à la séance.');
       return;
     }
     if (items.length === 0) {
@@ -473,7 +475,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       return;
     }
     if (accountId === null) {
-      notify('Aucun profil', 'Choisis un profil avant de créer une séance.');
+      notify('Aucun profil', 'Choisis un profil pour créer une séance.');
       return;
     }
     try {
@@ -519,6 +521,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
     );
   }
 
+  const supersetGroups = computeSupersetGroups(items);
   const selectedIds = items.map((item) => item.exercise.id);
   const hasEndurance = items.some((item) => isEndurance(item.exercise));
   const hasStrength = items.some((item) => !isEndurance(item.exercise));
@@ -568,58 +571,65 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={draggingKey === null}
       >
-        <Text style={styles.label}>Nom de la séance</Text>
-        <Input
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.kicker}>{'// Nom de la séance'}</Text>
+        <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
           style={styles.nameInput}
-          placeholder="Ex. Séance Poitrine / Triceps"
+          placeholder="NOM DE LA SÉANCE"
+          placeholderTextColor={theme.colors.textMuted}
           value={nom}
           onChangeText={setNom}
           returnKeyType="done"
+          autoCapitalize="characters"
+          accessibilityLabel="Nom de la séance"
         />
 
-        <Text style={[styles.label, styles.labelSpaced]}>Groupe / split</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.kicker, styles.kickerSpaced]}>{'// Affectation groupe'}</Text>
         {groups.length === 0 ? (
-          <Text style={styles.groupEmptyText}>
-            Aucun groupe. Crées-en un depuis « Mes séances » (PPL, Maison, Upper/Lower…).
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.groupEmptyText}>
+            Aucun groupe. Crée-en un depuis « Séances ».
           </Text>
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chips}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Chip
-              label="Sans groupe"
-              selected={groupId === null}
-              onPress={() => setGroupId(null)}
-            />
-            {groups.map((group) => (
-              <Chip
-                key={group.id}
-                label={group.nom}
-                selected={groupId === group.id}
-                onPress={() => setGroupId(group.id)}
-              />
-            ))}
-          </ScrollView>
+          <View style={styles.cells}>
+            {[{ id: null as number | null, nom: 'Sans groupe' }, ...groups].map((group) => {
+              const selected = groupId === group.id;
+              return (
+                <PressableScale
+                  key={group.id ?? 'none'}
+                  style={[styles.cell, selected && styles.cellSelected]}
+                  onPress={() => setGroupId(group.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={group.nom}
+                  scaleTo={0.97}
+                >
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    style={[styles.cellText, selected && styles.cellTextSelected]}
+                    numberOfLines={2}
+                  >
+                    {group.nom}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
         )}
 
         <SectionTitle
           style={styles.sectionHeader}
-          right={
-            <Text style={styles.sectionCount}>
-              {items.length} exercice{items.length > 1 ? 's' : ''}
-            </Text>
-          }
+          hint={`${padIndex(items.length)} entrée${items.length > 1 ? 's' : ''}`}
         >
           Exercices
         </SectionTitle>
 
-        <Text style={styles.progressionHint}>{editorHint}</Text>
+        <View style={styles.protocol}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.protocolHeader}>
+            {hasEndurance && !hasStrength ? 'Protocole · Endurance' : 'Protocole · Double progression'}
+          </Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.protocolBody}>{editorHint}</Text>
+        </View>
 
         {items.length === 0 ? (
-          <Text style={styles.emptyText}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptyText}>
             Aucun exercice. Les séries, la cible (reps ou durée), le repos et le poids sont
             préremplis selon la règle polyarticulaire / monoarticulaire, puis restent modifiables.
           </Text>
@@ -662,7 +672,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                         setDragOffset(0);
                       }}
                     />
-                    <Text style={styles.cardIndex}>{index + 1}</Text>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.cardIndex}>{padIndex(index + 1)}</Text>
                     <PressableScale
                       style={styles.itemImageTap}
                       onPress={() => setDetail({ exercise: item.exercise, itemKey: item.key })}
@@ -683,30 +693,28 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                       scaleTo={0.97}
                     >
                       <View style={styles.cardTitleBlock}>
-                        <Text style={styles.cardTitle} numberOfLines={1}>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.cardTitle} numberOfLines={1}>
                           {item.exercise.nom}
                         </Text>
-                        <Text style={styles.itemSummary}>
-                          {endurance
-                            ? `${item.series} × ${Math.floor(item.duration_sec / 60)}:${String(
-                                item.duration_sec % 60
-                              ).padStart(2, '0')}, repos ${formatRest(item.rest_time)}`
-                            : `${item.series} × ${item.reps_min}–${item.reps_max}, repos ${formatRest(
-                                item.rest_time
-                              )}`}
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.itemSummary} numberOfLines={1}>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.itemScheme}>
+                            {endurance
+                              ? `${item.series}×${Math.floor(item.duration_sec / 60)}:${String(
+                                  item.duration_sec % 60
+                                ).padStart(2, '0')}`
+                              : `${item.series}×${item.reps_min}–${item.reps_max}`}
+                          </Text>
+                          {` · REPOS ${formatRest(item.rest_time)}`}
+                          {supersetGroups[index] !== null
+                            ? `  SS-${String.fromCharCode(64 + (supersetGroups[index] as number))}`
+                            : ''}
                         </Text>
                       </View>
                       <Badge
                         label={
                           endurance ? 'Endurance' : item.exercise.is_poly === 1 ? 'Poly' : 'Mono'
                         }
-                        tone={
-                          endurance
-                            ? 'neutral'
-                            : item.exercise.is_poly === 1
-                            ? 'action'
-                            : 'neutral'
-                        }
+                        tone={endurance ? 'neutral' : 'outline'}
                       />
                     </PressableScale>
                     <IconButton
@@ -719,13 +727,13 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
 
                   {expandedKeys.has(item.key) ? (
                     <>
-                      <Text style={styles.rules}>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rules}>
                         {describeRules(item.exercise.is_poly, endurance)}
                       </Text>
 
                       {item.superset || (index > 0 && items[index - 1].superset) ? (
-                        <Text style={styles.supersetNote}>
-                          Superset : enchaîne sans repos avec l’exercice lié, repos après le dernier.
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.supersetNote}>
+                          Superset : pas de repos entre les deux, repos après le dernier.
                         </Text>
                       ) : null}
 
@@ -787,10 +795,9 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
 
                       {endurance ? null : (
                         <View style={styles.setWeights}>
-                          <Text style={styles.fieldLabel}>Poids par série (kg)</Text>
-                          <Text style={styles.setWeightsHint}>
-                            La série 1 s’applique à toutes : modifie-la pour changer tout le monde. Une
-                            série modifiée plus bas garde son propre poids.
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.fieldLabel}>Poids par série (kg)</Text>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.setWeightsHint}>
+                            La série 1 s’applique à toutes. Une série modifiée garde son poids.
                           </Text>
                           <View style={styles.fields}>
                             {item.set_weights.map((weight, setIndex) => (
@@ -830,26 +837,29 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                     </>
                   ) : null}
                 </View>
+                <DashedLine />
               </Appear>
               </View>
             );
           })
         )}
 
-        <Button
-          label="Ajouter un exercice"
-          leading={<Icon name="plus" size={18} color={theme.colors.action} />}
-          variant="secondary"
-          size="lg"
+        <PressableScale
           style={styles.addButton}
           onPress={() => setPicker({ mode: 'add' })}
-        />
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter un exercice"
+          scaleTo={0.98}
+        >
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.addButtonText}>[ + ] Ajouter un exercice</Text>
+        </PressableScale>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Button
           label="Enregistrer la séance"
           size="lg"
+          code="SAVE"
           loading={saving}
           onPress={onSave}
         />
@@ -862,13 +872,13 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
       >
         <SafeAreaView style={styles.pickerContainer} edges={['top', 'bottom']}>
           <View style={styles.pickerHeader}>
-            <Text style={styles.pickerTitle} numberOfLines={2}>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.pickerTitle} numberOfLines={2}>
               {pickerTarget ? `Remplacer « ${pickerTarget.exercise.nom} »` : 'Ajouter un exercice'}
             </Text>
             <Button label="Terminé" size="sm" onPress={() => setPicker(null)} />
           </View>
           {pickerTarget ? (
-            <Text style={styles.pickerSubtitle}>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.pickerSubtitle}>
               Exercices qui travaillent les mêmes muscles. Séries, cible (reps ou durée) et repos
               sont conservés ; les poids repartent de zéro.
             </Text>
@@ -920,20 +930,68 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     padding: spacing.xl,
     paddingBottom: spacing.sm,
   },
-  label: {
-    ...text.label,
+  kicker: {
+    ...text.kicker,
     color: theme.colors.textMuted,
   },
-  labelSpaced: {
+  kickerSpaced: {
     marginTop: spacing.xl,
   },
   nameInput: {
+    ...text.screenTitle,
+    color: theme.colors.text,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: 0,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.action,
+  },
+  cells: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  chips: {
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    paddingRight: spacing.sm,
+  cell: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: radius.sm,
+  },
+  cellSelected: {
+    backgroundColor: theme.colors.selectedSurface,
+    borderColor: theme.colors.selectedSurface,
+  },
+  cellText: {
+    ...text.label,
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  cellTextSelected: {
+    color: theme.colors.onSelected,
+  },
+  protocol: {
+    borderWidth: 1,
+    borderColor: theme.colors.success,
+    marginBottom: spacing.lg,
+  },
+  protocolHeader: {
+    ...text.caption,
+    fontFamily: fontFamily.monoBold,
+    backgroundColor: theme.colors.success,
+    color: theme.colors.onSuccess,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  protocolBody: {
+    ...text.body,
+    color: theme.colors.text,
+    padding: spacing.md,
   },
   groupEmptyText: {
     ...text.meta,
@@ -944,16 +1002,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   sectionHeader: {
     marginTop: spacing.xxl,
     marginBottom: spacing.sm,
-  },
-  sectionCount: {
-    ...text.caption,
-    color: theme.colors.action,
-  },
-  progressionHint: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    lineHeight: 18,
-    marginBottom: spacing.lg,
   },
   emptyText: {
     ...text.meta,
@@ -969,9 +1017,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.sm,
   },
   cardIndex: {
-    ...text.bodyStrong,
+    ...text.caption,
+    fontSize: 13,
     color: theme.colors.textMuted,
-    width: 18,
+    width: 22,
   },
   cardTitleBlock: {
     flex: 1,
@@ -983,7 +1032,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.sm,
   },
   cardTitle: {
-    ...text.subtitle,
+    ...text.cardTitle,
     color: theme.colors.text,
   },
   rules: {
@@ -992,10 +1041,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginTop: spacing.md,
   },
   item: {
-    marginBottom: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingVertical: spacing.md,
   },
   itemSuperset: {
     borderLeftWidth: 3,
@@ -1017,9 +1063,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.sm,
   },
   itemSummary: {
-    ...text.micro,
+    ...text.caption,
     color: theme.colors.textMuted,
     marginTop: 2,
+  },
+  itemScheme: {
+    fontFamily: fontFamily.monoBold,
+    color: theme.colors.action,
   },
   cardSuperset: {
     borderLeftWidth: 3,
@@ -1064,16 +1114,19 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
   },
   stepInput: {
     flex: 1,
     height: 44,
     textAlign: 'center',
     ...text.subtitle,
+    fontFamily: fontFamily.monoMedium,
     color: theme.colors.text,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderStrong,
     borderRadius: radius.control,
   },
   durationInput: {
@@ -1103,7 +1156,18 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginTop: spacing.xs,
   },
   addButton: {
-    marginTop: spacing.xs,
+    marginTop: spacing.lg,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.borderStrong,
+    borderRadius: radius.sm,
+  },
+  addButtonText: {
+    ...text.label,
+    color: theme.colors.text,
   },
   footer: {
     padding: spacing.xl,
@@ -1125,7 +1189,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     paddingTop: spacing.md,
   },
   pickerTitle: {
-    ...text.cardTitle,
+    ...text.sectionTitle,
+    flex: 1,
     color: theme.colors.text,
   },
   pickerSubtitle: {

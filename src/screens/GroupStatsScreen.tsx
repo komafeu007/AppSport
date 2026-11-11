@@ -16,7 +16,7 @@ import {
 import type { RootStackParamList } from '../navigation/types';
 import { getGroupPlanExercises, type GroupPlanExercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupStats'>;
 
@@ -104,7 +104,7 @@ export default function GroupStatsScreen({ route }: Props) {
         <StateView
           kind="empty"
           title="Aucun exercice dans ce groupe"
-          message="Ajoute une séance et ses exercices depuis l’onglet Séances : la répartition du groupe s’affichera ici."
+          message="Ajoute une séance dans l’onglet Séances."
         />
       </SafeAreaView>
     );
@@ -124,8 +124,8 @@ export default function GroupStatsScreen({ route }: Props) {
           </SectionTitle>
 
           {muscles.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Aucun muscle reconnu dans les exercices de ce groupe.
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptyText}>
+              Aucun muscle reconnu dans ce groupe.
             </Text>
           ) : (
             <>
@@ -139,7 +139,7 @@ export default function GroupStatsScreen({ route }: Props) {
               ) : null}
               <MuscleLegend muscles={muscles} max={muscleMax} format={formatSets} valueWidth={32} />
 
-              <Text style={styles.caption}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.caption}>
                 Séries prévues par groupe musculaire, sur l’ensemble des séances du split : tout
                 pour le muscle principal, la moitié pour chaque muscle secondaire.
               </Text>

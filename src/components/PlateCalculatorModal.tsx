@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import {
   computePlates,
@@ -9,12 +9,13 @@ import {
   sortWeightsDesc,
 } from '../domain/plates';
 import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, radius, spacing, text } from '../theme/tokens';
 import Button from './ui/Button';
 import Chip from './ui/Chip';
 import ConfirmSheet, { type ConfirmRequest } from './ui/ConfirmSheet';
 import Input from './ui/Input';
 import Sheet from './ui/Sheet';
+import SheetScrollView from './ui/SheetScrollView';
 
 interface Props {
   visible: boolean;
@@ -137,17 +138,17 @@ export default function PlateCalculatorModal({
 
   return (
     <Sheet visible={visible} title="Chargement" onClose={onClose}>
-      <ScrollView
+      <SheetScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.hint}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.hint}>
           Choisis ta barre et tes disques : les poids à mettre à gauche et à droite sont calculés
           automatiquement. Appui long sur une barre/disque perso pour le supprimer.
         </Text>
 
-        <Text style={styles.label}>Poids total (kg)</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Poids total (kg)</Text>
         <Input
           emphasis
           value={weightText}
@@ -157,7 +158,7 @@ export default function PlateCalculatorModal({
           returnKeyType="done"
         />
 
-        <Text style={styles.label}>Barre</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Barre</Text>
         <View style={styles.chips}>
           {barOptions.map((value) => (
             <Chip
@@ -173,11 +174,11 @@ export default function PlateCalculatorModal({
         </View>
         <CustomAdder placeholder="Barre perso (kg)" onAdd={onAddBar} />
 
-        <Text style={styles.label}>Par côté</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Par côté</Text>
         {weight <= barWeight ? (
-          <Text style={styles.resultMuted}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.resultMuted}>
             {weight < barWeight
-              ? `La barre seule (${formatWeight(barWeight)} kg) est déjà plus lourde que le poids visé.`
+              ? `La barre seule (${formatWeight(barWeight)} kg) dépasse déjà le poids visé.`
               : 'Barre seule, aucun disque à charger.'}
           </Text>
         ) : (
@@ -186,21 +187,21 @@ export default function PlateCalculatorModal({
               <View style={styles.plateList}>
                 {breakdown.perSide.map((load) => (
                   <View key={load.plate} style={styles.platePill}>
-                    <Text style={styles.platePillText}>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.platePillText}>
                       {load.count} × {formatWeight(load.plate)}
                     </Text>
                   </View>
                 ))}
               </View>
             ) : (
-              <Text style={styles.resultMuted}>Aucun disque disponible.</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.resultMuted}>Aucun disque disponible.</Text>
             )}
-            <Text style={styles.resultLine}>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.resultLine}>
               {formatWeight(breakdown.sideWeight)} kg par côté, {formatWeight(breakdown.total)} kg
               au total
             </Text>
             {breakdown.remainder > 0 ? (
-              <Text style={styles.resultWarn}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.resultWarn}>
                 Reste {formatWeight(breakdown.remainder)} kg par côté : ajoute un disque plus petit
                 pour tomber juste.
               </Text>
@@ -208,7 +209,7 @@ export default function PlateCalculatorModal({
           </>
         )}
 
-        <Text style={styles.label}>Disques disponibles</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Disques disponibles</Text>
         <View style={styles.chips}>
           {plateOptions.map((value) => (
             <Chip
@@ -223,7 +224,7 @@ export default function PlateCalculatorModal({
           ))}
         </View>
         <CustomAdder placeholder="Disque perso (kg)" onAdd={onAddPlate} />
-      </ScrollView>
+      </SheetScrollView>
 
       <View style={styles.footer}>
         <Button label="Fermer" onPress={onClose} size="lg" />
@@ -249,8 +250,8 @@ const createStyles = (theme: Theme) =>
       marginBottom: spacing.md,
     },
     label: {
-      ...text.label,
-      color: theme.colors.text,
+      ...text.kicker,
+      color: theme.colors.textMuted,
       marginTop: spacing.lg,
       marginBottom: spacing.sm,
     },

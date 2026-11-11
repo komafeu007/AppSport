@@ -6,7 +6,7 @@ import { joinKeyList } from '../domain/profile';
 export const DATABASE_NAME = 'appsportlocal.db';
 
 /** Incrémenter à chaque évolution du schéma et ajouter la migration correspondante. */
-const DATABASE_VERSION = 15;
+const DATABASE_VERSION = 16;
 
 export interface Exercise {
   id: number;
@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS LOGS_SESSION (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER,
     program_id INTEGER,
+    group_id INTEGER,
     date TEXT NOT NULL,
     duration_sec INTEGER,
     total_volume REAL,
@@ -263,7 +264,12 @@ export async function migrateDbIfNeeded(db: SQLite.SQLiteDatabase): Promise<void
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
 
-/** Ajoute `LOGS_SESSION.program_id` (v7 : séance enregistrée -> programme lancé). */
+/**
+ * Colonnes de `LOGS_SESSION` : `program_id` (v7 : séance enregistrée -> programme
+ * lancé) et `group_id` (v16 : groupe de la séance au moment où elle a été faite,
+ * pour que le journal suive le groupe actif même si la séance est supprimée ou
+ * déplacée ensuite). Le groupe des séances existantes est repris de leur programme.
+ */
 async function ensureLogsSessionColumns(db: SQLite.SQLiteDatabase): Promise<void> {
   const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(LOGS_SESSION)');
   if (columns.length === 0) return;
@@ -272,6 +278,14 @@ async function ensureLogsSessionColumns(db: SQLite.SQLiteDatabase): Promise<void
   if (!names.has('program_id')) {
     await db.execAsync('ALTER TABLE LOGS_SESSION ADD COLUMN program_id INTEGER');
   }
+  if (!names.has('group_id')) {
+    await db.execAsync('ALTER TABLE LOGS_SESSION ADD COLUMN group_id INTEGER');
+  }
+  await db.execAsync(
+    `UPDATE LOGS_SESSION
+        SET group_id = (SELECT p.group_id FROM PROGRAMS p WHERE p.id = LOGS_SESSION.program_id)
+      WHERE group_id IS NULL AND program_id IS NOT NULL`
+  );
 }
 
 /**
@@ -965,6 +979,100 @@ export async function deleteSessionGroup(db: SQLite.SQLiteDatabase, id: number):
   });
 }
 
+/**
+ * Retire une séance terminée de l'historique (LOGS_SESSION + ses LOGS_SETS).
+ * Les charges déjà reportées dans les programmes (WORKOUT_EXOS) ne bougent pas.
+ */
+export async function deleteCompletedSession(db: SQLite.SQLiteDatabase, id: number): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM LOGS_SETS WHERE session_id = ?', id);
+    await db.runAsync('DELETE FROM LOGS_SESSION WHERE id = ?', id);
+  });
+}
+
+export interface UpdateCompletedSessionInput {
+  duration_sec: number;
+  /** Séries corrigées, dans l'ordre d'affichage (remplacent toutes celles de la séance). */
+  sets: SaveWorkoutSet[];
+}
+
+/**
+ * Corrige une séance terminée (erreur de saisie) : remplace ses LOGS_SETS,
+ * recalcule le volume et met à jour la durée.
+ *
+ * Les charges des programmes (WORKOUT_EXOS) ne sont réécrites que pour les
+ * exercices dont cette séance est la **dernière** réalisation du compte : c'est
+ * elle qui avait reporté le poids, une séance plus récente l'emporte.
+ */
+export async function updateCompletedSession(
+  db: SQLite.SQLiteDatabase,
+  sessionId: number,
+  input: UpdateCompletedSessionInput
+): Promise<void> {
+  const session = await db.getFirstAsync<{ account_id: number | null; date: string }>(
+    'SELECT account_id, date FROM LOGS_SESSION WHERE id = ?',
+    sessionId
+  );
+  if (!session) throw new Error('Séance introuvable.');
+
+  const volume = input.sets.reduce((total, set) => total + set.weight * set.reps, 0);
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE LOGS_SESSION SET duration_sec = ?, total_volume = ? WHERE id = ?',
+      input.duration_sec,
+      Math.round(volume * 100) / 100,
+      sessionId
+    );
+    await db.runAsync('DELETE FROM LOGS_SETS WHERE session_id = ?', sessionId);
+    for (const set of input.sets) {
+      await db.runAsync(
+        `INSERT INTO LOGS_SETS (session_id, exercise_id, set_num, weight, reps, duration_sec, completed)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        sessionId,
+        set.exercise_id,
+        set.set_num,
+        set.weight,
+        set.reps,
+        set.duration_sec,
+        set.completed ? 1 : 0
+      );
+    }
+
+    if (session.account_id == null) return;
+    const byExercise = new Map<number, SaveWorkoutSet[]>();
+    for (const set of input.sets) {
+      const list = byExercise.get(set.exercise_id) ?? [];
+      list.push(set);
+      byExercise.set(set.exercise_id, list);
+    }
+    for (const [exerciseId, sets] of byExercise) {
+      // Endurance : pas de charge à reporter.
+      if (sets.every((set) => set.duration_sec > 0)) continue;
+      const newer = await db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) AS count
+           FROM LOGS_SESSION s
+           JOIN LOGS_SETS ls ON ls.session_id = s.id
+          WHERE s.account_id = ? AND ls.exercise_id = ? AND s.id <> ?
+            AND (s.date > ? OR (s.date = ? AND s.id > ?))`,
+        session.account_id,
+        exerciseId,
+        sessionId,
+        session.date,
+        session.date,
+        sessionId
+      );
+      if ((newer?.count ?? 0) > 0) continue;
+      await applyPlanWeights(db, session.account_id, {
+        workout_exo_id: 0,
+        exercise_id: exerciseId,
+        target_weight: sets[0].weight,
+        set_weights: sets.map((set) => set.weight),
+      });
+    }
+  });
+}
+
 /** true si au moins une séance a déjà été enregistrée pour ce compte (LOGS_SESSION). */
 export async function hasCompletedSessions(
   db: SQLite.SQLiteDatabase,
@@ -981,6 +1089,8 @@ export async function hasCompletedSessions(
 export interface CompletedSession {
   id: number;
   program_id: number | null;
+  /** Groupe (split) dans lequel la séance a été faite. */
+  group_id: number | null;
   nom_seance: string | null;
   date: string;
   duration_sec: number | null;
@@ -997,7 +1107,7 @@ export function getCompletedSessions(
   accountId: number
 ): Promise<CompletedSession[]> {
   return db.getAllAsync<CompletedSession>(
-    `SELECT ls.id, ls.program_id, p.nom_seance, ls.date, ls.duration_sec,
+    `SELECT ls.id, ls.program_id, ls.group_id, p.nom_seance, ls.date, ls.duration_sec,
             COALESCE(ls.total_volume, 0) AS total_volume,
             (SELECT COALESCE(SUM(s.reps), 0)
                FROM LOGS_SETS s WHERE s.session_id = ls.id) AS total_reps,
@@ -1095,9 +1205,10 @@ export async function saveWorkoutSession(
 
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
-      `INSERT INTO LOGS_SESSION (account_id, program_id, date, duration_sec, total_volume, avg_hr)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO LOGS_SESSION (account_id, program_id, group_id, date, duration_sec, total_volume, avg_hr)
+       VALUES (?, ?, (SELECT group_id FROM PROGRAMS WHERE id = ?), ?, ?, ?, ?)`,
       input.account_id ?? null,
+      input.program_id,
       input.program_id,
       input.date,
       input.duration_sec,

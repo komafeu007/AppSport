@@ -3,8 +3,18 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Appear, Button, Card, IconButton, SectionTitle, StateView, Thumb } from '../components/ui';
-import { exerciseImages } from '../data/exerciseImages';
+import {
+  Button,
+  DashedLine,
+  Icon,
+  IconButton,
+  PressableScale,
+  ScreenHeader,
+  SectionTitle,
+  StateView,
+  StatTiles,
+} from '../components/ui';
+import { padIndex } from '../lib/format';
 import {
   describePlannedExercise,
   exerciseDisplayName,
@@ -22,45 +32,83 @@ import {
   savePlan,
   sessionSummary,
 } from '../services/programGeneration';
-import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { useTheme, useThemedStyles, type Theme } from '../theme';
+import { MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProgramGenerator' | 'WelcomeGenerator'>;
 
-/** Une ligne d'exercice planifié : vignette, nom, séries × reps, repos, et « relancer ». */
+/** Libellé court de 4 lettres d'un muscle pour l'axe du graphique. */
+const MUSCLE_SHORT: Record<string, string> = {
+  pectoraux: 'PEC',
+  dos: 'DOS',
+  quadriceps: 'QUAD',
+  épaules: 'ÉPA',
+  epaules: 'ÉPA',
+  ischios: 'ISCH',
+  'ischio-jambiers': 'ISCH',
+  abdos: 'ABDO',
+  abdominaux: 'ABDO',
+  fessiers: 'FESS',
+  biceps: 'BICE',
+  triceps: 'TRIC',
+  mollets: 'MOLL',
+  avant: 'AVBR',
+};
+
+function shortMuscle(label: string): string {
+  const key = label.trim().toLowerCase();
+  return MUSCLE_SHORT[key] ?? label.trim().slice(0, 4).toUpperCase();
+}
+
+/** Repos « 2:15 ». */
+function restClock(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Une ligne d'exercice planifié : référence, nom, séries × reps, repos, et « relancer ». */
 function ExerciseRow({
   planned,
+  index,
+  last,
   onReroll,
   rerolling = false,
 }: {
   planned: PlannedExercise;
+  index: number;
+  last: boolean;
   /** Propose une autre variante de cet exercice (absent = pas de bouton). */
   onReroll?: () => void;
   rerolling?: boolean;
 }) {
   const styles = useThemedStyles(createStyles);
   const { exercise } = planned;
-  const source = exercise.image ? exerciseImages[exercise.image] : undefined;
 
   return (
     <View style={styles.exerciseRow}>
-      <Thumb source={source} size={44} accessibilityLabel={exerciseDisplayName(exercise)} />
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseRef}>{`A.${padIndex(index + 1, 2)}`}</Text>
       <View style={styles.exerciseText}>
-        <Text style={styles.exerciseName} numberOfLines={2}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseName} numberOfLines={2}>
           {exerciseDisplayName(exercise)}
         </Text>
-        <Text style={styles.exerciseMeta}>{describePlannedExercise(planned)}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseMeta} accessibilityLabel={describePlannedExercise(planned)}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseScheme}>
+            {`${planned.series}×${planned.repsMin}–${planned.repsMax}`}
+          </Text>
+          {` · REPOS ${restClock(planned.restTime)}`}
+        </Text>
       </View>
       {onReroll ? (
         <IconButton
-          icon={rerolling ? 'more' : 'refresh'}
+          icon={rerolling ? 'more' : 'swap'}
           tone="neutral"
           size={36}
           accessibilityLabel="Proposer un autre exercice"
           onPress={onReroll}
         />
       ) : null}
+      {last ? null : <DashedLine style={styles.exerciseDivider} />}
     </View>
   );
 }
@@ -71,6 +119,7 @@ function ExerciseRow({
  * relance simplement le moteur avec une nouvelle graine.
  */
 export default function ProgramGeneratorScreen({ navigation, route }: Props) {
+  const theme = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
@@ -85,6 +134,8 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
   const [plan, setPlan] = useState<GeneratedProgram | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  /** Séances dépliées (la première l'est d'office). */
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true });
   const [error, setError] = useState<string | null>(null);
   /** Exercice en cours de « relance » : la ligne affiche un état d'attente. */
   const [rerolling, setRerolling] = useState<{
@@ -181,7 +232,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
     try {
       const replacement = await rerollExercise(db, account, plan, sessionIndex, exerciseIndex);
       if (replacement === null) {
-        setError('Aucune autre variante disponible avec ce matériel pour cet exercice.');
+        setError('Aucune autre variante avec ton matériel.');
         return;
       }
       setError(null);
@@ -224,83 +275,158 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
     );
   }
 
+  const totalSets = plan ? plan.sessions.reduce((n, session) => n + sessionSummary(session).sets, 0) : 0;
+  const avgMinutes =
+    plan && plan.sessions.length > 0
+      ? Math.round(
+          plan.sessions.reduce((n, session) => n + session.estimatedMinutes, 0) /
+            plan.sessions.length
+        )
+      : 0;
+  const maxSets = plan ? Math.max(1, ...plan.weeklySets.map((item) => item.sets)) : 1;
+  const topTwo = plan
+    ? [...plan.weeklySets]
+        .sort((a, b) => b.sets - a.sets)
+        .slice(0, 2)
+        .map((item) => item.muscle)
+    : [];
+  const sessionCount = plan?.sessions.length ?? 0;
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
+        <ScreenHeader
+          kicker="Aperçu"
+          title={route.params && 'reason' in route.params && route.params.reason === 'bloc' ? 'Nouveau bloc' : 'Ton programme'}
+          compact
+          style={styles.header}
+        />
         {plan ? (
-          <>
-            <Appear>
-              <Card tone="accent">
-                <SectionTitle hint={`bloc de ${BLOCK_WEEKS} semaines`}>
-                  Pourquoi ce programme ?
-                </SectionTitle>
-                {plan.rationale.map((line) => (
-                  <View key={line} style={styles.bulletRow}>
-                    <View style={styles.bulletDot} />
-                    <Text style={styles.bullet}>{line}</Text>
-                  </View>
-                ))}
-              </Card>
-            </Appear>
+          <View style={styles.body}>
+            <View style={styles.previewTag}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.previewTagText}>APERÇU · NON ENREGISTRÉ</Text>
+            </View>
 
-            {plan.warnings.length > 0 ? (
-              <Appear style={styles.section}>
-                {plan.warnings.map((warning) => (
-                  <View key={warning} style={styles.warning}>
-                    <Text style={styles.warningText}>{warning}</Text>
-                  </View>
-                ))}
-              </Appear>
-            ) : null}
+            <StatTiles
+              style={styles.section}
+              tiles={[
+                { label: 'FRÉQ.', value: `${sessionCount}×`, unit: '/SEM', accent: true },
+                { label: 'SÉRIES', value: String(totalSets) },
+                { label: 'DURÉE', value: `≈${avgMinutes}′` },
+              ]}
+            />
 
-            <Appear style={styles.section}>
-              <SectionTitle hint="séries / semaine">Volume par muscle</SectionTitle>
-              <View style={styles.volumeWrap}>
-                {plan.weeklySets.map((item) => (
-                  <View key={item.muscle} style={styles.volumeChip}>
-                    <Text style={styles.volumeLabel}>{item.label}</Text>
-                    <Text style={styles.volumeValue}>{item.sets}</Text>
-                  </View>
-                ))}
+            <View style={styles.section}>
+              <SectionTitle hint="SÉRIES / SEM.">Volume par muscle</SectionTitle>
+              <View style={styles.chart}>
+                {plan.weeklySets.map((item) => {
+                  const top = topTwo.includes(item.muscle);
+                  return (
+                    <View
+                      key={item.muscle}
+                      style={styles.barCol}
+                      accessible
+                      accessibilityLabel={`${item.label} : ${item.sets} séries par semaine`}
+                    >
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.barValue}>{item.sets}</Text>
+                      <View style={styles.barTrack}>
+                        <View
+                          style={[
+                            styles.bar,
+                            top ? styles.barTop : styles.barPlain,
+                            { height: Math.max(4, Math.round((item.sets / maxSets) * 96)) },
+                          ]}
+                        >
+                          {top ? null : <View style={styles.barCut} />}
+                        </View>
+                      </View>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.barLabel} numberOfLines={1}>
+                        {shortMuscle(item.label)}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
-            </Appear>
+            </View>
 
-            <Appear style={styles.section}>
-              <SectionTitle>{`Séances (${plan.sessions.length})`}</SectionTitle>
+            <View style={styles.section}>
+              <SectionTitle hint={`${sessionCount} MODULES`}>Séances</SectionTitle>
               {plan.sessions.map((session, sessionIndex) => {
                 const summary = sessionSummary(session);
+                const open = expanded[sessionIndex] === true;
+                const toggle = () =>
+                  setExpanded((prev) => ({ ...prev, [sessionIndex]: !prev[sessionIndex] }));
                 return (
-                  <View key={session.nom} style={styles.sessionCard}>
-                    <Text style={styles.sessionName}>{session.nom}</Text>
-                    <Text style={styles.sessionMeta}>
-                      {summary.exercises} exercices, {summary.sets} séries, environ {summary.minutes} min
-                    </Text>
-                    {session.exercises.map((planned, exerciseIndex) => (
-                      <ExerciseRow
-                        key={`${session.nom}-${exerciseIndex}-${planned.exercise.id}`}
-                        planned={planned}
-                        onReroll={() => handleReroll(sessionIndex, exerciseIndex)}
-                        rerolling={
-                          rerolling?.sessionIndex === sessionIndex &&
-                          rerolling.exerciseIndex === exerciseIndex
-                        }
-                      />
-                    ))}
+                  <View key={session.nom} style={styles.module}>
+                    <PressableScale
+                      onPress={toggle}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: open }}
+                      accessibilityLabel={`${session.nom}, ${summary.exercises} exercices, ${summary.sets} séries`}
+                      scaleTo={0.99}
+                      style={styles.moduleHeader}
+                    >
+                      <View style={styles.moduleTitleWrap}>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.moduleKicker} numberOfLines={1}>
+                          {open
+                            ? `MODULE ${sessionIndex + 1}/${sessionCount} · ${padIndex(summary.exercises, 2)} EXOS · ${padIndex(summary.sets, 2)} SÉRIES`
+                            : `MOD. ${sessionIndex + 1}/${sessionCount}`}
+                        </Text>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.moduleName} numberOfLines={1}>
+                          {session.nom}
+                        </Text>
+                      </View>
+                      {open ? (
+                        <View style={styles.moduleSquare} />
+                      ) : (
+                        <View style={styles.modulePlus}>
+                          <Icon name="plus" size={18} color={theme.colors.text} />
+                        </View>
+                      )}
+                    </PressableScale>
+                    {open ? (
+                      <View style={styles.moduleBody}>
+                        {session.exercises.map((planned, exerciseIndex) => (
+                          <ExerciseRow
+                            key={`${session.nom}-${exerciseIndex}-${planned.exercise.id}`}
+                            planned={planned}
+                            index={exerciseIndex}
+                            last={exerciseIndex === session.exercises.length - 1}
+                            onReroll={() => handleReroll(sessionIndex, exerciseIndex)}
+                            rerolling={
+                              rerolling?.sessionIndex === sessionIndex &&
+                              rerolling.exerciseIndex === exerciseIndex
+                            }
+                          />
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
-            </Appear>
+            </View>
 
-            <Text style={styles.note}>
-              Le programme démarre sur tes charges habituelles et se règle en séance : dès que tu
-              atteins le haut de la fourchette de répétitions, tu montes le poids et tu repars au
-              minimum. Un exercice qui ne te convient pas ? Appuie sur le bouton de régénération
-              pour en proposer un autre,
-              et tout reste modifiable dans l’éditeur de séance.
+            <View style={[styles.protocol, styles.section]}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.protocolTitle}>{`PROTOCOLE · BLOC DE ${BLOCK_WEEKS} SEMAINES`}</Text>
+              {plan.rationale.map((line) => (
+                <View key={line} style={styles.bulletRow}>
+                  <View style={styles.bulletDot} />
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.bullet}>{line}</Text>
+                </View>
+              ))}
+              {plan.warnings.map((warning) => (
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} key={warning} style={styles.warningText}>
+                  {warning}
+                </Text>
+              ))}
+            </View>
+
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.note}>
+              Le programme part de tes charges habituelles. Tu montes le poids dès que tu atteins le haut de la fourchette. Un exercice ne te convient pas ? Relance-le avec le bouton d’échange. Tout reste modifiable dans l’éditeur.
             </Text>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-          </>
+            {error ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.error}>{error}</Text> : null}
+          </View>
         ) : null}
       </ScrollView>
 
@@ -308,14 +434,16 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
       <View style={{ paddingBottom: insets.bottom + spacing.md }}>
         <View style={styles.footer}>
           <Button
-            label="Régénérer"
+            label="Relancer"
             variant="secondary"
+            leading={<Icon name="refresh" size={18} color={theme.colors.text} />}
             onPress={() => setSeed(newSeed())}
             disabled={saving || loading}
-            style={styles.footerButton}
+            style={styles.footerSecondary}
           />
           <Button
-            label="Enregistrer ce programme"
+            label="Enregistrer"
+            code="OK"
             onPress={handleSave}
             loading={saving}
             disabled={!plan || loading}
@@ -343,99 +471,184 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    padding: spacing.xl,
     paddingBottom: spacing.xxl,
+  },
+  header: {
+    paddingTop: spacing.md,
+  },
+  body: {
+    paddingHorizontal: spacing.xl,
   },
   section: {
     marginTop: spacing.xl,
   },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  bulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: theme.colors.action,
-    // Centre la puce sur la première ligne de texte (24 px).
-    marginTop: 9,
-  },
-  bullet: {
-    ...text.body,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  warning: {
-    marginBottom: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.danger,
-    paddingLeft: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  warningText: {
-    ...text.meta,
-    color: theme.colors.danger,
-  },
-  volumeWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  volumeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  previewTag: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.action,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
   },
-  volumeLabel: {
+  previewTagText: {
     ...text.caption,
-    color: theme.colors.textMuted,
-  },
-  volumeValue: {
-    ...text.label,
     color: theme.colors.action,
   },
-  sessionCard: {
-    paddingTop: spacing.lg,
+  chart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
     marginTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
   },
-  sessionName: {
-    ...text.cardTitle,
+  barCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  barValue: {
+    ...text.monoValue,
     color: theme.colors.text,
   },
-  sessionMeta: {
+  barTrack: {
+    height: 96,
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  barTop: {
+    backgroundColor: theme.colors.action,
+  },
+  barPlain: {
+    backgroundColor: theme.colors.selectedSurface,
+  },
+  // Petite coupe en biais en bas à droite des barres crème.
+  barCut: {
+    position: 'absolute',
+    right: -6,
+    bottom: -6,
+    width: 12,
+    height: 12,
+    backgroundColor: theme.colors.background,
+    transform: [{ rotate: '45deg' }],
+  },
+  barLabel: {
+    ...text.caption,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+  },
+  module: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+  },
+  moduleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 64,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  moduleTitleWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  moduleKicker: {
     ...text.caption,
     color: theme.colors.textMuted,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
+  },
+  moduleName: {
+    ...text.title,
+    color: theme.colors.text,
+  },
+  moduleSquare: {
+    width: 10,
+    height: 10,
+    backgroundColor: theme.colors.action,
+  },
+  modulePlus: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+  },
+  moduleBody: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderStrong,
+    paddingHorizontal: spacing.lg,
   },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  exerciseRef: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+    width: 36,
   },
   exerciseText: {
     flex: 1,
   },
   exerciseName: {
-    ...text.bodyStrong,
+    ...text.cardTitle,
     color: theme.colors.text,
   },
   exerciseMeta: {
     ...text.caption,
     color: theme.colors.textMuted,
     marginTop: 2,
+  },
+  exerciseScheme: {
+    fontFamily: fontFamily.monoBold,
+    color: theme.colors.action,
+  },
+  exerciseDivider: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  protocol: {
+    borderWidth: 1,
+    borderColor: theme.colors.success,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  protocolTitle: {
+    ...text.caption,
+    color: theme.colors.success,
+    marginBottom: spacing.xs,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    backgroundColor: theme.colors.success,
+    // Centre la puce sur la première ligne de texte (22 px).
+    marginTop: 8,
+  },
+  bullet: {
+    ...text.body,
+    color: theme.colors.text,
+    flex: 1,
+  },
+  warningText: {
+    ...text.meta,
+    color: theme.colors.danger,
+    marginTop: spacing.sm,
   },
   note: {
     ...text.meta,
@@ -456,8 +669,11 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
+  footerSecondary: {
+    flex: 2,
+  },
   footerButton: {
-    flex: 1,
+    flex: 3,
   },
   skip: {
     marginBottom: spacing.lg,

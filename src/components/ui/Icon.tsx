@@ -1,3 +1,6 @@
+import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import ArrowRight from 'lucide-react-native/icons/arrow-right';
+import ArrowRightLeft from 'lucide-react-native/icons/arrow-right-left';
 import Check from 'lucide-react-native/icons/check';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import Dot from 'lucide-react-native/icons/dot';
@@ -25,6 +28,8 @@ import { useTheme } from '../../theme';
  */
 const ICONS = {
   alert: TriangleAlert,
+  arrowLeft: ArrowLeft,
+  arrowRight: ArrowRight,
   check: Check,
   chevronRight: ChevronRight,
   close: X,
@@ -39,6 +44,7 @@ const ICONS = {
   refresh: RefreshCw,
   sessions: Dumbbell,
   stop: Square,
+  swap: ArrowRightLeft,
 } as const;
 
 export type IconName = keyof typeof ICONS;

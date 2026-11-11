@@ -1,3 +1,4 @@
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
@@ -5,31 +6,38 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import MuscleLegend from '../components/MuscleLegend';
-import MuscleRadarChart from '../components/MuscleRadarChart';
+import MuscleBarChart from '../components/MuscleBarChart';
 import VolumeLineChart, { type VolumeLinePoint } from '../components/VolumeLineChart';
 import {
-  Appear,
   Badge,
   Button,
   Card,
-  CountUp,
+  ConfirmSheet,
+  DashedLine,
   SectionTitle,
   StateView,
-  Thumb,
+  StatTiles,
+  type ConfirmRequest,
+  type StatTile,
 } from '../components/ui';
-import { exerciseImages } from '../data/exerciseImages';
 import { aggregateMuscleAmount, parseSecondaryMuscles } from '../domain/muscles';
 import { formatWeight } from '../domain/plates';
-import { beatsSet, formatPerformance, type SetPerformance } from '../domain/workoutRules';
-import { formatDuration, formatKg, formatLongDate, formatNumber, formatShortDate } from '../lib/format';
+import { beatsSet, type SetPerformance } from '../domain/workoutRules';
+import {
+  formatDotDate,
+  formatDotDateYear,
+  formatDuration,
+  formatNumber,
+  formatWeekdayShort,
+  padIndex,
+} from '../lib/format';
 import type { RootStackParamList } from '../navigation/types';
 import {
+  deleteCompletedSession,
   getExerciseBestSetsBefore,
   getSessionSets,
   getSessionSummary,
@@ -38,7 +46,7 @@ import {
   type SessionSetDetail,
 } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionSummary'>;
 
@@ -118,7 +126,6 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
   const styles = useThemedStyles(createStyles);
   const db = useSQLiteContext();
   const { sessionId } = route.params;
-  const { width } = useWindowDimensions();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,8 +138,13 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
   const [muscles, setMuscles] = useState<ReturnType<typeof aggregateMuscleAmount>>([]);
   const [history, setHistory] = useState<VolumeLinePoint[]>([]);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  // Relu à chaque retour sur l'écran (après une correction de la séance).
+  const [reloadKey, setReloadKey] = useState(0);
+  useFocusEffect(useCallback(() => setReloadKey((key) => key + 1), []));
 
   useEffect(() => {
+    if (reloadKey === 0) return;
     let mounted = true;
     (async () => {
       try {
@@ -174,7 +186,7 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
         );
         setHistory(
           historyRows.map((point) => ({
-            label: formatShortDate(point.date),
+            label: formatDotDate(point.date),
             value: point.total_volume,
           }))
         );
@@ -188,12 +200,30 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
     return () => {
       mounted = false;
     };
-  }, [db, sessionId]);
+  }, [db, sessionId, reloadKey]);
 
   const finish = useCallback(() => {
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Tabs');
   }, [navigation]);
+
+  // Séance enregistrée par erreur (ou de test) : la retirer de l'historique.
+  const askDelete = useCallback(() => {
+    setConfirm({
+      title: 'Supprimer cette séance',
+      message:
+        'Elle disparaît de l’historique et des stats. Tes charges ne changent pas.',
+      confirmLabel: 'Supprimer',
+      destructive: true,
+      onConfirm: () => {
+        deleteCompletedSession(db, sessionId)
+          .then(finish)
+          .catch((cause: unknown) =>
+            setError(cause instanceof Error ? cause.message : 'Erreur inconnue')
+          );
+      },
+    });
+  }, [db, sessionId, finish]);
 
   if (loading) {
     return (
@@ -216,189 +246,177 @@ export default function SessionSummaryScreen({ navigation, route }: Props) {
     );
   }
 
-  const radarSize = Math.min(width - spacing.xl * 2 - spacing.lg * 2, 300);
-  const muscleMax = Math.max(...muscles.map((muscle) => muscle.amount), 1);
   const records = blocks.filter(isRecord);
+  const refCode = `ARN-LOG-${padIndex(sessionId, 3)}`;
+  const metaParts = [
+    date ? `${formatWeekdayShort(date)} ${formatDotDateYear(date)}` : null,
+    `RÉF. ${refCode}`,
+    `${padIndex(blocks.length)} EXOS`,
+  ].filter((part): part is string => part !== null);
+
+  const tiles: StatTile[] = [
+    { label: 'T.01 CHARGE', value: formatNumber(totalVolume), unit: 'KG', unitBelow: true, accent: true },
+    { label: 'T.02 DURÉE', value: formatDuration(durationSec), unit: 'MIN:S', unitBelow: true },
+    totalReps > 0
+      ? { label: 'T.03 RÉPS', value: formatNumber(totalReps), unit: 'UNITÉS', unitBelow: true }
+      : {
+          label: 'T.03 EFFORT',
+          value: formatDuration(totalEffort),
+          unit: 'TEMPS D’EFFORT',
+          unitBelow: true,
+        },
+  ];
+
+  /** Écart de charge avec le record précédent : « +5 KG » ou « +1 RÉP ». */
+  const recordGain = (best: SetPerformance, previous: SetPerformance): string => {
+    const kg = best.weight - previous.weight;
+    if (kg > 0) return `+${formatWeight(kg)} KG`;
+    return `+${Math.max(1, best.reps - previous.reps)} RÉP`;
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Appear>
-          <View style={styles.hero}>
-            <Text style={styles.heroTitle}>{sessionName}</Text>
-            <Text style={styles.heroSub}>
-              Séance terminée{date ? `, ${formatLongDate(date)}` : ''}
-            </Text>
+        <View style={styles.hero}>
+          <Badge label="STATUT : TERMINÉE" tone="success" />
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.heroTitle}>{sessionName}</Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.heroMeta}>{metaParts.join(' · ')}</Text>
+        </View>
 
-            <View style={styles.stats}>
-              <View style={styles.stat}>
-                <CountUp
-                  style={[styles.statValue, styles.statVolume]}
-                  value={totalVolume}
-                  format={formatNumber}
-                />
-                <Text style={styles.statLabel}>kg soulevés</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.stat}>
-                <CountUp
-                  style={[styles.statValue, styles.statTime]}
-                  value={durationSec}
-                  format={formatDuration}
-                />
-                <Text style={styles.statLabel}>temps</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.stat}>
-                {totalReps > 0 ? (
-                  <>
-                    <CountUp
-                      style={styles.statValue}
-                      value={totalReps}
-                      format={formatNumber}
-                    />
-                    <Text style={styles.statLabel}>répétitions</Text>
-                  </>
-                ) : (
-                  <>
-                    <CountUp
-                      style={[styles.statValue, styles.statTime]}
-                      value={totalEffort}
-                      format={formatDuration}
-                    />
-                    <Text style={styles.statLabel}>temps d’effort</Text>
-                  </>
-                )}
-              </View>
-            </View>
-          </View>
-        </Appear>
+        <StatTiles tiles={tiles} style={styles.tiles} />
 
-        <Appear style={styles.section}>
-          <View style={styles.flat}>
-            <SectionTitle hint="en répétitions">Répartition par muscle</SectionTitle>
+        <View style={styles.section}>
+          <SectionTitle hint="UNITÉ : RÉPS">Charge par muscle</SectionTitle>
+          <View style={styles.sectionBody}>
             {muscles.length === 0 ? (
-              <Text style={styles.emptyText}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptyText}>
                 Aucune répétition à répartir : les exercices d’endurance, comptés au temps, ne
                 comptent pas comme des répétitions.
               </Text>
             ) : (
-              <>
-                {muscles.length >= 3 ? (
-                  <View style={styles.radarWrap}>
-                    <MuscleRadarChart
-                      size={radarSize}
-                      data={muscles.map((muscle) => ({
-                        label: muscle.label,
-                        value: muscle.amount,
-                      }))}
-                    />
-                  </View>
-                ) : null}
-
-                <MuscleLegend muscles={muscles} max={muscleMax} format={formatNumber} />
-              </>
+              <MuscleBarChart muscles={muscles} format={formatNumber} />
             )}
           </View>
-        </Appear>
+        </View>
 
-        <Appear style={styles.section}>
-          <View style={styles.flat}>
-            <SectionTitle hint="cette séance">Évolution du volume</SectionTitle>
-            {history.length === 0 ? (
-              <Text style={styles.emptyText}>Pas encore d’historique pour cette séance.</Text>
-            ) : (
-              <>
-                <VolumeLineChart points={history} />
-                <Text style={styles.chartHint}>
-                  {history.length <= 1
-                    ? 'Première fois : refais cette séance pour voir la courbe grimper.'
-                    : `${history.length} dernières séances, du plus ancien au plus récent.`}
-                </Text>
-              </>
-            )}
-          </View>
-        </Appear>
+        <View style={styles.section}>
+          {history.length === 0 ? (
+            <>
+              <SectionTitle hint="CETTE SÉANCE">Évolution du volume</SectionTitle>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.emptyText, styles.sectionBody]}>
+                Pas encore d’historique pour cette séance.
+              </Text>
+            </>
+          ) : (
+            <VolumeLineChart points={history} />
+          )}
+        </View>
 
         {records.length > 0 ? (
-          <Appear style={styles.section}>
+          <View style={styles.section}>
             <Card tone="marker">
-              <SectionTitle hint="cette séance">Records</SectionTitle>
+              <View style={styles.recordsHead}>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordsTitle}>Records battus</Text>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordsCount}>×{padIndex(records.length)}</Text>
+              </View>
               {records.map((block) => {
                 if (block.bestSet === null || block.previousBest === null) return null;
                 return (
-                  <View key={block.id} style={styles.recordRow}>
-                    <View style={styles.recordBody}>
-                      <Text style={styles.recordName} numberOfLines={1}>
-                        {block.name}
-                      </Text>
-                      <Text style={styles.recordMeta}>
-                        {formatPerformance(block.bestSet)} (avant :{' '}
-                        {formatPerformance(block.previousBest)})
-                      </Text>
+                  <View key={block.id}>
+                    <DashedLine />
+                    <View style={styles.recordRow}>
+                      <View style={styles.recordBody}>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordName} numberOfLines={1}>
+                          {block.name}
+                        </Text>
+                        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordMeta}>
+                          NOUV.{' '}
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.recordStrong}>{compactSet(block.bestSet)}</Text>
+                          {' / ANC. '}
+                          {compactSet(block.previousBest)}
+                        </Text>
+                      </View>
+                      <Badge label={recordGain(block.bestSet, block.previousBest)} tone="marker" />
                     </View>
-                    <Badge label="Record" tone="marker" />
                   </View>
                 );
               })}
             </Card>
-          </Appear>
+          </View>
         ) : null}
 
-        <Appear style={styles.section}>
-          <View style={styles.flat}>
-            <SectionTitle hint={`${blocks.length} exercice${blocks.length > 1 ? 's' : ''}`}>
-              Détail des exercices
-            </SectionTitle>
-            {blocks.length === 0 ? (
-              <Text style={styles.emptyText}>Aucune série enregistrée pour cette séance.</Text>
-            ) : (
-              blocks.map((block, index) => (
-                <View
-                  key={block.id}
-                  style={[styles.exercise, index > 0 && styles.exerciseDivider]}
-                >
-                  <Thumb
-                    source={block.image ? exerciseImages[block.image] : undefined}
-                    size={44}
-                    accessibilityLabel={block.name}
-                  />
-                  <View style={styles.exerciseBody}>
-                    <View style={styles.exerciseHead}>
-                      <Text style={styles.exerciseName} numberOfLines={1}>
-                        {block.name}
-                      </Text>
-                      <Badge label={block.isPoly ? 'Poly' : 'Mono'} tone="neutral" />
-                      {isRecord(block) ? <Badge label="Record" tone="marker" /> : null}
+        <View style={styles.section}>
+          <SectionTitle hint={`${padIndex(blocks.length)} ENTRÉE${blocks.length > 1 ? 'S' : ''}`}>
+            Détail exercices
+          </SectionTitle>
+          {blocks.length === 0 ? (
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.emptyText, styles.sectionBody]}>
+              Aucune série enregistrée pour cette séance.
+            </Text>
+          ) : (
+            blocks.map((block, index) => (
+              <View key={block.id}>
+                <View style={styles.exercise}>
+                  <View style={styles.exerciseHead}>
+                    <View style={styles.codeBox}>
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.codeText}>EX-{padIndex(index + 1)}</Text>
                     </View>
-                    <Text style={styles.exerciseMeta}>
-                      {block.sets.length} série{block.sets.length > 1 ? 's' : ''},{' '}
-                      {block.timed
-                        ? `${formatDuration(block.duration)} d’effort`
-                        : `${block.reps} reps, ${formatKg(block.volume)}`}
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseName} numberOfLines={1}>
+                      {block.name}
                     </Text>
-                    <Text style={styles.exerciseSets} numberOfLines={2}>
-                      {block.sets
-                        .map((set) =>
-                          set.durationSec > 0
-                            ? formatDuration(set.durationSec)
-                            : `${formatWeight(set.weight)} × ${set.reps}`
-                        )
-                        .join(', ')}
+                    <Badge label={block.isPoly ? 'POLY' : 'MONO'} tone="outline" />
+                    {isRecord(block) ? <Badge label="RECORD" tone="marker" /> : null}
+                  </View>
+                  <View style={styles.exerciseFoot}>
+                    <View style={styles.setList}>
+                      {block.sets.map((set, setIndex) => (
+                        <View key={setIndex} style={styles.setBox}>
+                          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.setText}>
+                            {set.durationSec > 0
+                              ? formatDuration(set.durationSec)
+                              : `${formatWeight(set.weight)}×${set.reps}`}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.exerciseVolume}>
+                      {block.timed
+                        ? formatDuration(block.duration)
+                        : `${formatNumber(block.volume)} KG`}
                     </Text>
                   </View>
                 </View>
-              ))
-            )}
-          </View>
-        </Appear>
+                <DashedLine />
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button label="Terminer" size="lg" onPress={finish} />
+        <Button label="Terminer" code="ENREG." size="lg" onPress={finish} />
+        <Button
+          label="Corriger la saisie"
+          variant="secondary"
+          onPress={() => navigation.navigate('CompletedSessionEdit', { sessionId })}
+          style={styles.deleteButton}
+        />
+        <Button
+          label="Supprimer de l’historique"
+          variant="tertiary"
+          onPress={askDelete}
+          style={styles.deleteButton}
+        />
       </View>
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </SafeAreaView>
   );
+}
+
+/** « 200×8 » : série compacte pour la fiche de record. */
+function compactSet(set: SetPerformance): string {
+  return `${formatWeight(set.weight)}×${set.reps}`;
 }
 
 const createStyles = (theme: Theme) => StyleSheet.create({
@@ -411,85 +429,61 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   section: {
-    marginTop: spacing.lg,
+    marginTop: spacing.xxl,
+  },
+  sectionBody: {
+    marginTop: spacing.md,
   },
   hero: {
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  flat: {
-    paddingVertical: spacing.xs,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
   heroTitle: {
-    ...text.title,
+    ...text.screenTitle,
     color: theme.colors.text,
   },
-  heroSub: {
-    ...text.meta,
+  heroMeta: {
+    ...text.caption,
     color: theme.colors.textMuted,
-    marginTop: spacing.xs,
   },
-  stats: {
+  tiles: {
+    marginTop: spacing.xl,
+  },
+  recordsHead: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.lg,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
+  recordsTitle: {
+    ...text.sectionTitle,
+    color: theme.colors.marker,
   },
-  statValue: {
-    ...text.numM,
-    color: theme.colors.text,
-    fontVariant: ['tabular-nums'],
-  },
-  statVolume: {
-    color: theme.colors.action,
-  },
-  statTime: {
-    color: theme.colors.action,
-  },
-  statLabel: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: theme.colors.border,
-  },
-  radarWrap: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  chartHint: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    marginTop: spacing.sm,
+  recordsCount: {
+    ...text.monoValue,
+    color: theme.colors.marker,
   },
   recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    paddingVertical: spacing.md,
   },
   recordBody: {
     flex: 1,
   },
   recordName: {
-    ...text.bodyStrong,
+    ...text.cardTitle,
     color: theme.colors.text,
   },
   recordMeta: {
     ...text.caption,
     color: theme.colors.textMuted,
     marginTop: 2,
-    fontVariant: ['tabular-nums'],
+  },
+  recordStrong: {
+    fontFamily: fontFamily.monoBold,
+    color: theme.colors.text,
   },
   emptyText: {
     ...text.meta,
@@ -497,38 +491,55 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     lineHeight: 20,
   },
   exercise: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
     paddingVertical: spacing.md,
-  },
-  exerciseDivider: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  exerciseBody: {
-    flex: 1,
+    gap: spacing.sm,
   },
   exerciseHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
+  codeBox: {
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+  },
+  codeText: {
+    ...text.caption,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+  },
   exerciseName: {
-    ...text.bodyStrong,
+    ...text.cardTitle,
     color: theme.colors.text,
     flexShrink: 1,
   },
-  exerciseMeta: {
+  exerciseFoot: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  setList: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  setBox: {
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  setText: {
+    ...text.caption,
+    color: theme.colors.text,
+  },
+  exerciseVolume: {
     ...text.caption,
     color: theme.colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  exerciseSets: {
-    ...text.micro,
-    color: theme.colors.textMuted,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
   },
   footer: {
     padding: spacing.xl,
@@ -536,5 +547,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.background,
+  },
+  deleteButton: {
+    marginTop: spacing.xs,
   },
 });

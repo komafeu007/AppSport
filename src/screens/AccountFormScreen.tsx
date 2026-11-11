@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,12 +12,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  Appear,
   Button,
   Chip,
   ConfirmSheet,
   Input,
-  SectionTitle,
+  PressableScale,
+  ScreenHeader,
   StateView,
   type ConfirmRequest,
 } from '../components/ui';
@@ -43,18 +43,19 @@ import {
   type AccountInput,
 } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { padIndex } from '../lib/format';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountForm' | 'WelcomeForm'>;
 
 const DURATION_OPTIONS: readonly ProfileOption[] = SESSION_DURATIONS.map((value) => ({
   key: String(value),
-  label: `${value} min`,
+  label: `${value}′`,
 }));
 
 const FREQUENCY_OPTIONS: readonly ProfileOption[] = WEEKLY_FREQUENCIES.map((value) => ({
   key: String(value),
-  label: value === 1 ? '1 séance' : `${value} séances`,
+  label: padIndex(value, 2),
 }));
 
 /**
@@ -96,6 +97,116 @@ function ChipGroup({
           onPress={() => onToggle(option.key)}
         />
       ))}
+    </View>
+  );
+}
+
+/** Cadre à filet avec son titre mono posé sur la bordure du haut. */
+function Fieldset({ title, children }: { title: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.fieldset}>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.fieldsetTitle} accessibilityRole="header">
+        {title}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+/** Choix unique en lignes pleine largeur : `[ ]  Esthétique   OBJ-A`. */
+function ChoiceList({
+  options,
+  value,
+  prefix,
+  onToggle,
+}: {
+  options: readonly ProfileOption[];
+  value: string | null;
+  prefix: string;
+  onToggle: (key: string) => void;
+}) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.choiceList}>
+      {options.map((option, index) => {
+        const selected = option.key === value;
+        const ink = selected ? styles.inkSelected : styles.inkIdle;
+        return (
+          <PressableScale
+            key={option.key}
+            onPress={() => onToggle(option.key)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            scaleTo={0.99}
+            style={[styles.choiceRow, selected ? styles.choiceRowSelected : null]}
+          >
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.choiceBox, ink]}>{selected ? '[■]' : '[ ]'}</Text>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.choiceLabel, ink]} numberOfLines={2}>
+              {option.label}
+            </Text>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.choiceRef, selected ? styles.inkSelected : styles.inkMuted]}>
+              {`${prefix}-${String.fromCharCode(65 + index)}`}
+            </Text>
+          </PressableScale>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Petit jeu d'options en grille de cases carrées ; sélection = aplat crème. */
+function CellGrid({
+  options,
+  values,
+  onToggle,
+}: {
+  options: readonly ProfileOption[];
+  values: string[];
+  onToggle: (key: string) => void;
+}) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.cells}>
+      {options.map((option) => {
+        const selected = values.includes(option.key);
+        return (
+          <PressableScale
+            key={option.key}
+            onPress={() => onToggle(option.key)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            scaleTo={0.96}
+            style={[styles.cell, selected ? styles.cellSelected : null]}
+          >
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.cellText, selected ? styles.cellTextSelected : null]}>
+              {option.label}
+            </Text>
+          </PressableScale>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Champ numérique avec son unité collée à droite (ANS, CM, KG). */
+function UnitField({
+  label,
+  unit,
+  ...rest
+}: { label: string; unit: string } & ComponentProps<typeof Input>) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.col}>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>{label}</Text>
+      <View>
+        <Input style={[styles.input, styles.unitInput]} {...rest} />
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.unit} pointerEvents="none">
+          {unit}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -189,7 +300,7 @@ export default function AccountFormScreen({ navigation, route }: Props) {
   const onSave = async () => {
     const name = prenom.trim();
     if (!name) {
-      notify('Prénom requis', 'Indique au moins un prénom pour identifier le profil.');
+      notify('Prénom requis', 'Indique un prénom pour ce profil.');
       return;
     }
 
@@ -260,8 +371,15 @@ export default function AccountFormScreen({ navigation, route }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Appear>
-          <Text style={styles.label}>Prénom</Text>
+        <ScreenHeader
+          kicker="Fiche opérateur"
+          title={editingId !== null ? 'Modifier le profil' : 'Nouveau profil'}
+          compact
+          style={styles.header}
+        />
+
+        <Fieldset title="SEC. 01 — IDENTITÉ">
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Prénom</Text>
           <Input
             style={styles.input}
             placeholder="Ex. Simon"
@@ -273,131 +391,116 @@ export default function AccountFormScreen({ navigation, route }: Props) {
           />
 
           <View style={styles.row}>
-            <View style={styles.col}>
-              <Text style={styles.label}>Âge</Text>
-              <Input
-                style={styles.input}
-                placeholder="ans"
-                value={age}
-                onChangeText={setAge}
-                keyboardType="numeric"
-                returnKeyType="done"
-                accessibilityLabel="Âge, en années"
-              />
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Taille</Text>
-              <Input
-                style={styles.input}
-                placeholder="cm"
-                value={taille}
-                onChangeText={setTaille}
-                keyboardType="numeric"
-                returnKeyType="done"
-                accessibilityLabel="Taille, en centimètres"
-              />
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Poids</Text>
-              <Input
-                style={styles.input}
-                placeholder="kg"
-                value={poids}
-                onChangeText={setPoids}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                accessibilityLabel="Poids, en kilos"
-              />
-            </View>
+            <UnitField
+              label="Âge"
+              unit="ANS"
+              placeholder="0"
+              value={age}
+              onChangeText={setAge}
+              keyboardType="numeric"
+              returnKeyType="done"
+              accessibilityLabel="Âge, en années"
+            />
+            <UnitField
+              label="Taille"
+              unit="CM"
+              placeholder="0"
+              value={taille}
+              onChangeText={setTaille}
+              keyboardType="numeric"
+              returnKeyType="done"
+              accessibilityLabel="Taille, en centimètres"
+            />
+            <UnitField
+              label="Poids"
+              unit="KG"
+              placeholder="0"
+              value={poids}
+              onChangeText={setPoids}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              accessibilityLabel="Poids, en kilos"
+            />
           </View>
-        </Appear>
 
-        <Appear style={styles.section}>
-          <SectionTitle>Objectif</SectionTitle>
-          <ChipGroup
-            options={OBJECTIFS}
-            values={objectif ? [objectif] : []}
-            onToggle={(key) => setObjectif((prev) => (prev === key ? null : key))}
-          />
-        </Appear>
-
-        <Appear style={styles.section}>
-          <SectionTitle>Sexe</SectionTitle>
-          <ChipGroup
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subLabel}>Sexe</Text>
+          <CellGrid
             options={SEXES}
             values={sexe ? [sexe] : []}
             onToggle={(key) => setSexe((prev) => (prev === key ? null : key))}
           />
-        </Appear>
+        </Fieldset>
 
-        <Appear style={styles.section}>
-          <SectionTitle>Fréquence & durée</SectionTitle>
-          <Text style={styles.subLabel}>Entraînements par semaine</Text>
-          <ChipGroup
+        <Fieldset title="SEC. 02 — OBJECTIF">
+          <ChoiceList
+            options={OBJECTIFS}
+            value={objectif}
+            prefix="OBJ"
+            onToggle={(key) => setObjectif((prev) => (prev === key ? null : key))}
+          />
+        </Fieldset>
+
+        <Fieldset title="SEC. 03 — RYTHME">
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Entraînements par semaine</Text>
+          <CellGrid
             options={FREQUENCY_OPTIONS}
             values={frequence !== null ? [String(frequence)] : []}
             onToggle={(key) =>
               setFrequence((prev) => (prev === Number(key) ? null : Number(key)))
             }
           />
-          <Text style={styles.subLabel}>Temps par séance</Text>
-          <ChipGroup
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subLabel}>Temps par séance</Text>
+          <CellGrid
             options={DURATION_OPTIONS}
             values={duree !== null ? [String(duree)] : []}
             onToggle={(key) => setDuree((prev) => (prev === Number(key) ? null : Number(key)))}
           />
-        </Appear>
-
-        <Appear style={styles.section}>
-          <SectionTitle>Format de séance</SectionTitle>
-          <ChipGroup
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subLabel}>Format de séance</Text>
+          <ChoiceList
             options={SESSION_FORMATS}
-            values={format ? [format] : []}
+            value={format}
+            prefix="FMT"
             onToggle={(key) => setFormat((prev) => (prev === key ? null : key))}
           />
-        </Appear>
+        </Fieldset>
 
-        <Appear style={styles.section}>
-          <SectionTitle>Points forts & points faibles</SectionTitle>
-          <Text style={styles.subLabel}>Points faibles à prioriser</Text>
-          <ChipGroup
-            options={MUSCLE_OPTIONS}
-            values={pointsFaibles}
-            onToggle={(key) => toggleFocus(setPointsFaibles, setPointsForts, key)}
-          />
-          <Text style={styles.subLabel}>Points forts à limiter</Text>
+        <Fieldset title="SEC. 04 — POINTS FORTS / FAIBLES">
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Points faibles à prioriser</Text>
+          <View style={styles.chipsGap}>
+            <ChipGroup
+              options={MUSCLE_OPTIONS}
+              values={pointsFaibles}
+              onToggle={(key) => toggleFocus(setPointsFaibles, setPointsForts, key)}
+            />
+          </View>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subLabel}>Points forts à limiter</Text>
           <ChipGroup
             options={MUSCLE_OPTIONS}
             values={pointsForts}
             onToggle={(key) => toggleFocus(setPointsForts, setPointsFaibles, key)}
           />
-          <Text style={styles.rulesHint}>
-            Un point faible reçoit plus de séries et revient dans chaque séance qui travaille la
-            même zone du corps. Un point fort est allégé (moins de séries, un seul exercice), et
-            une séance entièrement dédiée à un point fort est raccourcie. Le programme garde son
-            découpage : on ne met pas des jambes un jour de haut du corps. « Jambes » vise tout le
-            bas du corps d’un coup (quadriceps, ischios, fessiers et mollets).
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rulesHint}>
+            Un point faible reçoit plus de séries. Un point fort est allégé : moins de séries, un
+            seul exercice. « Jambes » couvre tout le bas du corps.
           </Text>
-        </Appear>
+        </Fieldset>
 
-        <Appear style={styles.section}>
-          <SectionTitle>Matériel disponible</SectionTitle>
-          <ChipGroup
-            options={EQUIPMENTS}
-            values={materiel}
-            onToggle={toggleMulti(setMateriel)}
-          />
-        </Appear>
+        <Fieldset title="SEC. 05 — MATÉRIEL">
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Matériel disponible</Text>
+          <View style={styles.chipsGap}>
+            <ChipGroup options={EQUIPMENTS} values={materiel} onToggle={toggleMulti(setMateriel)} />
+          </View>
+        </Fieldset>
 
-        <Appear style={styles.section}>
-          <SectionTitle>État de santé</SectionTitle>
-          <Text style={styles.subLabel}>Zones sensibles / douloureuses</Text>
-          <ChipGroup options={HEALTH_ZONES} values={zones} onToggle={toggleMulti(setZones)} />
-          <Text style={styles.rulesHint}>
-            Les exercices concernés par ces zones sont retirés du programme (et non seulement
-            allégés), contrairement aux points forts qui ne font que réduire le volume.
+        <Fieldset title="SEC. 06 — ÉTAT DE SANTÉ">
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Zones sensibles / douloureuses</Text>
+          <View style={styles.chipsGap}>
+            <ChipGroup options={HEALTH_ZONES} values={zones} onToggle={toggleMulti(setZones)} />
+          </View>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rulesHint}>
+            Les exercices qui sollicitent ces zones sont retirés du programme.
           </Text>
-          <Text style={styles.subLabel}>Précisions (optionnel)</Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subLabel}>Précisions (optionnel)</Text>
           <Input
             style={[styles.input, styles.noteInput]}
             placeholder="Ex. douleur genou droit en flexion, tendinite épaule…"
@@ -406,33 +509,30 @@ export default function AccountFormScreen({ navigation, route }: Props) {
             multiline
             accessibilityLabel="Précisions sur les zones sensibles"
           />
-        </Appear>
+        </Fieldset>
 
-        <Appear style={styles.section}>
-          {/* Information, pas action : elle reste à plat. La seule carte d'un
-              écran est réservée à ce qu'on peut faire. */}
-          <View>
-            <SectionTitle>Règles de séries & repos</SectionTitle>
-            <Text style={styles.rules}>
-              Polyarticulaire (squat, développé, tirage…) : {polyRules.seriesRange[0]} à{' '}
-              {polyRules.seriesRange[1]} séries, repos {formatRest(polyRules.restRange[0])}.
-            </Text>
-            <Text style={styles.rules}>
-              Monoarticulaire (curl, extension, élévations…) : {monoRules.seriesRange[0]} à{' '}
-              {monoRules.seriesRange[1]} séries, repos {formatRest(monoRules.restRange[0])} à{' '}
-              {formatRest(monoRules.restRange[1])}.
-            </Text>
-            <Text style={styles.rulesHint}>
-              Ces réglages sont préremplis automatiquement sur chaque exercice de séance, puis
-              restent modifiables.
-            </Text>
-          </View>
-        </Appear>
+        <Fieldset title="SEC. 07 — RÈGLES">
+          {/* Information, pas action : elle reste à plat. */}
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>Règles de séries & repos</Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.rules, styles.chipsGap]}>
+            Polyarticulaire (squat, développé, tirage…) : {polyRules.seriesRange[0]} à{' '}
+            {polyRules.seriesRange[1]} séries, repos {formatRest(polyRules.restRange[0])}.
+          </Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rules}>
+            Monoarticulaire (curl, extension, élévations…) : {monoRules.seriesRange[0]} à{' '}
+            {monoRules.seriesRange[1]} séries, repos {formatRest(monoRules.restRange[0])} à{' '}
+            {formatRest(monoRules.restRange[1])}.
+          </Text>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rulesHint}>
+            Préremplis sur chaque exercice, modifiables ensuite.
+          </Text>
+        </Fieldset>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Button
           label={editingId !== null ? 'Enregistrer' : 'Créer mon profil'}
+          code={editingId !== null ? 'SAVE' : 'RUN'}
           size="lg"
           loading={saving}
           onPress={onSave}
@@ -450,21 +550,51 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    padding: spacing.xl,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  header: {
+    paddingHorizontal: 0,
+    paddingTop: spacing.md,
+  },
+  fieldset: {
+    marginTop: spacing.xxl,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+    padding: spacing.lg,
+    paddingTop: spacing.xl,
+  },
+  fieldsetTitle: {
+    ...text.caption,
+    position: 'absolute',
+    top: -9,
+    left: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: theme.colors.background,
+    color: theme.colors.action,
   },
   label: {
     ...text.label,
     color: theme.colors.textMuted,
   },
   subLabel: {
-    ...text.caption,
+    ...text.label,
     color: theme.colors.textMuted,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   input: {
     marginTop: spacing.sm,
+  },
+  unitInput: {
+    paddingRight: 44,
+  },
+  unit: {
+    ...text.caption,
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.sm + 18,
+    color: theme.colors.textMuted,
   },
   noteInput: {
     minHeight: 72,
@@ -473,19 +603,79 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     marginTop: spacing.lg,
   },
   col: {
     flex: 1,
   },
-  section: {
-    marginTop: spacing.xxl,
-  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  chipsGap: {
+    marginTop: spacing.sm,
+  },
+  choiceList: {
+    gap: spacing.sm,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+  },
+  choiceRowSelected: {
+    backgroundColor: theme.colors.action,
+    borderColor: theme.colors.action,
+  },
+  choiceBox: {
+    ...text.label,
+  },
+  choiceLabel: {
+    ...text.cardTitle,
+    flex: 1,
+  },
+  choiceRef: {
+    ...text.caption,
+  },
+  inkSelected: {
+    color: theme.colors.onAction,
+  },
+  inkIdle: {
+    color: theme.colors.text,
+  },
+  inkMuted: {
+    color: theme.colors.textMuted,
+  },
+  cells: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  cell: {
+    minWidth: 52,
+    height: 48,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+  },
+  cellSelected: {
+    backgroundColor: theme.colors.selectedSurface,
+    borderColor: theme.colors.selectedSurface,
+  },
+  cellText: {
+    ...text.label,
+    color: theme.colors.text,
+  },
+  cellTextSelected: {
+    color: theme.colors.onSelected,
   },
   rules: {
     ...text.meta,
@@ -500,7 +690,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginTop: spacing.xs,
   },
   footer: {
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,

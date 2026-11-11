@@ -1,17 +1,6 @@
 import { Image } from 'expo-image';
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  type ScrollView as ScrollViewType,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, type ScrollView as ScrollViewType } from 'react-native';
 
 import { exerciseImages } from '../data/exerciseImages';
 import { isEndurance } from '../domain/exerciseCatalog';
@@ -19,11 +8,12 @@ import { exerciseTermLabel, exerciseTermLabels } from '../domain/exerciseLabels'
 import { exerciseGifUrls } from '../lib/exerciseMedia';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { fontFamily, radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 import ExerciseAlternatives from './ExerciseAlternatives';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import Sheet, { useSheetDrag } from './ui/Sheet';
+import Sheet from './ui/Sheet';
+import SheetScrollView from './ui/SheetScrollView';
 
 interface AlternativesConfig {
   /** Catalogue complet dans lequel chercher les substituts. */
@@ -43,13 +33,6 @@ interface Props {
   /** Vue « substitution » : propose des exercices voisins (absent = lecture seule). */
   alternatives?: AlternativesConfig;
 }
-
-/** Distance tirée vers le bas (px) qui referme le tuto. */
-const DISMISS_DISTANCE = 72;
-/** Vitesse du geste (px/s) qui referme le tuto. */
-const DISMISS_VELOCITY = 700;
-/** Déplacement (px) avant que le glissement ne prenne la main sur le défilement. */
-const DRAG_START = 8;
 
 /** Découpe le texte d'instructions en étapes numérotables (phrases). */
 function toSteps(value: string): string[] {
@@ -112,7 +95,7 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <DragScroll
+      <SheetScrollView
         scrollRef={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -141,17 +124,17 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
               />
             ) : (
               <View style={[styles.image, styles.imagePlaceholder]}>
-                <Text style={styles.imagePlaceholderText}>Pas d’image</Text>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.imagePlaceholderText}>Pas d’image</Text>
               </View>
             )}
 
             {gifFailed ? (
-              <Text style={styles.mediaHint}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.mediaHint}>
                 Démonstration animée indisponible : la vignette la remplace.
               </Text>
             ) : null}
 
-            <Text style={styles.title}>{exercise.nom}</Text>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>{exercise.nom}</Text>
 
             <View style={styles.badges}>
               <Badge
@@ -164,31 +147,31 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
               />
               {exercise.target ? (
                 <View style={styles.tag}>
-                  <Text style={styles.tagText}>{exerciseTermLabel(exercise.target)}</Text>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.tagText}>{exerciseTermLabel(exercise.target)}</Text>
                 </View>
               ) : null}
               {exercise.equipment ? (
                 <View style={styles.tag}>
-                  <Text style={styles.tagText}>{exerciseTermLabel(exercise.equipment)}</Text>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.tagText}>{exerciseTermLabel(exercise.equipment)}</Text>
                 </View>
               ) : null}
             </View>
 
-            {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+            {meta ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.meta}>{meta}</Text> : null}
             {secondary.length > 0 ? (
-              <Text style={styles.meta}>Muscles secondaires : {secondary.join(', ')}</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.meta}>Muscles secondaires : {secondary.join(', ')}</Text>
             ) : null}
 
-            <Text style={styles.sectionTitle}>Tutoriel</Text>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.sectionTitle}>Tutoriel</Text>
             {steps.length === 0 ? (
-              <Text style={styles.instructions}>Pas d’instructions disponibles.</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.instructions}>Pas d’instructions disponibles.</Text>
             ) : steps.length === 1 ? (
-              <Text style={styles.instructions}>{steps[0]}</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.instructions}>{steps[0]}</Text>
             ) : (
               steps.map((step, index) => (
                 <View key={step + String(index)} style={styles.step}>
-                  <Text style={styles.stepIndex}>{index + 1}</Text>
-                  <Text style={styles.stepText}>{step}</Text>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.stepIndex}>{index + 1}</Text>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.stepText}>{step}</Text>
                 </View>
               ))
             )}
@@ -204,98 +187,12 @@ export default function ExerciseDetailModal({ exercise, visible, onClose, altern
             ) : null}
           </>
         ) : null}
-      </DragScroll>
+      </SheetScrollView>
 
       <View style={styles.footer}>
         <Button label="Fermer" onPress={onClose} size="lg" />
       </View>
     </Sheet>
-  );
-}
-
-interface DragScrollProps {
-  scrollRef: RefObject<ScrollViewType | null>;
-  style: StyleProp<ViewStyle>;
-  contentContainerStyle: StyleProp<ViewStyle>;
-  children: ReactNode;
-}
-
-/**
- * `ScrollView` de la feuille qui **suit le doigt**.
- *
- * Le geste est un `Pan` de Gesture Handler composé *simultanément* avec le
- * geste natif de défilement (`Gesture.Native`) : la vue défilante garde la main
- * sur le scroll, et le pan ne prend le relais que si le contenu est déjà tout en
- * haut — un glissement vers le bas y est alors une fermeture, pas un défilement.
- * C'est la seule façon d'obtenir ce suivi : un `PanResponder` (ou les
- * événements tactiles) est annulé par la vue défilante native dès les premiers
- * pixels, et ses rappels de défilement ne donnent que la vitesse, jamais la
- * position du doigt.
- */
-function DragScroll({ scrollRef, style, contentContainerStyle, children }: DragScrollProps) {
-  const sheetDrag = useSheetDrag();
-  /** Le contenu est tout en haut. */
-  const atTop = useRef(true);
-  /** Le geste en cours a commencé alors que le contenu était en haut. */
-  const fromTop = useRef(false);
-
-  const gesture = useMemo(
-    () =>
-      Gesture.Simultaneous(
-        Gesture.Native(),
-        Gesture.Pan()
-          // Reanimated n'est pas installé : les rappels restent sur le fil JS.
-          .runOnJS(true)
-          // S'active en descendant seulement : tirer vers le haut défile.
-          .activeOffsetY([-100000, DRAG_START])
-          .failOffsetY([-16, 100000])
-          .failOffsetX([-24, 24])
-          .onStart(() => {
-            fromTop.current = atTop.current;
-          })
-          .onUpdate((event) => {
-            if (!fromTop.current) return;
-            // On retire le seuil d'activation : la feuille ne saute pas de
-            // 8 px au moment où le geste prend la main.
-            sheetDrag?.follow(Math.max(0, event.translationY - DRAG_START));
-          })
-          .onEnd((event) => {
-            if (!fromTop.current) return;
-            fromTop.current = false;
-            const dismiss =
-              event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
-            sheetDrag?.release(dismiss);
-          })
-          .onFinalize((_event, success) => {
-            // Geste interrompu (appel entrant, doigt levé hors zone…) : la
-            // feuille reprend sa place au lieu de rester à mi-chemin.
-            if (success || !fromTop.current) return;
-            fromTop.current = false;
-            sheetDrag?.release(false);
-          })
-      ),
-    [sheetDrag]
-  );
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    atTop.current = event.nativeEvent.contentOffset.y <= 0;
-  };
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <ScrollView
-        ref={scrollRef}
-        style={style}
-        contentContainerStyle={contentContainerStyle}
-        scrollEventThrottle={16}
-        onScroll={handleScroll}
-        // Pas de rebond : c'est la feuille qui suit le doigt, pas le contenu.
-        bounces={false}
-        overScrollMode="never"
-      >
-        {children}
-      </ScrollView>
-    </GestureDetector>
   );
 }
 
@@ -344,14 +241,13 @@ const createStyles = (theme: Theme) =>
     tag: {
       borderRadius: radius.sm,
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surfaceAlt,
+      borderColor: theme.colors.success,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,
     },
     tagText: {
-      ...text.label,
-      color: theme.colors.text,
+      ...text.caption,
+      color: theme.colors.success,
     },
     meta: {
       ...text.meta,
@@ -359,7 +255,7 @@ const createStyles = (theme: Theme) =>
       marginTop: spacing.sm,
     },
     sectionTitle: {
-      ...text.cardTitle,
+      ...text.sectionTitle,
       color: theme.colors.text,
       marginTop: spacing.xxl,
       marginBottom: spacing.md,

@@ -8,7 +8,7 @@ import { useAccount } from '../services/account';
 import { abandonActiveWorkout, loadActiveWorkout, useActiveWorkout } from '../services/activeWorkout';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { duration, easing, radius, spacing, spring, text, touch } from '../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, spacing, spring, text, touch } from '../theme/tokens';
 import { ConfirmSheet, Icon, PressableScale, type ConfirmRequest } from './ui';
 
 /** Hauteur de la barre d'onglets (§8.9) : la bulle flotte juste au-dessus. */
@@ -91,7 +91,7 @@ export default function ActiveWorkoutBubble() {
     setConfirm({
       title: 'Abandonner la séance en cours ?',
       message:
-        'Les séries déjà validées ne seront pas enregistrées. Les poids saisis restent dans le programme.',
+        'Les séries validées ne seront pas enregistrées. Les poids saisis sont conservés.',
       confirmLabel: 'Abandonner',
       cancelLabel: 'Continuer',
       destructive: true,
@@ -130,8 +130,8 @@ export default function ActiveWorkoutBubble() {
             accessibilityLabel={`Reprendre la séance ${shown.nom}`}
           >
             <View style={styles.labels}>
-              <Text style={styles.title}>Reprendre la séance</Text>
-              <Text style={styles.meta} numberOfLines={1}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>// Reprendre la séance</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.meta} numberOfLines={1}>
                 {shown.nom}, {done} série{done > 1 ? 's' : ''} sur {total}
               </Text>
             </View>
@@ -143,7 +143,7 @@ export default function ActiveWorkoutBubble() {
               scaleTo={0.9}
               hitSlop={8}
             >
-              <Icon name="close" size={18} color={theme.colors.onAction} />
+              <Icon name="close" size={18} color={theme.colors.text} />
             </PressableScale>
           </PressableScale>
         </Animated.View>
@@ -171,24 +171,27 @@ const createStyles = (theme: Theme) =>
       paddingLeft: spacing.lg,
       paddingRight: spacing.sm,
       paddingVertical: spacing.sm,
-      borderRadius: radius.button,
-      backgroundColor: theme.colors.action,
+      borderWidth: 1,
+      borderColor: theme.colors.action,
+      backgroundColor: theme.colors.surface,
     },
     labels: {
       flex: 1,
     },
     title: {
       ...text.label,
-      color: theme.colors.onAction,
+      color: theme.colors.action,
     },
     meta: {
       ...text.caption,
-      color: theme.colors.onAction,
+      color: theme.colors.textMuted,
       marginTop: 2,
     },
     close: {
       width: 32,
       height: 32,
+      borderWidth: 1,
+      borderColor: theme.colors.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
     },

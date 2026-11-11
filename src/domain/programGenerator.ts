@@ -507,13 +507,13 @@ function resolveFormat(
   if (wanted === 'ppl' && sessionsPerWeek < 3) {
     return {
       format: 'full-body',
-      warning: `Le découpage ${FORMAT_LABEL.ppl} demande au moins 3 séances par semaine : Full body appliqué.`,
+      warning: `Le découpage ${FORMAT_LABEL.ppl} demande 3 séances par semaine minimum. Full body appliqué.`,
     };
   }
   if (wanted === 'upper-lower' && sessionsPerWeek < 2) {
     return {
       format: 'full-body',
-      warning: `Le découpage ${FORMAT_LABEL['upper-lower']} demande au moins 2 séances par semaine : Full body appliqué.`,
+      warning: `Le découpage ${FORMAT_LABEL['upper-lower']} demande 2 séances par semaine minimum. Full body appliqué.`,
     };
   }
   return { format: wanted, warning: null };
@@ -912,13 +912,13 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   const overlapping = requestedForts.filter((muscle) => weakPoints.has(muscle));
   if (overlapping.length > 0) {
     warnings.push(
-      `${overlapping.map((muscle) => muscleLabel(muscle)).join(', ')} ${overlapping.length > 1 ? 'sont cochés' : 'est coché'} à la fois en point fort et en point faible : priorisé${overlapping.length > 1 ? 's' : ''} (point faible).`
+      `${overlapping.map((muscle) => muscleLabel(muscle)).join(', ')} ${overlapping.length > 1 ? 'sont cochés' : 'est coché'} en point fort et en point faible : traité${overlapping.length > 1 ? 's' : ''} en point faible.`
     );
   }
 
   if ((profile.sessionsPerWeek ?? 3) > MAX_SESSIONS) {
     warnings.push(
-      `Tu as indiqué ${profile.sessionsPerWeek} séances par semaine : le programme est plafonné à ${MAX_SESSIONS}, la récupération fait partie de la progression.`
+      `Programme limité à ${MAX_SESSIONS} séances par semaine (au lieu de ${profile.sessionsPerWeek}) pour te laisser récupérer.`
     );
   }
 
@@ -931,7 +931,7 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
 
   if (allowed.size <= 1) {
     warnings.push(
-      'Aucun matériel déclaré : le programme est construit au poids du corps (les tractions, dips et pompes remplacent la fonte).'
+      'Aucun matériel déclaré : programme au poids du corps.'
     );
   }
   if (profile.zonesDouloureuses.length > 0) {
@@ -939,7 +939,7 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
       .map(([zone, count]) => `${count} pour « ${zoneLabel(zone)} »`)
       .join(', ');
     warnings.push(
-      `Mouvements écartés par prudence${details ? ` (${details})` : ''} — ce n'est pas un avis médical, en cas de douleur consulte un professionnel de santé.`
+      `Mouvements écartés par prudence${details ? ` (${details})` : ''}. Ce n'est pas un avis médical : en cas de douleur, consulte un professionnel.`
     );
   }
 
@@ -1093,43 +1093,43 @@ export function generateProgram(input: GenerateProgramInput): GeneratedProgram {
   // 3. Groupes de la trame qu'aucun exercice du catalogue ne peut couvrir avec ce matériel.
   if (unreachable.size > 0) {
     warnings.push(
-      `Aucun exercice accessible pour : ${[...unreachable].map((key) => muscleLabel(key)).join(', ')}. Ces muscles seront travaillés indirectement par les autres mouvements — ajouter du matériel (élastique, haltères) débloque le reste.`
+      `Aucun exercice accessible pour : ${[...unreachable].map((key) => muscleLabel(key)).join(', ')}. Ils seront travaillés indirectement. Ajoute du matériel pour les cibler.`
     );
   }
 
   // 4. Récapitulatif lisible.
   rationale.push(
-    `Objectif ${objectiveRules.label.toLowerCase()} : ${objectiveRules.polyReps[0]}–${objectiveRules.polyReps[1]} reps sur les mouvements polyarticulaires, ${objectiveRules.monoReps[0]}–${objectiveRules.monoReps[1]} sur l'isolation.`
+    `Objectif ${objectiveRules.label.toLowerCase()} : ${objectiveRules.polyReps[0]}–${objectiveRules.polyReps[1]} reps en polyarticulaire, ${objectiveRules.monoReps[0]}–${objectiveRules.monoReps[1]} en isolation.`
   );
   rationale.push(
-    `${sessionsPerWeek} séances par semaine, découpage ${FORMAT_LABEL[format]}, environ ${targetMinutes} min par séance.`
+    `${sessionsPerWeek} séances par semaine, ${FORMAT_LABEL[format]}, environ ${targetMinutes} min chacune.`
   );
   rationale.push(
-    'Le volume est calé sur cette durée : si une séance débordait, les exercices de fin de séance (abdos, mollets, avant-bras) sont retirés en premier ; s’il restait du temps, des exercices complémentaires sont ajoutés.'
+    'Séances calées sur cette durée : on retire d’abord abdos, mollets et avant-bras si ça déborde.'
   );
   if (weakPoints.size > 0) {
     rationale.push(
-      `Points faibles priorisés (${collapseMuscleKeys([...weakPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : +25 % de séries et un exercice de plus ; chaque groupe revient dans chaque séance qui travaille déjà la même zone du corps (jamais des jambes un jour de haut du corps).`
+      `Points faibles (${collapseMuscleKeys([...weakPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : +25 % de séries, un exercice de plus, et un créneau dans chaque séance de la même zone du corps.`
     );
   }
   if (strongPoints.size > 0) {
     rationale.push(
-      `Points forts allégés (${collapseMuscleKeys([...strongPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : −40 % de séries et un seul exercice par séance, pour laisser la place au reste.`
+      `Points forts (${collapseMuscleKeys([...strongPoints]).map((muscle) => muscleLabel(muscle)).join(', ')}) : −40 % de séries, un seul exercice par séance.`
     );
   }
   if (cappedSessions.size > 0) {
     rationale.push(
-      `Séance(s) dédiée(s) à un point fort (${[...cappedSessions].join(', ')}) : ${STRONG_FOCUS_MAX_ITEMS} exercices maximum au lieu de la trame complète.`
+      `Séance(s) dédiée(s) à un point fort (${[...cappedSessions].join(', ')}) : ${STRONG_FOCUS_MAX_ITEMS} exercices maximum.`
     );
   }
   rationale.push(
     `${MIN_SERIES} à ${MAX_SERIES} séries par exercice.`
   );
   if (profile.materiel.length > 0) {
-    rationale.push(`Matériel pris en compte : ${profile.materiel.length} type(s) déclaré(s).`);
+    rationale.push(`Matériel déclaré : ${profile.materiel.length} type(s).`);
   }
   rationale.push(
-    'Charges de départ reprises de ta dernière séance sur chaque exercice : ajuste le poids dès que tu atteins le haut de la fourchette de reps.'
+    'Charges reprises de ta dernière séance. Augmente dès que tu atteins le haut de la fourchette.'
   );
 
   const weeklySets = [...weekly.entries()]

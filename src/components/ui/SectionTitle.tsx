@@ -2,44 +2,40 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 import PressableScale from './PressableScale';
 
 interface Props {
   children: string;
-  /** Précision discrète à côté du titre (ex. « retiré de l'accueil »). */
+  /** Mention mono à droite : « 009 entrées », « unité : reps ». */
   hint?: string;
-  /** Élément aligné à droite (compteur, boutons). */
+  /** Contenu à droite (bouton, lien) ; remplace `hint`. */
   right?: ReactNode;
+  /** Retire le filet sous le titre. */
+  plain?: boolean;
   style?: StyleProp<ViewStyle>;
-  /** Rend le titre cliquable (ex. ouvrir la répartition d'un groupe). */
   onPress?: () => void;
 }
 
 /**
- * Titre de section (§6.2 « titre-2 ») : Big Shoulders, casse de phrase, encre
- * principale. Plus de majuscules espacées : la DA l'interdit (§3).
+ * Titre de section de la DA « Terminal » : Chakra Petch en capitales à gauche,
+ * mention mono à droite, souligné d'un filet sur toute la largeur.
  */
-export default function SectionTitle({ children, hint, right, style, onPress }: Props) {
+export default function SectionTitle({ children, hint, right, plain = false, style, onPress }: Props) {
   const styles = useThemedStyles(createStyles);
 
   const title = onPress ? (
-    // Un titre cliquable obéit à la même règle que le reste : il répond au
-    // doigt (100 ms), sinon on ne sait pas que l'appui a été pris.
-    <PressableScale onPress={onPress} accessibilityRole="button" scaleTo={0.98}>
-      <Text style={styles.title}>{children}</Text>
+    <PressableScale onPress={onPress} accessibilityRole="button" scaleTo={0.98} style={styles.titleWrap}>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title} accessibilityRole="header">{children}</Text>
     </PressableScale>
   ) : (
-    <Text style={styles.title}>{children}</Text>
+    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.title, styles.titleWrap]} accessibilityRole="header">{children}</Text>
   );
 
   return (
-    <View style={[styles.row, style]}>
-      <View style={styles.left}>
-        {title}
-        {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-      </View>
-      {right}
+    <View style={[styles.row, plain ? null : styles.ruled, style]}>
+      {title}
+      {right ?? (hint ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.hint}>{hint}</Text> : null)}
     </View>
   );
 }
@@ -48,24 +44,26 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
-      alignItems: 'baseline',
+      alignItems: 'flex-end',
       justifyContent: 'space-between',
       gap: spacing.sm,
       marginBottom: spacing.md,
+      paddingBottom: spacing.sm,
     },
-    left: {
+    ruled: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderStrong,
+    },
+    titleWrap: {
       flexShrink: 1,
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: spacing.sm,
     },
     title: {
       ...text.sectionTitle,
       color: theme.colors.text,
-      flexShrink: 1,
     },
     hint: {
       ...text.caption,
       color: theme.colors.textMuted,
+      marginBottom: 3,
     },
   });

@@ -1,6 +1,6 @@
 # Arny
 
-**Arny** — application mobile (Expo + React Native + TypeScript) de suivi d'entraînement : catalogue d'exercices, recherche, génération de programme et journal de séances. Interface suivant la direction artistique **« Foulée »** — thème **clair ou sombre selon le téléphone** ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md)) — textes et données en **français**.
+**Arny** — application mobile (Expo + React Native + TypeScript) de suivi d'entraînement : catalogue d'exercices, recherche, génération de programme et journal de séances. Interface suivant la direction artistique **« Terminal »** — thème **sombre** façon poste de commande ([`docs/DA_Arny_Terminal.md`](docs/DA_Arny_Terminal.md)) — textes et données en **français**.
 
 > 📌 **Document vivant** — ce README est mis à jour à chaque évolution. On coche la feuille de route et on ajuste les sections plutôt que de tout réécrire.
 
@@ -19,9 +19,9 @@
 - [ ] Module 3 — Exercices volatils (ajouter un exercice non prévu en pleine séance)
 - [x] Module 4 — **Récapitulatif de fin de séance** : volume, durée, reps, **radar des muscles — réparti en répétitions (pas en kilos)**, courbe d'évolution, détail des exercices et **records** (SVG). *(À venir : 1RM estimé, progression par exercice.)*
 - [ ] Module 4 — Statistiques globales (progression par exercice, volume par semaine)
-- [x] Écran **Accueil** : date du jour en toutes lettres, carte de la séance à faire (nom, aperçu des 3 premiers exercices au format « 4 × 8–12 », bouton **Commencer la séance**, ou **Reprendre la séance** si elle est en cours ; rotation par groupe), choix du groupe, **couloir « Cette semaine »** gradué selon la fréquence du profil (« 2 sur 4 ») et dernières séances (date en toutes lettres, volume ou temps d'effort à droite). Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
+- [x] Écran **Accueil** : date du jour en toutes lettres, carte de la séance à faire (nom, aperçu des 3 premiers exercices au format « 4 × 8–12 », bouton **Commencer la séance**, ou **Reprendre la séance** si elle est en cours ; rotation par groupe), choix du groupe, **couloir « Cette semaine »** gradué selon la fréquence du profil (« 2 sur 4 ») et dernières séances **du groupe actif** (chaque séance garde le groupe où elle a été faite ; date en toutes lettres, volume ou temps d'effort à droite) ; une séance se **supprime de l'historique** par appui long sur sa ligne ou depuis son récapitulatif (confirmation demandée, les charges des programmes ne changent pas). Une séance terminée se **corrige** depuis son récapitulatif (« Corriger la saisie » : poids, reps ou durée de chaque série, séries ajoutées/retirées, durée totale) ; volume et records sont recalculés, et les charges des programmes suivent si c'est la dernière fois que l'exercice a été fait. Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
 - [x] Navigation : **2 onglets** (Accueil / Séances) + écrans empilés (éditeur, séance en cours, récapitulatif, profils)
-- [x] **Thème clair / sombre** qui suit le téléphone (DA « Foulée ») et les deux polices de la DA
+- [x] **Refonte « Terminal »** : thème sombre unique, trois polices (Chakra Petch, IBM Plex Sans Condensed, IBM Plex Mono), angles vifs et relevés mono
 - [x] EAS configuré ([`eas.json`](eas.json)) : profil `preview` = **APK Android** autonome
 
 ## Stack
@@ -133,7 +133,7 @@ src/
     MuscleRadarChart.tsx    # radar des muscles du récapitulatif (SVG)
     PlateCalculatorModal.tsx # calculateur de chargement (barre + disques)
     VolumeLineChart.tsx     # courbe de volume/progression du récapitulatif (SVG)
-    ui/                     # Design system : Button, Card, Row, Chip, Sheet, ConfirmSheet…
+    ui/                     # Design system : Button, Card, Row, Chip, Sheet, SheetScrollView, ConfirmSheet, SystemBar, StatTiles, LeaderRow, DashedLine…
   data/
     exercises.seed.json     # catalogue (généré depuis le dataset)
     exerciseImages.ts       # map fichier -> require() des vignettes (généré)
@@ -152,7 +152,8 @@ src/
     format.ts               # formatage court (kg, durée, date)
   navigation/
     RootNavigator.tsx       # onglets (Accueil, Séances) + stack (éditeur, séance, récap…)
-    StartLineTabBar.tsx     # barre d'onglets « ligne de départ » (trait bleu, fond surface)
+    StartLineTabBar.tsx     # barre d'onglets numérotée (01 ACCUEIL / 02 SÉANCES, trait orange)
+    TerminalStackHeader.tsx # en-tête des écrans poussés (retour carré + intitulé mono)
     types.ts                # RootStackParamList + MainTabParamList + types de navigation
   screens/
     AccountSelectScreen.tsx # choix du profil (+ ⚙ gestion des profils)
@@ -163,6 +164,7 @@ src/
     SessionEditorScreen.tsx # création/édition de séance (fiche exercice, substitution)
     LiveWorkoutScreen.tsx   # séance en cours : poids/séries/reps, repos, reprise, arrêt
     SessionSummaryScreen.tsx # récapitulatif de fin de séance (stats, records)
+    CompletedSessionEditScreen.tsx # correction d'une séance terminée (erreur de saisie)
   services/                 # accès base / préférences / OS
     account.tsx             # AccountProvider + useAccount (profil actif)
     activeWorkout.ts        # séance en cours en mémoire + useActiveWorkout (bulle de reprise)
@@ -173,7 +175,7 @@ src/
   theme/
     colors.ts               # palette de la DA + rampes des zones d'effort
     tokens.ts               # jetons : espacements, rayons, typographie et familles, durées, courbes
-    theme.tsx               # ThemeProvider + useTheme / useThemedStyles (clair & sombre, suit le téléphone)
+    theme.tsx               # ThemeProvider + useTheme / useThemedStyles (thème sombre unique)
     index.ts                # réexports du thème
 assets/exercises/           # 1 324 vignettes 180x180 (© Gym visual)
 docs/                       # CDC, DA, SCHEMA.sql, guide de test
@@ -181,17 +183,17 @@ docs/                       # CDC, DA, SCHEMA.sql, guide de test
 
 ## Direction artistique
 
-L'app suit la DA « Foulée » ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md)) : le concept de **marquage au sol** (lignes et filets plutôt que cartes empilées).
+L'app suit la DA « Terminal » ([`docs/DA_Arny_Terminal.md`](docs/DA_Arny_Terminal.md)), tirée de la maquette *Arny — Refonte design-selection* : un **poste de commande** technique, thème sombre, titres gravés en capitales et relevés mono.
 
-- **Palette, une couleur = un rôle** : bleu court `#2347D6` (action), marine `#0D1B4C` (encre), jaune balise `#FFD60A` (record, « en cours » — jamais en texte), dalle `#EEF1F6` (fond), craie `#D5DAE5` (filets), ardoise `#5B6478` (texte secondaire), rouge piste `#D1273B` (erreur), vert gazon `#187A41` (réussi). Rien d'autre n'est bleu, sauf les données de progression.
-- **Clair & sombre, qui suit le téléphone** : `ThemeProvider` (`src/theme/theme.tsx`) applique le thème clair ou sombre (§14 de la DA). Un écran lit ses couleurs par rôle via `useTheme()` et calcule sa feuille de style avec `useThemedStyles(createStyles)`.
-- **Typographie** : Big Shoulders Display pour les chiffres et les titres, Public Sans pour le texte, chargées par `expo-font` dans `App.tsx`. Casse de phrase partout (aucune capitale espacée), le poids est porté par le nom de la famille.
-- **Grille** : espacements sur une base de 4, marge de 20 px pour tout le texte, rayons 4 / 8 / 12 / 20, hauteur tactile 48 px (56 pendant la séance).
-- **Une seule carte par écran**, réservée à l'action principale ; le reste est une liste à plat séparée par des filets de 1 px (`src/components/ui/Row.tsx`). Une seule ombre dans toute l'app : celle des feuilles.
-- **Briques** : `Button`, `Card`, `Row`, `Chip`, `IconButton`, `Input`, `Badge`, `Thumb`, `SectionTitle`, `ScreenHeader`, `StateView`, `Sheet`, `ConfirmSheet`, `ActionSheet`, `PressableScale`. Pas de nombre, de couleur ou de taille de police en dur dans les écrans.
+- **Palette, une couleur = un rôle** : graphite `#121211` (fond), carbone `#1B1C1A` (carte), crème `#E8E4D8` (encre), cendre `#8F8C82` (libellés), orange `#FF5A1F` (action, rubriques), kaki `#BDB58A` (validé, protocole, POLY), jaune `#F5C400` (records uniquement), rouge `#E5484D` (suppression).
+- **Thème sombre unique** : `ThemeProvider` (`src/theme/theme.tsx`) fournit les couleurs par rôle via `useTheme()` ; chaque écran calcule sa feuille avec `useThemedStyles(createStyles)`.
+- **Typographie** : Chakra Petch (titres et chiffres, en capitales), IBM Plex Sans Condensed (noms d'exercices, texte), IBM Plex Mono (libellés techniques, références, métadonnées), chargées par `expo-font` dans `App.tsx`.
+- **Formes** : angles vifs, contours de 1 px, séparateurs en pointillés, références décoratives (`RÉF. ARN-SE-001`, `A-01`, `#009`), notation entre crochets (`[ GO ]`, `[ + ] AJOUTER UN EXERCICE`).
+- **Une seule carte par écran**, réservée à l'action principale ; le reste est une liste à plat (`Row`) ou des blocs au trait. Une seule ombre : celle des feuilles.
+- **Briques** : `SystemBar`, `ScreenHeader` (rubrique `// …` + grand titre), `SectionTitle`, `Button` (`code`, `arrow`), `Card` (`crosshair`), `Badge`, `StatTiles`, `LeaderRow`, `DashedLine`, `Row`, `Chip`, `IconButton`, `Input`, `Thumb`, `StateView`, `Sheet`, `SheetScrollView` (glisser vers le bas pour fermer), `ConfirmSheet`, `ActionSheet`, `PressableScale`. En-tête des écrans poussés : `TerminalStackHeader`. Pas de nombre, de couleur ou de taille de police en dur dans les écrans.
 - **Feuilles** : toutes les modales de contenu sont des feuilles basses (`Sheet`, glissé 360 ms) qui se ferment en touchant à côté, avec le bouton de fermeture, ou avec le retour Android.
-- **Confirmations** : les cartes de validation et les messages d'erreur passent par `ConfirmSheet` (titre, détail, gros bouton rouge si destructif, « Annuler ») — plus aucune `Alert.alert` native.
-- **Animations** : glissé entre les onglets Accueil ↔ Séances, trait de départ sur l'onglet actif, écrans empilés en glissé (séance en cours depuis le bas), enfoncement de 100 ms à l'appui (`PressableScale`), coche de série remplie. Aucune apparition automatique des sections (interdit par la DA) : `Appear` n'est plus qu'une enveloppe.
+- **Confirmations** : `ConfirmSheet` (titre, détail, gros bouton rouge si destructif, « Annuler ») — aucune `Alert.alert` native.
+- **Animations** : glissé entre les onglets, trait orange qui glisse sous l'onglet actif, écrans empilés en glissé, enfoncement de 100 ms à l'appui (`PressableScale`). Aucune apparition automatique des sections ; un graphique peut se déployer une fois à l'arrivée de ses données.
 
 ## Données
 
@@ -203,26 +205,10 @@ L'app suit la DA « Foulée » ([`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_a
 - `docs/SCHEMA.sql` est la **source de vérité** du schéma SQLite (à garder synchronisé avec `src/services/database.ts`).
 - Remarques pour les agents/développeurs : [`AGENTS.md`](AGENTS.md).
 
-## Palette (DA « Foulée »)
-
-**Une couleur = un rôle**, en clair comme en sombre (valeurs dans `src/theme/colors.ts`). Les écrans ne lisent jamais un code couleur : ils passent par `useTheme()` (`colors.action`, `colors.marker`, `colors.danger`, `colors.surface`…).
-
-| Rôle | Clair | Sombre |
-| --- | --- | --- |
-| Fond | `#EEF1F6` (dalle) | `#0B1433` |
-| Surface | `#FFFFFF` | `#141E45` |
-| Action — interactif, liens, données de progression | `#2347D6` (bleu court) | `#7C95FF` |
-| Encre / texte | `#0D1B4C` (marine) | `#F2F5FF` |
-| Marqueur — record, « ici maintenant » (aplat à encre marine, **jamais en texte**) | `#FFD60A` (jaune balise) | `#FFD60A` |
-| Filets, bordures | `#D5DAE5` (craie) | `#2B3A75` |
-| Succès — fait, validé | `#187A41` (vert gazon) | `#4FD18B` |
-| Danger — erreur, suppression | `#D1273B` (rouge piste) | `#FF6B7D` |
-
-Les **zones d'effort** ont leur propre rampe Z1 → Z5 (`zonesLight` / `zonesDark`). La palette sombre du CDC (`#121218`, `#00E676`, `#00B0FF`, `#FF3D00`) est **remplacée** par cette DA.
-
 ## Documentation
 
-- [`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md) — direction artistique « Foulée » (source de vérité visuelle)
+- [`docs/DA_Arny_Terminal.md`](docs/DA_Arny_Terminal.md) — direction artistique « Terminal » (source de vérité visuelle)
+- [`docs/DA_Foulee_app_sport.md`](docs/DA_Foulee_app_sport.md) — ancienne DA « Foulée » (historique)
 - [`docs/CDC.md`](docs/CDC.md) — cahier des charges produit (v2.0)
 - [`docs/SCHEMA.sql`](docs/SCHEMA.sql) — schéma SQLite
 - [`docs/TESTING.md`](docs/TESTING.md) — installer/tester sur téléphone

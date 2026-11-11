@@ -6,7 +6,7 @@ import { findExerciseAlternatives } from '../domain/exerciseAlternatives';
 import { exerciseTermLabel } from '../domain/exerciseLabels';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 import { PressableScale, SectionTitle, Thumb } from './ui';
 import Row from './ui/Row';
 
@@ -49,8 +49,10 @@ export default function ExerciseAlternatives({
 
   return (
     <View style={styles.root}>
-      <SectionTitle>Remplacer cet exercice</SectionTitle>
-      <Text style={styles.hint}>
+      <SectionTitle hint={`${String(ranked.length).padStart(2, '0')} option${ranked.length > 1 ? 's' : ''}`}>
+        Remplacer cet exercice
+      </SectionTitle>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.hint}>
         Mêmes muscles travaillés. Séries, cible (reps ou durée) et repos sont conservés ; les
         poids repartent de zéro.
       </Text>
@@ -61,7 +63,7 @@ export default function ExerciseAlternatives({
           const meta = [exercise.target, exercise.equipment]
             .filter((value): value is string => Boolean(value))
             .map(exerciseTermLabel)
-            .join(', ');
+            .join(' · ');
           return (
             <Row
               key={exercise.id}
@@ -71,12 +73,12 @@ export default function ExerciseAlternatives({
             >
               <Thumb source={source} size={44} />
               <View style={styles.rowBody}>
-                <Text style={styles.rowTitle} numberOfLines={2}>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowTitle} numberOfLines={2}>
                   {exercise.nom}
                 </Text>
-                {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
+                {meta ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowMeta}>{meta}</Text> : null}
               </View>
-              <Text style={styles.swap}>Changer</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.swap}>[ Changer ]</Text>
             </Row>
           );
         })}
@@ -88,7 +90,7 @@ export default function ExerciseAlternatives({
         accessibilityLabel="Voir tous les exercices similaires"
         onPress={onSeeAll}
       >
-        <Text style={styles.seeAllText}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.seeAllText}>
           Voir tous les exercices similaires ({ranked.length})
         </Text>
       </PressableScale>
@@ -121,6 +123,7 @@ const createStyles = (theme: Theme) =>
     },
     rowMeta: {
       ...text.caption,
+      fontSize: 11,
       color: theme.colors.textMuted,
       marginTop: 2,
     },

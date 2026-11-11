@@ -5,7 +5,7 @@ import {
   NavigationContainer,
   type Theme as NavigationTheme,
 } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, type NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { useMemo } from 'react';
 import { Easing, StyleSheet, View } from 'react-native';
 
@@ -17,19 +17,21 @@ import LiveWorkoutScreen from '../screens/LiveWorkoutScreen';
 import MainScreen from '../screens/MainScreen';
 import ProgramGeneratorScreen from '../screens/ProgramGeneratorScreen';
 import SessionEditorScreen from '../screens/SessionEditorScreen';
+import CompletedSessionEditScreen from '../screens/CompletedSessionEditScreen';
 import GroupStatsScreen from '../screens/GroupStatsScreen';
 import SessionListScreen from '../screens/SessionListScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
 import { useAccount } from '../services/account';
 import { useTheme, type Theme } from '../theme';
-import { duration, text } from '../theme/tokens';
+import { duration } from '../theme/tokens';
 import StartLineTabBar from './StartLineTabBar';
+import TerminalStackHeader from './TerminalStackHeader';
 import type { MainTabParamList, RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-/** Thème de navigation aligné sur le thème actif (clair ou sombre, §14). */
+/** Thème de navigation aligné sur le thème de l'app (sombre). */
 function toNavigationTheme(theme: Theme): NavigationTheme {
   const base = theme.isDark ? DarkTheme : DefaultTheme;
   return {
@@ -86,11 +88,8 @@ export default function RootNavigator() {
   const stackScreenOptions = useMemo(
     () =>
       ({
-        headerStyle: { backgroundColor: theme.colors.background },
-        headerTintColor: theme.colors.action,
-        headerTitleStyle: { ...text.title, color: theme.colors.text },
-        headerTitleAlign: 'left',
-        headerShadowVisible: false,
+        // En-tête « terminal » : retour carré + intitulé mono centré.
+        header: (props: NativeStackHeaderProps) => <TerminalStackHeader {...props} />,
         contentStyle: { backgroundColor: theme.colors.background },
         animation: 'slide_from_right',
         animationDuration: duration.base,
@@ -163,6 +162,11 @@ export default function RootNavigator() {
                 animation: 'fade',
                 headerBackVisible: false,
               }}
+            />
+            <Stack.Screen
+              name="CompletedSessionEdit"
+              component={CompletedSessionEditScreen}
+              options={{ title: 'Corriger la séance' }}
             />
              <Stack.Screen
                name="GroupStats"

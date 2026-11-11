@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../theme';
-import { spacing, text, touch } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text, touch } from '../theme/tokens';
+import DashedLine from './ui/DashedLine';
 import PressableScale from './ui/PressableScale';
 import Sheet from './ui/Sheet';
 
@@ -47,22 +48,25 @@ export default function ActionSheet({ visible, title, items, onClose }: Props) {
       }}
     >
       <View style={styles.items}>
-        {items.map((item) => (
-          <PressableScale
-            key={item.label}
-            style={styles.item}
-            onPress={() => selectItem(item)}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.itemText, item.destructive === true && styles.itemDanger]}>
-              {item.label}
-            </Text>
-          </PressableScale>
+        {items.map((item, index) => (
+          <View key={item.label}>
+            <PressableScale
+              style={styles.item}
+              onPress={() => selectItem(item)}
+              accessibilityRole="button"
+            >
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.itemCode}>{String(index + 1).padStart(2, '0')}</Text>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.itemText, item.destructive === true && styles.itemDanger]}>
+                {item.label}
+              </Text>
+            </PressableScale>
+            {index < items.length - 1 ? <DashedLine /> : null}
+          </View>
         ))}
       </View>
 
       <PressableScale style={styles.cancel} onPress={onClose} accessibilityRole="button">
-        <Text style={styles.cancelText}>Annuler</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.cancelText}>[ Annuler ]</Text>
       </PressableScale>
     </Sheet>
   );
@@ -74,15 +78,20 @@ const createStyles = (theme: Theme) =>
       paddingHorizontal: spacing.md,
     },
     item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
       minHeight: touch.min,
-      justifyContent: 'center',
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+    },
+    itemCode: {
+      ...text.caption,
+      color: theme.colors.textMuted,
     },
     itemText: {
-      ...text.subtitle,
+      ...text.cardTitle,
+      flex: 1,
       color: theme.colors.text,
     },
     itemDanger: {
@@ -95,7 +104,7 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
     },
     cancelText: {
-      ...text.subtitle,
+      ...text.label,
       color: theme.colors.textMuted,
     },
   });

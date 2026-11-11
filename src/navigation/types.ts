@@ -14,6 +14,8 @@ export type RootStackParamList = {
   LiveWorkout: { programId: number };
   /** Récapitulatif post-séance (Module 4 - Stats), ouvert à la fin d'une séance. */
   SessionSummary: { sessionId: number };
+  /** Correction d'une séance terminée (erreur de saisie), ouverte depuis le récapitulatif. */
+  CompletedSessionEdit: { sessionId: number };
   /** Répartition musculaire d'un groupe (split). */
   GroupStats: { groupId: number };
   /**

@@ -23,7 +23,7 @@ export default function IconButton({
   onPress,
   tone = 'neutral',
   active = false,
-  size = 36,
+  size = 44,
   accessibilityLabel,
 }: Props) {
   const theme = useTheme();
@@ -74,7 +74,7 @@ const createStyles = (theme: Theme) =>
       borderWidth: 1,
       // Un bouton d'icône est un contrôle : sa limite doit se lire (3:1).
       borderColor: theme.colors.borderStrong,
-      backgroundColor: theme.colors.surfaceAlt,
+      backgroundColor: 'transparent',
       borderRadius: radius.sm,
     },
   });

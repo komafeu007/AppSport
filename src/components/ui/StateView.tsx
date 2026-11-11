@@ -4,7 +4,7 @@ import Svg, { Circle, Line, Rect } from 'react-native-svg';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { radius, spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, radius, spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 import Icon from './Icon';
 
@@ -110,9 +110,9 @@ export default function StateView({ kind, title, message, action, style }: Props
       {kind === 'error' ? <Icon name="alert" size={36} color={theme.colors.danger} /> : null}
       {kind === 'empty' ? <PitchMark /> : null}
       {heading ? (
-        <Text style={[styles.title, kind === 'error' && styles.titleError]}>{heading}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.title, kind === 'error' && styles.titleError]}>{heading}</Text>
       ) : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {message ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.message}>{message}</Text> : null}
       {action ? <View style={styles.action}>{action}</View> : null}
     </Appear>
   );
@@ -133,8 +133,8 @@ const createStyles = (theme: Theme) =>
     },
     skeletonBar: {
       height: 12,
-      borderRadius: radius.pill,
-      backgroundColor: theme.colors.border,
+      borderRadius: radius.none,
+      backgroundColor: theme.colors.borderStrong,
     },
     skeletonTitle: {
       width: 140,
@@ -144,7 +144,7 @@ const createStyles = (theme: Theme) =>
       width: '75%',
     },
     title: {
-      ...text.title,
+      ...text.sectionTitle,
       color: theme.colors.text,
       textAlign: 'center',
       marginTop: spacing.md,

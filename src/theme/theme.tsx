@@ -1,21 +1,12 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { useColorScheme, type ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
-import {
-  chartSeriesDark,
-  chartSeriesLight,
-  darkPalette,
-  palette,
-  zonesBorderDark,
-  zonesBorderLight,
-  zonesDark,
-  zonesLight,
-} from './colors';
+import { chartSeries, palette, zones } from './colors';
 
 /**
- * Thème de l'app — direction artistique « Foulée » (docs/DA_Foulee_app_sport.md).
+ * Thème de l'app — direction artistique « Terminal » (docs/DA_Arny_Terminal.md).
  *
- * Le mode suit le réglage du système (§14). Aucun écran ne doit importer une
+ * Aucun écran ne doit importer une
  * couleur brute : tout passe par `useTheme()` (couleurs de rôle) et
  * `useThemedStyles()` (feuille de style recalculée au changement de thème).
  */
@@ -33,7 +24,7 @@ export interface ThemeColors {
   surface: string;
   /** Surface secondaire : puce au repos, tuile d'image, bouton neutre. */
   surfaceAlt: string;
-  /** Surface d'un contrôle sélectionné (puce, filtre) — marine en clair. */
+  /** Surface d'un contrôle sélectionné (puce, filtre) — crème. */
   selectedSurface: string;
   /** Encre posée sur la surface de sélection. */
   onSelected: string;
@@ -54,15 +45,15 @@ export interface ThemeColors {
   actionPressed: string;
   /** Texte et icônes posés sur l'action. */
   onAction: string;
-  /** Marqueur : série en cours, record, ligne de départ (jaune balise). */
+  /** Marqueur : record, ce qui se passe maintenant (jaune record). */
   marker: string;
-  /** Encre posée sur le marqueur (toujours marine). */
+  /** Encre posée sur le marqueur (graphite). */
   onMarker: string;
   /** Erreur, suppression, alerte. */
   danger: string;
   /** Texte posé sur l'erreur. */
   onDanger: string;
-  /** Succès, objectif atteint. */
+  /** Succès, statut validé (kaki). */
   success: string;
   /** Encre posée sur le succès. */
   onSuccess: string;
@@ -84,85 +75,51 @@ export interface Theme {
   shadow: ViewStyle;
 }
 
-export const lightTheme: Theme = {
-  mode: 'light',
-  isDark: false,
-  colors: {
-    background: palette.dalle,
-    surface: palette.blanc,
-    surfaceAlt: palette.craieClaire,
-    selectedSurface: palette.marine,
-    onSelected: palette.blanc,
-    border: palette.craie,
-    borderStrong: palette.ardoiseControle,
-    text: palette.marine,
-    textMuted: palette.ardoise,
-    action: palette.bleuCourt,
-    actionPressed: palette.bleuAppui,
-    onAction: palette.blanc,
-    marker: palette.jauneBalise,
-    onMarker: palette.marine,
-    danger: palette.rougePiste,
-    onDanger: palette.blanc,
-    success: palette.vertGazon,
-    onSuccess: palette.blanc,
-    overlay: 'rgba(13, 27, 76, 0.4)',
-  },
-  zones: zonesLight,
-  chartSeries: chartSeriesLight,
-  zoneBorder: zonesBorderLight,
-  shadow: {
-    shadowColor: palette.marine,
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: -8 },
-    elevation: 12,
-  },
-};
-
+/**
+ * Thème unique : la DA « Terminal » est sombre par construction (fond graphite,
+ * encre crème). Le réglage clair/sombre du téléphone n'a plus d'effet.
+ */
 export const darkTheme: Theme = {
   mode: 'dark',
   isDark: true,
   colors: {
-    background: darkPalette.fond,
-    surface: darkPalette.surface,
-    surfaceAlt: darkPalette.surfaceHaute,
-    selectedSurface: darkPalette.action,
-    onSelected: darkPalette.encre,
-    border: darkPalette.filet,
-    borderStrong: darkPalette.filetControle,
-    text: darkPalette.texte,
-    textMuted: darkPalette.texteSecondaire,
-    action: darkPalette.action,
-    actionPressed: darkPalette.actionAppui,
-    onAction: darkPalette.encre,
-    marker: darkPalette.marqueur,
-    onMarker: darkPalette.encre,
-    danger: darkPalette.erreur,
-    onDanger: darkPalette.encre,
-    success: darkPalette.succes,
-    onSuccess: darkPalette.encre,
-    overlay: 'rgba(4, 9, 26, 0.6)',
+    background: palette.graphite,
+    surface: palette.carbone,
+    surfaceAlt: palette.acier,
+    selectedSurface: palette.creme,
+    onSelected: palette.graphite,
+    border: palette.filet,
+    borderStrong: palette.filetControle,
+    text: palette.creme,
+    textMuted: palette.cendre,
+    action: palette.orange,
+    actionPressed: palette.orangeAppui,
+    onAction: palette.graphite,
+    marker: palette.jauneRecord,
+    onMarker: palette.graphite,
+    danger: palette.rouge,
+    onDanger: palette.graphite,
+    success: palette.kaki,
+    onSuccess: palette.graphite,
+    overlay: 'rgba(0, 0, 0, 0.72)',
   },
-  zones: zonesDark,
-  chartSeries: chartSeriesDark,
-  zoneBorder: zonesBorderDark,
+  zones,
+  chartSeries,
+  zoneBorder: palette.filet,
   shadow: {
-    shadowColor: darkPalette.fond,
-    shadowOpacity: 0.5,
+    shadowColor: '#000000',
+    shadowOpacity: 0.6,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: -8 },
     elevation: 12,
   },
 };
 
-const ThemeContext = createContext<Theme>(lightTheme);
+const ThemeContext = createContext<Theme>(darkTheme);
 
-/** Applique le thème clair ou sombre selon le réglage du téléphone. */
+/** Fournit le thème (unique, sombre) à l'app. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const scheme = useColorScheme();
-  const theme = scheme === 'dark' ? darkTheme : lightTheme;
-  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={darkTheme}>{children}</ThemeContext.Provider>;
 }
 
 /** Thème actif : couleurs de rôle, rampes et ombre. */

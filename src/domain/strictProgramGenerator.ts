@@ -193,7 +193,7 @@ export function generateStrictProgram(input: StrictGeneratorInput): StrictProgra
   // on enregistre l'avertissement. L'exclusion réelle des exercices se fait côté UI
   // via les tags. On conserve la liste pour traçabilité.
   if (input.healthTags && input.healthTags.length > 0) {
-    warnings.push(`Tags santé pris en compte pour l'exclusion : ${input.healthTags.join(', ')}.`);
+    warnings.push(`Tags santé pris en compte : ${input.healthTags.join(', ')}.`);
   }
 
   // abdos toujours 0 (exclus)

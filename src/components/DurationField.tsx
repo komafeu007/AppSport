@@ -17,7 +17,7 @@ import {
   parseDurationInput,
 } from '../domain/workoutRules';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 
 interface Props {
   /** Durée en secondes. */
@@ -68,8 +68,8 @@ export default function DurationField({
 
   return (
     <View style={[styles.container, style]}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput
+      {label ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.label}>{label}</Text> : null}
+      <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
         style={[styles.input, inputStyle]}
         value={draft}
         onChangeText={setDraft}
@@ -84,9 +84,9 @@ export default function DurationField({
         accessibilityLabel={accessibilityLabel ?? label}
       />
       {hint === true ? (
-        <Text style={styles.hint}>{formatRest(value)}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.hint}>{formatRest(value)}</Text>
       ) : hint ? (
-        <Text style={styles.hint}>{hint}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.hint}>{hint}</Text>
       ) : null}
     </View>
   );
@@ -104,10 +104,11 @@ const createStyles = (theme: Theme) =>
       minHeight: 56,
       textAlign: 'center',
       ...text.subtitle,
+      fontFamily: fontFamily.monoMedium,
       color: theme.colors.text,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceAlt,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderStrong,
       borderRadius: radius.control,
       paddingHorizontal: spacing.sm,
       fontVariant: ['tabular-nums'],

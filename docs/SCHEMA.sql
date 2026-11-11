@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS LOGS_SESSION (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER,
     program_id INTEGER,           -- séance (PROGRAMS) réellement effectuée
+    group_id INTEGER,             -- groupe (SESSION_GROUPS) de la séance au moment où elle a été faite (v16)
     date TEXT NOT NULL,
     duration_sec INTEGER,
     total_volume REAL,

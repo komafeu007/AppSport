@@ -42,10 +42,13 @@ const createStyles = (theme: Theme) =>
     thumb: {
       backgroundColor: theme.colors.surfaceAlt,
       borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.borderStrong,
     },
     placeholder: {
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.borderStrong,
+      borderStyle: 'dashed',
     },
     center: {
       alignItems: 'center',

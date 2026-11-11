@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, type Theme } from '../../theme';
-import { duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 
 interface Props {
   visible: boolean;
@@ -182,7 +182,7 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
             ]}
           >
             <View style={styles.handle} />
-            {title ? <Text style={styles.title}>{title}</Text> : null}
+            {title ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>{title}</Text> : null}
             <SheetDragContext.Provider value={drag}>{children}</SheetDragContext.Provider>
           </Animated.View>
         </KeyboardAvoidingView>
@@ -214,7 +214,10 @@ const createStyles = (theme: Theme) =>
       borderTopRightRadius: radius.sheet,
       borderWidth: 1,
       borderBottomWidth: 0,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.borderStrong,
+      // Filet orange en tête : la feuille est « l'opération en cours ».
+      borderTopWidth: 2,
+      borderTopColor: theme.colors.action,
       maxHeight: '88%',
       ...theme.shadow,
     },
@@ -222,8 +225,7 @@ const createStyles = (theme: Theme) =>
       alignSelf: 'center',
       width: 36,
       height: 4,
-      borderRadius: radius.pill,
-      backgroundColor: theme.colors.border,
+      backgroundColor: theme.colors.borderStrong,
       marginTop: spacing.sm,
       marginBottom: spacing.sm,
     },

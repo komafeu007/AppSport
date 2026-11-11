@@ -195,7 +195,7 @@ export function parseDurationInput(input: string): number | null {
 
 /** Résumé court des règles conseillées, affiché sous chaque exercice. */
 export function describeRules(isPoly: number | boolean, endurance = false): string {
-  if (endurance) return 'Endurance, au temps : la durée remplace les répétitions';
+  if (endurance) return 'Endurance : la durée remplace les reps';
   const { seriesRange, restRange } = rulesFor(isPoly);
   const rest =
     restRange[0] === restRange[1] ? `${restRange[0]} s` : `${restRange[0]}–${restRange[1]} s`;
@@ -204,11 +204,11 @@ export function describeRules(isPoly: number | boolean, endurance = false): stri
 
 /** Rappel de la double progression, affiché dans l'éditeur. */
 export const PROGRESSION_HINT =
-  'Double progression : démarre au min de reps, et dès que tu atteins le max, monte le poids et redescends au min.';
+  'Double progression : une fois le max de reps atteint, monte la charge et repars du min.';
 
 /** Rappel de la saisie au temps, affiché dès qu'un exercice d'endurance est présent. */
 export const ENDURANCE_HINT =
-  'Exercices d’endurance : la cible est une durée (mm:ss), pas une répétition. La charge n’est pas demandée.';
+  'Endurance : la cible est une durée (mm:ss), sans charge.';
 
 /** Une série (poids + reps) pour la comparaison des records. */
 export interface SetPerformance {

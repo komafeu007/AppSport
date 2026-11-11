@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -9,18 +9,34 @@ import {
   Button,
   Card,
   Chip,
-  Icon,
+  ConfirmSheet,
+  Badge,
+  LeaderRow,
   Row,
   ScreenHeader,
   SectionTitle,
   StateView,
+  StatTiles,
+  SystemBar,
+  type ConfirmRequest,
 } from '../components/ui';
 import { ACTIVE_WORKOUT_BUBBLE_SPACE } from '../components/ActiveWorkoutBubble';
-import { formatDuration, formatKg, formatLongDate, startOfWeek } from '../lib/format';
+import {
+  formatDotDate,
+  formatDotDateYear,
+  formatDuration,
+  formatKg,
+  formatLongDate,
+  formatWeekdayShort,
+  isoWeekNumber,
+  padIndex,
+  startOfWeek,
+} from '../lib/format';
 import type { MainScreenNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { useActiveWorkout } from '../services/activeWorkout';
 import {
+  deleteCompletedSession,
   getCompletedSessions,
   getNextProgramInGroup,
   getProgramExercises,
@@ -32,22 +48,10 @@ import {
 } from '../services/database';
 import { getActiveGroupId, getHiddenGroupIds, setActiveGroupId } from '../services/preferences';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
-/** Exercices montrés dans la carte de la prochaine séance (le reste est résumé). */
-const PREVIEW_COUNT = 3;
-
-/** Prescription d'un exercice, au format de la DA : « 4 × 8 », « 3 × 8–12 », « 3 × 2:00 ». */
-function prescription(exercise: ProgramExercise): string {
-  const series = exercise.series ?? 1;
-  if (exercise.duration_sec !== null && exercise.duration_sec > 0) {
-    return `${series} × ${formatDuration(exercise.duration_sec)}`;
-  }
-  const min = exercise.reps_min ?? exercise.reps_max;
-  const max = exercise.reps_max ?? exercise.reps_min;
-  if (min === null || max === null) return `${series} séries`;
-  return `${series} × ${min === max ? min : `${min}–${max}`}`;
-}
+/** Barres du code-barres décoratif (largeurs en px, alternées barre / vide). */
+const BARCODE = [2, 1, 1, 3, 2, 1, 4, 1, 2, 2, 1, 3, 1, 1, 2, 4, 1, 2, 3, 1, 1, 2, 1, 3, 2, 1, 1, 4, 2, 1];
 
 export default function MainScreen() {
   const styles = useThemedStyles(createStyles);
@@ -66,6 +70,7 @@ export default function MainScreen() {
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const loaded = useRef(false);
 
   const load = useCallback(() => {
@@ -112,6 +117,25 @@ export default function MainScreen() {
 
   useFocusEffect(load);
 
+  // Appui long sur une séance de l'historique : la retirer, après confirmation.
+  const askDeleteSession = (session: CompletedSession) => {
+    setConfirm({
+      title: 'Supprimer cette séance',
+      message: `${session.nom_seance ?? 'Séance'} du ${formatLongDate(
+        session.date
+      )} disparaît de l’historique et des stats. Tes charges ne changent pas.`,
+      confirmLabel: 'Supprimer',
+      destructive: true,
+      onConfirm: () => {
+        deleteCompletedSession(db, session.id)
+          .then(load)
+          .catch((cause: unknown) =>
+            setError(cause instanceof Error ? cause.message : 'Erreur inconnue')
+          );
+      },
+    });
+  };
+
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const visibleGroups = groups.filter((group) => !hiddenIds.includes(group.id));
 
@@ -143,7 +167,7 @@ export default function MainScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Accueil" />
+        <ScreenHeader kicker="01 — Tableau de bord" title="Accueil" />
         <StateView kind="loading" style={styles.flex} />
       </SafeAreaView>
     );
@@ -152,7 +176,7 @@ export default function MainScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Accueil" />
+        <ScreenHeader kicker="01 — Tableau de bord" title="Accueil" />
         <StateView
           kind="error"
           title="Base de données indisponible"
@@ -167,24 +191,53 @@ export default function MainScreen() {
     visibleGroups.length > 0 && (visibleGroups.length > 1 || activeGroupId === null);
   const resuming = nextSession !== null && activeWorkout?.program_id === nextSession.id;
 
-  // Couloir de la semaine (§8.6) : une graduation par séance prévue au profil.
+  // Couloir de la semaine : séances faites depuis lundi sur celles prévues au profil.
+  const now = new Date();
   const weekStart = startOfWeek();
   const weekCount = sessions.filter((session) => new Date(session.date) >= weekStart).length;
   const weekTarget = account?.sessions_per_week ?? null;
   const showWeek = weekTarget !== null && weekTarget > 0;
 
+  // Télémétrie des 7 derniers jours.
+  const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const recent = sessions.filter((session) => new Date(session.date).getTime() >= sevenDaysAgo);
+  const recentVolume = recent.reduce((sum, session) => sum + session.total_volume, 0);
+  const recentDuration = recent.reduce((sum, session) => sum + (session.duration_sec ?? 0), 0);
+
+  // Dernière fois que cette séance a été faite (volume et durée).
+  const lastOfNext =
+    nextSession === null
+      ? null
+      : (sessions.find((session) => session.program_id === nextSession.id) ?? null);
+  const refCode = nextSession ? `ARN-SE-${padIndex(nextSession.id, 3)}` : null;
+
+  // Le journal suit le groupe actif : chaque séance garde le groupe où elle a été faite.
+  const journal =
+    activeGroupId === null
+      ? sessions
+      : sessions.filter((session) => session.group_id === activeGroupId);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <SystemBar
+        center={`${formatWeekdayShort(now)} ${formatDotDateYear(now)}`}
+        right={`SEM. ${padIndex(isoWeekNumber(now))}`}
+      />
       <ScreenHeader
+        kicker="01 — Tableau de bord"
         title="Accueil"
-        subtitle={formatLongDate(new Date())}
         right={
-          <Button
-            label={account?.prenom ?? 'Compte'}
-            variant="secondary"
-            size="sm"
+          <Pressable
+            style={styles.operator}
             onPress={() => navigation.navigate('Accounts')}
-          />
+            accessibilityRole="button"
+            accessibilityLabel={`Profil ${account?.prenom ?? ''}`}
+          >
+            <View style={styles.operatorDot} />
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.operatorText} numberOfLines={1}>
+              OP. {(account?.prenom ?? 'Compte').toUpperCase()}
+            </Text>
+          </Pressable>
         }
       />
 
@@ -192,38 +245,56 @@ export default function MainScreen() {
         contentContainerStyle={[styles.content, activeWorkout !== null && styles.contentReserved]}
       >
         <Appear>
-          <Card tone="accent" style={styles.hero}>
+          <Card crosshair style={styles.hero}>
             {nextSession && activeGroup ? (
               <>
-                <Text style={styles.heroContext} numberOfLines={1}>
-                  {resuming ? 'Séance en cours' : `Prochaine séance, ${activeGroup.nom}`}
-                </Text>
-                <Text style={styles.heroTitle} numberOfLines={2}>
+                <View style={styles.heroTop}>
+                  <Badge tone="action" label={resuming ? 'SÉANCE EN COURS' : 'PROCHAINE SÉANCE'} />
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.ref}>RÉF. {refCode}</Text>
+                </View>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.heroTitle} numberOfLines={2}>
                   {nextSession.nom_seance}
                 </Text>
 
-                {nextExercises.length > 0 ? (
-                  <View style={styles.preview}>
-                    {nextExercises.slice(0, PREVIEW_COUNT).map((exercise) => (
-                      <View key={exercise.id} style={styles.previewRow}>
-                        <Text style={styles.previewName} numberOfLines={1}>
-                          {exercise.nom}
-                        </Text>
-                        <Text style={styles.previewValue}>{prescription(exercise)}</Text>
-                      </View>
+                <View style={styles.leaders}>
+                  {nextExercises.length > 0 ? (
+                    <LeaderRow label="Exercices" value={padIndex(nextExercises.length)} />
+                  ) : null}
+                  <LeaderRow label="Groupe" value={activeGroup.nom.toUpperCase()} />
+                  {lastOfNext && lastOfNext.total_volume > 0 ? (
+                    <LeaderRow
+                      label="Dernier volume"
+                      value={formatKg(lastOfNext.total_volume).toUpperCase()}
+                    />
+                  ) : null}
+                  {lastOfNext && (lastOfNext.duration_sec ?? 0) > 0 ? (
+                    <LeaderRow
+                      label="Dernière durée"
+                      value={formatDuration(lastOfNext.duration_sec ?? 0)}
+                    />
+                  ) : null}
+                </View>
+
+                <View style={styles.barcodeRow} accessibilityElementsHidden>
+                  <View style={styles.barcode}>
+                    {BARCODE.map((width, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.bar,
+                          { width, marginRight: 2 },
+                          index % 2 === 1 && styles.barGap,
+                        ]}
+                      />
                     ))}
-                    {nextExercises.length > PREVIEW_COUNT ? (
-                      <Text style={styles.previewMore}>
-                        {nextExercises.length - PREVIEW_COUNT === 1
-                          ? 'Et 1 autre exercice'
-                          : `Et ${nextExercises.length - PREVIEW_COUNT} autres exercices`}
-                      </Text>
-                    ) : null}
                   </View>
-                ) : null}
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.ref}>{refCode}</Text>
+                </View>
 
                 <Button
-                  label={resuming ? 'Reprendre la séance' : 'Commencer la séance'}
+                  label={resuming ? 'Reprendre' : 'Démarrer'}
+                  code="GO"
+                  arrow
                   size="lg"
                   style={styles.heroButton}
                   onPress={() =>
@@ -233,7 +304,7 @@ export default function MainScreen() {
               </>
             ) : (
               <>
-                <Text style={styles.heroTitle}>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.heroTitle}>
                   {groups.length === 0
                     ? 'Aucun groupe'
                     : visibleGroups.length === 0
@@ -242,14 +313,14 @@ export default function MainScreen() {
                         ? 'Aucune séance dans ce groupe'
                         : 'Choisis ton groupe'}
                 </Text>
-                <Text style={styles.heroMeta}>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.heroMeta}>
                   {groups.length === 0
-                    ? 'Crée un groupe (PPL, Maison, Upper/Lower…) et ajoute-y tes séances.'
+                    ? 'Crée un groupe, puis ajoute-y tes séances.'
                     : visibleGroups.length === 0
-                      ? 'Tous les groupes sont retirés de l’accueil. Réactive-en un depuis l’onglet Séances.'
+                      ? 'Tous les groupes sont masqués. Réaffiche-en un depuis l’onglet Séances.'
                       : activeGroup
-                        ? 'Ajoute une séance à ce groupe pour la voir apparaître ici.'
-                        : 'Sélectionne un groupe ci-dessous : sa prochaine séance s’affichera ici.'}
+                        ? 'Ajoute une séance à ce groupe.'
+                        : 'Choisis un groupe ci-dessous.'}
                 </Text>
                 <Button
                   label={
@@ -259,6 +330,8 @@ export default function MainScreen() {
                         ? 'Ajouter une séance'
                         : 'Gérer mes séances'
                   }
+                  code="GO"
+                  arrow
                   size="lg"
                   style={styles.heroButton}
                   onPress={openPrimaryAction}
@@ -268,69 +341,61 @@ export default function MainScreen() {
           </Card>
         </Appear>
 
+        <Appear style={styles.section}>
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.caption}>// Télémétrie — 7 derniers jours</Text>
+          <StatTiles
+            tiles={[
+              showWeek
+                ? {
+                    // Objectif de la semaine (depuis lundi), pas sur 7 jours glissants.
+                    label: 'A.01 Sem. / obj.',
+                    value: `${padIndex(weekCount)}/${padIndex(weekTarget)}`,
+                  }
+                : { label: 'A.01 Séances', value: padIndex(recent.length) },
+              {
+                label: 'A.02 Volume',
+                value: (recentVolume / 1000).toFixed(1).replace('.', ','),
+                unit: 't',
+              },
+              { label: 'A.03 Durée', value: formatDuration(recentDuration) },
+            ]}
+          />
+        </Appear>
+
         {showChooser ? (
           <Appear style={styles.section}>
-            <SectionTitle>Choisir mon groupe</SectionTitle>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.caption}>// Groupe actif</Text>
             <View style={styles.chips}>
-              {visibleGroups.map((group) => (
-                <Chip
-                  key={group.id}
-                  label={group.nom}
-                  selected={group.id === activeGroupId}
-                  onPress={() => chooseGroup(group.id)}
-                />
-              ))}
-            </View>
-          </Appear>
-        ) : null}
-
-        {showWeek ? (
-          <Appear style={styles.section}>
-            <SectionTitle>Cette semaine</SectionTitle>
-            <View
-              style={styles.weekRow}
-              accessible
-              accessibilityLabel={`Cette semaine : ${weekCount} séance${
-                weekCount > 1 ? 's' : ''
-              } sur ${weekTarget} prévue${weekTarget > 1 ? 's' : ''}.`}
-            >
-              <View style={styles.lane}>
-                {Array.from({ length: weekTarget }, (_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.laneSegment,
-                      index < weekCount && styles.laneSegmentDone,
-                      index > 0 && styles.laneGraduation,
-                    ]}
+              {visibleGroups.map((group) => {
+                const selected = group.id === activeGroupId;
+                return (
+                  <Chip
+                    key={group.id}
+                    label={`${selected ? '[■]' : '[ ]'} ${group.nom.toUpperCase()}`}
+                    accessibilityLabel={group.nom}
+                    selected={selected}
+                    onPress={() => chooseGroup(group.id)}
                   />
-                ))}
-              </View>
-              <Text style={styles.weekValue}>
-                {weekCount} sur {weekTarget}
-              </Text>
+                );
+              })}
             </View>
           </Appear>
         ) : null}
 
         <Appear style={styles.section}>
           <SectionTitle
-            hint={
-              sessions.length > 0
-                ? `${sessions.length} séance${sessions.length > 1 ? 's' : ''}`
-                : undefined
-            }
+            hint={journal.length > 0 ? `${padIndex(journal.length, 3)} entrées` : undefined}
           >
-            Dernières séances
+            Journal
           </SectionTitle>
         </Appear>
 
-        {sessions.length === 0 ? (
-          <Text style={styles.historyEmpty}>
+        {journal.length === 0 ? (
+          <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.historyEmpty}>
             Aucune séance terminée. Elles s’afficheront ici, de la plus récente à la plus ancienne.
           </Text>
         ) : (
-          sessions.map((session, index) => {
+          journal.map((session, index) => {
             // Une séance d'endurance n'a pas de volume : son chiffre est le temps d'effort.
             const mainValue =
               session.total_volume > 0
@@ -338,37 +403,50 @@ export default function MainScreen() {
                 : session.total_effort_sec > 0
                   ? formatDuration(session.total_effort_sec)
                   : formatKg(0);
+            const work =
+              session.total_reps > 0
+                ? `${session.total_reps} REPS`
+                : session.total_effort_sec > 0
+                  ? formatDuration(session.total_effort_sec)
+                  : null;
+            const meta = [
+              formatDotDate(session.date),
+              `${session.exercise_count} EXO${session.exercise_count > 1 ? 'S' : ''}`,
+              work,
+            ]
+              .filter(Boolean)
+              .join(' · ');
             return (
               <Row
                 key={session.id}
                 inset={false}
-                last={index === sessions.length - 1}
+                last={index === journal.length - 1}
                 accessibilityLabel={`Récapitulatif de ${session.nom_seance ?? 'séance'}, ${formatLongDate(
                   session.date
                 )}, ${mainValue}, durée ${formatDuration(session.duration_sec ?? 0)}`}
                 onPress={() => navigation.navigate('SessionSummary', { sessionId: session.id })}
+                onLongPress={() => askDeleteSession(session)}
               >
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.historyIndex}>#{padIndex(journal.length - index, 3)}</Text>
                 <View style={styles.historyBody}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.historyTitle} numberOfLines={1}>
                     {session.nom_seance ?? 'Séance'}
                   </Text>
-                  <Text style={styles.historyMeta} numberOfLines={1}>
-                    {formatLongDate(session.date)}, {session.exercise_count} exercice
-                    {session.exercise_count > 1 ? 's' : ''}
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.historyMeta} numberOfLines={1}>
+                    {meta}
                   </Text>
                 </View>
                 <View style={styles.historyStats}>
-                  <Text style={styles.historyValue}>{mainValue}</Text>
-                  <Text style={styles.historyDuration}>
-                    {formatDuration(session.duration_sec ?? 0)}
-                  </Text>
+                  <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.historyValue}>{mainValue.toUpperCase()}</Text>
+                  <Badge tone="success" label="VALIDÉ" />
                 </View>
-                <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
               </Row>
             );
           })
         )}
       </ScrollView>
+
+      <ConfirmSheet request={confirm} onClose={() => setConfirm(null)} />
     </SafeAreaView>
   );
 }
@@ -389,18 +467,41 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   contentReserved: {
     paddingBottom: spacing.xxxl + ACTIVE_WORKOUT_BUBBLE_SPACE,
   },
+  operator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+  },
+  operatorDot: {
+    width: 8,
+    height: 8,
+    backgroundColor: theme.colors.action,
+  },
+  operatorText: {
+    ...text.caption,
+    color: theme.colors.text,
+  },
   hero: {
     padding: spacing.xl,
   },
-  heroContext: {
-    ...text.meta,
-    color: theme.colors.textMuted,
-    marginBottom: spacing.xs,
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
-  // Le nom de la prochaine séance est **l'information** de l'écran : il prend
-  // le titre de section, pas la taille d'une ligne de liste.
+  ref: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+  },
   heroTitle: {
-    ...text.sectionTitle,
+    ...text.screenTitle,
+    fontSize: 34,
+    lineHeight: 38,
     color: theme.colors.text,
   },
   heroMeta: {
@@ -408,66 +509,38 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
-  // Aperçu de la séance (maquette §7.7) : nom à gauche, prescription à droite.
-  preview: {
+  leaders: {
     marginTop: spacing.lg,
     gap: spacing.sm,
   },
-  previewRow: {
+  barcodeRow: {
+    marginTop: spacing.lg,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: spacing.md,
   },
-  previewName: {
-    ...text.body,
-    color: theme.colors.text,
-    flex: 1,
+  barcode: {
+    flexDirection: 'row',
+    height: 24,
+    opacity: 0.6,
   },
-  previewValue: {
-    ...text.bodyStrong,
-    color: theme.colors.text,
-    fontVariant: ['tabular-nums'],
+  bar: {
+    height: '100%',
+    backgroundColor: theme.colors.text,
   },
-  previewMore: {
-    ...text.meta,
-    color: theme.colors.textMuted,
+  barGap: {
+    backgroundColor: 'transparent',
   },
   heroButton: {
     marginTop: spacing.xl,
   },
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  // Couloir de piste gradué (§8.6) : rail craie, remplissage bleu, une
-  // graduation marine de 1 px entre deux séances prévues.
-  lane: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 12,
-    borderRadius: radius.xs,
-    overflow: 'hidden',
-    backgroundColor: theme.colors.border,
-  },
-  laneSegment: {
-    flex: 1,
-  },
-  laneSegmentDone: {
-    backgroundColor: theme.colors.action,
-  },
-  laneGraduation: {
-    borderLeftWidth: 1,
-    borderLeftColor: theme.colors.text,
-  },
-  weekValue: {
-    ...text.bodyStrong,
-    color: theme.colors.text,
-    fontVariant: ['tabular-nums'],
-  },
   section: {
     marginTop: spacing.xxl,
+    gap: spacing.md,
+  },
+  caption: {
+    ...text.caption,
+    color: theme.colors.textMuted,
   },
   chips: {
     flexDirection: 'row',
@@ -479,11 +552,16 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     lineHeight: 20,
   },
+  historyIndex: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+    marginRight: spacing.md,
+  },
   historyBody: {
     flex: 1,
   },
   historyTitle: {
-    ...text.bodyStrong,
+    ...text.cardTitle,
     color: theme.colors.text,
   },
   historyMeta: {
@@ -493,16 +571,10 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   historyStats: {
     alignItems: 'flex-end',
+    gap: spacing.xs,
   },
   historyValue: {
-    ...text.bodyStrong,
+    ...text.monoValue,
     color: theme.colors.text,
-    fontVariant: ['tabular-nums'],
-  },
-  historyDuration: {
-    ...text.caption,
-    color: theme.colors.textMuted,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
   },
 });

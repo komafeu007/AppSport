@@ -7,20 +7,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ACTIVE_WORKOUT_BUBBLE_SPACE } from '../components/ActiveWorkoutBubble';
 import ActionSheet from '../components/ActionSheet';
 import {
-  Appear,
   Button,
-  Card,
   ConfirmSheet,
+  DashedLine,
   Icon,
   IconButton,
   Input,
+  PressableScale,
   Row,
   ScreenHeader,
-  SectionTitle,
   Sheet,
   StateView,
+  SystemBar,
   type ConfirmRequest,
 } from '../components/ui';
+import { padIndex } from '../lib/format';
 import type { MainTabParamList, SessionListNavigation } from '../navigation/types';
 import { useAccount } from '../services/account';
 import { useActiveWorkout } from '../services/activeWorkout';
@@ -44,7 +45,9 @@ import {
   setGroupHidden,
 } from '../services/preferences';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { spacing, text } from '../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+
+const groupLetter = (index: number) => String.fromCharCode(65 + (index % 26));
 
 interface SessionSection {
   key: string;
@@ -189,7 +192,7 @@ export default function SessionListScreen() {
     (program: ProgramSummary) => {
       setConfirm({
         title: 'Supprimer la séance',
-        message: `« ${program.nom_seance} » et ses exercices seront supprimés.`,
+        message: `Supprimer « ${program.nom_seance} » et ses exercices ?`,
         confirmLabel: 'Supprimer',
         destructive: true,
         onConfirm: async () => {
@@ -254,8 +257,8 @@ export default function SessionListScreen() {
         title: 'Supprimer le groupe',
         message:
           count > 0
-            ? `« ${group.nom} » et ses ${count} séance${count > 1 ? 's' : ''} seront supprimés.`
-            : `« ${group.nom} » sera supprimé.`,
+            ? `Supprimer « ${group.nom} » et ses ${count} séance${count > 1 ? 's' : ''} ?`
+            : `Supprimer « ${group.nom} » ?`,
         confirmLabel: 'Supprimer',
         destructive: true,
         onConfirm: async () => {
@@ -319,32 +322,36 @@ export default function SessionListScreen() {
     load();
   }, [accountId, db, groupModal, load]);
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+  const topContent = (
+    <>
       <ScreenHeader
-        title="Séance"
-        subtitle="Tes groupes (splits) et les séances qu'ils contiennent."
+        kicker="02 — Inventaire"
+        title="Séances"
+        subtitle="Tes groupes et leurs séances."
       />
 
-      <Appear style={styles.generatorWrap}>
-        <Card
-          tone={block?.due ? 'accent' : 'default'}
-          accessibilityLabel={
-            block?.due ? 'Générer le nouveau programme' : 'Générer un programme'
-          }
+      <View style={styles.generatorWrap}>
+        <PressableScale
+          style={styles.generatorBox}
+          accessibilityRole="button"
+          accessibilityLabel={block?.due ? 'Générer le nouveau programme' : 'Générer un programme'}
           onPress={() =>
-            navigation.navigate(
-              'ProgramGenerator',
-              block?.due ? { reason: 'bloc' } : undefined
-            )
+            navigation.navigate('ProgramGenerator', block?.due ? { reason: 'bloc' } : undefined)
           }
         >
+          <View style={styles.generatorStrip}>
+            <View style={styles.generatorStripTitle}>
+              <Icon name="alert" size={14} color={theme.colors.onAction} />
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorStripText}>Générateur auto</Text>
+            </View>
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorStripText}>ARN-GEN</Text>
+          </View>
           <View style={styles.generatorRow}>
             <View style={styles.generatorText}>
-              <Text style={styles.generatorTitle}>
-                {block?.due ? 'Bloc terminé : choisis le nouveau programme' : 'Générer un programme'}
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorTitle}>
+                {block?.due ? 'Bloc terminé : choisis la suite' : 'Générer un programme'}
               </Text>
-              <Text style={styles.generatorMeta}>
+              <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorMeta}>
                 {block
                   ? `« ${block.group.nom} », semaine ${Math.min(
                       block.elapsedWeeks + 1,
@@ -352,15 +359,48 @@ export default function SessionListScreen() {
                     )} sur ${block.weeks}, ${block.sessionsDone} séance${
                       block.sessionsDone > 1 ? 's' : ''
                     } faite${block.sessionsDone > 1 ? 's' : ''}.${
-                      block.due ? ' Un nouveau bloc est proposé.' : ''
+                      block.due ? ' Nouveau bloc proposé.' : ''
                     }`
-                  : 'Séances calculées à partir de ton profil (objectif, sexe, matériel, durée), avec aperçu et régénération avant enregistrement.'}
+                  : 'Un programme adapté à ton profil. Tu le vois avant de l’enregistrer.'}
               </Text>
             </View>
-            <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
+            <Icon name="arrowRight" size={24} color={theme.colors.action} />
           </View>
-        </Card>
-      </Appear>
+        </PressableScale>
+      </View>
+    </>
+  );
+
+  const actionsFooter = (
+    <View style={styles.footer}>
+      <View style={styles.footerRow}>
+        <Button
+          label="Nouveau groupe"
+          variant="secondary"
+          size="lg"
+          style={styles.footerButton}
+          onPress={() => setGroupModal({ mode: 'create', name: '' })}
+        />
+        <Button
+          label="Nouvelle séance"
+          size="lg"
+          style={styles.footerButton}
+          onPress={() => navigation.navigate('SessionEditor', {})}
+        />
+      </View>
+      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.footerHint}>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.footerHintKey}>NOTE ▸ </Text>
+        Glisse pour réordonner · appui long pour supprimer.
+      </Text>
+    </View>
+  );
+
+  const groupCountLabel = `${padIndex(groups.length)} GRP`;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <SystemBar center="MODULE : SPLITS" right={groupCountLabel} />
+      {loading || error || isEmpty ? topContent : null}
 
       {loading ? (
         <StateView kind="loading" />
@@ -370,8 +410,12 @@ export default function SessionListScreen() {
         <StateView
           kind="empty"
           title="Aucune séance"
-          message="Crée un groupe (PPL, Maison, Upper/Lower…) puis ajoute-y des séances avec leurs exercices, séries, repos et poids."
+          message="Crée un groupe, puis ajoute-y tes séances."
         />
+      ) : null}
+
+      {loading || error || isEmpty ? (
+        actionsFooter
       ) : (
         <SectionList
           ref={listRef}
@@ -380,27 +424,41 @@ export default function SessionListScreen() {
           scrollEnabled={draggingId === null}
           contentContainerStyle={[styles.listContent, hasActiveWorkout && styles.listContentReserved]}
           stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => (
-            <Appear>
-              <SectionTitle
-                style={styles.sectionHeader}
-                onPress={
-                  section.group
-                    ? () => navigation.navigate('GroupStats', { groupId: section.group!.id })
-                    : undefined
-                }
-                hint={
-                  section.group && hiddenIds.includes(section.group.id)
-                    ? 'retiré de l’accueil'
-                    : undefined
-                }
-                right={
-                  section.group ? (
+          ListHeaderComponent={<View style={styles.listHeaderBleed}>{topContent}</View>}
+          ListFooterComponent={<View style={styles.listFooterBleed}>{actionsFooter}</View>}
+          renderSectionHeader={({ section }) => {
+            const sectionIndex = sections.findIndex((x) => x.key === section.key);
+            const letter = section.group ? groupLetter(sectionIndex) : 'X';
+            const count = section.data.length;
+            const hidden = section.group ? hiddenIds.includes(section.group.id) : false;
+            return (
+              <View style={styles.sectionHeader}>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.groupCaption}>
+                  {`GRP-${letter} · ${padIndex(count)} SÉANCE${count > 1 ? 'S' : ''}${
+                    hidden ? ' · RETIRÉ DE L’ACCUEIL' : ''
+                  }`}
+                </Text>
+                <View style={styles.groupHeadRow}>
+                  <PressableScale
+                    style={styles.groupNameWrap}
+                    disabled={!section.group}
+                    accessibilityRole={section.group ? 'button' : undefined}
+                    accessibilityLabel={`Statistiques du groupe ${section.title}`}
+                    onPress={() =>
+                      section.group
+                        ? navigation.navigate('GroupStats', { groupId: section.group.id })
+                        : undefined
+                    }
+                  >
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.groupName} numberOfLines={2}>
+                      {section.title}
+                    </Text>
+                  </PressableScale>
+                  {section.group ? (
                     <View style={styles.sectionActions}>
                       <Button
-                        label="Séance"
-                        leading={<Icon name="plus" size={16} color={theme.colors.action} />}
-                        variant="tertiary"
+                        label="+ Séance"
+                        variant="secondary"
                         size="sm"
                         onPress={() =>
                           navigation.navigate('SessionEditor', { groupId: section.group!.id })
@@ -412,13 +470,12 @@ export default function SessionListScreen() {
                         onPress={() => setMenuGroup(section.group)}
                       />
                     </View>
-                  ) : undefined
-                }
-              >
-                {section.title}
-              </SectionTitle>
-            </Appear>
-          )}
+                  ) : null}
+                </View>
+                <DashedLine style={styles.groupUnderline} />
+              </View>
+            );
+          }}
           renderItem={({ item, index, section }) => {
             const isDragging = draggingId === item.id;
             return (
@@ -454,10 +511,15 @@ export default function SessionListScreen() {
                       setDragOffset(0);
                     }}
                   />
+                  <View style={styles.codeBox}>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.codeText}>
+                      {`${groupLetter(sections.findIndex((x) => x.key === (section as SessionSection).key))}-${padIndex(index + 1)}`}
+                    </Text>
+                  </View>
                   <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>{item.nom_seance}</Text>
-                    <Text style={styles.rowMeta}>
-                      {item.exercise_count} exercice{item.exercise_count > 1 ? 's' : ''}
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowTitle}>{item.nom_seance}</Text>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowMeta}>
+                      {`${padIndex(item.exercise_count)} EXO${item.exercise_count > 1 ? 'S' : ''}`}
                     </Text>
                   </View>
                   <IconButton
@@ -466,41 +528,25 @@ export default function SessionListScreen() {
                     accessibilityLabel={`Supprimer ${item.nom_seance}`}
                     onPress={() => confirmDeleteProgram(item)}
                   />
-                  <Icon name="chevronRight" size={20} color={theme.colors.textMuted} />
                 </Row>
               </View>
             );
           }}
           renderSectionFooter={({ section }) =>
             section.group && section.data.length === 0 ? (
-              <Text style={styles.groupEmptyText}>
-                Aucune séance dans ce groupe. Touche « + Séance » ci-dessus.
-              </Text>
+              <PressableScale
+                style={styles.emptySlot}
+                accessibilityRole="button"
+                accessibilityLabel={`Ajouter une séance à ${section.title}`}
+                onPress={() => navigation.navigate('SessionEditor', { groupId: section.group!.id })}
+              >
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptySlotText}>[ Emplacement vide ]</Text>
+                <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.emptySlotAction}>+ Ajouter une séance</Text>
+              </PressableScale>
             ) : null
           }
         />
       )}
-
-      <View style={styles.footer}>
-        <View style={styles.footerRow}>
-          <Button
-            label="Nouveau groupe"
-            variant="secondary"
-            size="lg"
-            style={styles.footerButton}
-            onPress={() => setGroupModal({ mode: 'create', name: '' })}
-          />
-          <Button
-            label="Nouvelle séance"
-            size="lg"
-            style={styles.footerButton}
-            onPress={() => navigation.navigate('SessionEditor', {})}
-          />
-        </View>
-        <Text style={styles.footerHint}>
-          Glisse une séance pour la réordonner. Appui long pour la supprimer, menu du groupe pour le renommer.
-        </Text>
-      </View>
 
       <ActionSheet
         visible={menuGroup !== null}
@@ -518,7 +564,7 @@ export default function SessionListScreen() {
           <Input
             value={groupModal?.name ?? ''}
             onChangeText={(name) => setGroupModal((prev) => (prev ? { ...prev, name } : prev))}
-            placeholder="Ex. PPL, Maison, Upper/Lower"
+            placeholder="Ex. PPL, Maison"
             autoFocus
             returnKeyType="done"
             onSubmitEditing={saveGroup}
@@ -552,30 +598,59 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
   /** Place libre pour la bulle de reprise, qui flotte en bas de l'écran. */
   listContentReserved: {
     paddingBottom: spacing.sm + ACTIVE_WORKOUT_BUBBLE_SPACE,
   },
+  /** L'en-tête et les actions défilent avec la liste, qui a déjà sa marge de 20. */
+  listHeaderBleed: {
+    marginHorizontal: -spacing.xl,
+  },
+  listFooterBleed: {
+    marginHorizontal: -spacing.xl,
+    marginTop: spacing.lg,
+  },
   generatorWrap: {
     paddingHorizontal: spacing.xl,
+  },
+  generatorBox: {
+    borderWidth: 1,
+    borderColor: theme.colors.action,
+  },
+  generatorStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.action,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  generatorStripTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  generatorStripText: {
+    ...text.caption,
+    color: theme.colors.onAction,
   },
   generatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    padding: spacing.md,
   },
   generatorText: {
     flex: 1,
   },
   generatorTitle: {
-    ...text.subtitle,
+    ...text.sectionTitle,
     color: theme.colors.text,
   },
   generatorMeta: {
-    ...text.caption,
+    ...text.meta,
     color: theme.colors.textMuted,
     marginTop: spacing.xs,
   },
@@ -586,18 +661,63 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   sectionHeader: {
     marginTop: spacing.xl,
+    marginBottom: spacing.xs,
   },
-  groupEmptyText: {
-    ...text.meta,
+  groupCaption: {
+    ...text.caption,
     color: theme.colors.textMuted,
-    fontStyle: 'italic',
-    marginBottom: spacing.sm,
+  },
+  groupHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  groupNameWrap: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  groupName: {
+    ...text.title,
+    color: theme.colors.text,
+  },
+  groupUnderline: {
+    marginTop: spacing.sm,
+  },
+  emptySlot: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.borderStrong,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  emptySlotText: {
+    ...text.caption,
+    color: theme.colors.textMuted,
+  },
+  emptySlotAction: {
+    ...text.label,
+    color: theme.colors.action,
+  },
+  codeBox: {
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  codeText: {
+    ...text.caption,
+    color: theme.colors.text,
   },
   rowBody: {
     flex: 1,
   },
   rowTitle: {
-    ...text.subtitle,
+    ...text.cardTitle,
     color: theme.colors.text,
   },
   rowMeta: {
@@ -621,7 +741,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   footerHint: {
     ...text.caption,
     color: theme.colors.textMuted,
-    textAlign: 'center',
+  },
+  footerHintKey: {
+    color: theme.colors.action,
   },
   modalContent: {
     paddingHorizontal: spacing.xl,

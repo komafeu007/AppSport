@@ -2,31 +2,45 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { spacing, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 
 interface Props {
   title: string;
+  /** Rubrique orange au-dessus du titre : « 01 — Tableau de bord » → « // 01 — TABLEAU DE BORD ». */
+  kicker?: string;
   subtitle?: string;
-  /** Élément aligné à droite du titre (action, compteur). */
   right?: ReactNode;
+  /** Titre plus petit (écrans poussés : éditeur, aperçu). */
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
- * En-tête d'écran (§6.2 « titre-1 ») : titre en Big Shoulders, aligné sur la
- * marge de 20 px, sous-titre discret en dessous.
+ * En-tête d'écran de la DA « Terminal » : rubrique mono orange précédée de
+ * « // », puis le titre en Chakra Petch capitales, très grand.
  */
-export default function ScreenHeader({ title, subtitle, right, style }: Props) {
+export default function ScreenHeader({ title, kicker, subtitle, right, compact = false, style }: Props) {
   const styles = useThemedStyles(createStyles);
 
   return (
     <Appear style={[styles.header, style]}>
+      {kicker ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.kicker}>{`// ${kicker}`}</Text> : null}
       <View style={styles.row}>
-        <Text style={styles.title}>{title}</Text>
+        <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.title, compact ? styles.titleCompact : null]}
+          accessibilityRole="header"
+          // Le titre (52 px) ne doit jamais déborder ni couper un mot : il se
+          // réduit pour tenir sur sa ligne (deux lignes pour un titre compact,
+          // souvent un nom de séance).
+          numberOfLines={compact ? 2 : 1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+        >
+          {title}
+        </Text>
         {right}
       </View>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {subtitle ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.subtitle}>{subtitle}</Text> : null}
     </Appear>
   );
 }
@@ -35,8 +49,13 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     header: {
       paddingHorizontal: spacing.xl,
-      paddingTop: spacing.lg,
-      paddingBottom: spacing.sm,
+      paddingTop: spacing.xl,
+      paddingBottom: spacing.md,
+    },
+    kicker: {
+      ...text.kicker,
+      color: theme.colors.action,
+      marginBottom: spacing.xs,
     },
     row: {
       flexDirection: 'row',
@@ -49,9 +68,15 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.text,
       flexShrink: 1,
     },
+    titleCompact: {
+      fontSize: 40,
+      lineHeight: 42,
+    },
     subtitle: {
       ...text.meta,
+      fontSize: 16,
+      lineHeight: 22,
       color: theme.colors.textMuted,
-      marginTop: spacing.xs,
+      marginTop: spacing.sm,
     },
   });

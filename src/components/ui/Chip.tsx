@@ -3,7 +3,7 @@ import { Animated, StyleSheet } from 'react-native';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 import PressableScale from './PressableScale';
 
 interface Props {
@@ -62,11 +62,11 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
 
   const backgroundColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.colors.surfaceAlt, theme.colors.selectedSurface],
+    outputRange: [theme.colors.background, theme.colors.selectedSurface],
   });
   const borderColor = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [theme.colors.border, theme.colors.selectedSurface],
+    outputRange: [theme.colors.borderStrong, theme.colors.selectedSurface],
   });
   const color = progress.interpolate({
     inputRange: [0, 1],
@@ -92,7 +92,7 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
         }}
       >
         <Animated.View style={[styles.chip, { backgroundColor, borderColor }]}>
-          <Animated.Text style={[styles.label, { color }]}>{label}</Animated.Text>
+          <Animated.Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.label, { color }]}>{label}</Animated.Text>
         </Animated.View>
       </Animated.View>
     </PressableScale>

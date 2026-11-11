@@ -101,7 +101,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
               key={ratio}
               points={ring(ratio)}
               fill="none"
-              stroke={theme.colors.border}
+              stroke={theme.colors.borderStrong}
               strokeWidth={1}
             />
           ))}
@@ -114,7 +114,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
                 y1={center}
                 x2={at.x}
                 y2={at.y}
-                stroke={theme.colors.border}
+                stroke={theme.colors.borderStrong}
                 strokeWidth={1}
               />
             );
@@ -124,14 +124,14 @@ export default function MuscleRadarChart({ data, size }: Props) {
         <Polygon
           points={shape}
           fill={theme.colors.action}
-          fillOpacity={0.22}
+          fillOpacity={0.25}
           stroke={theme.colors.action}
           strokeWidth={2}
         />
 
         {data.map((point, index) => {
           const at = pointAt(index, point.value / max);
-          return <Circle key={point.label} cx={at.x} cy={at.y} r={3.5} fill={theme.colors.action} />;
+          return <Circle key={point.label} cx={at.x} cy={at.y} r={3} fill={theme.colors.action} />;
         })}
 
         {data.map((point, index) => {
@@ -143,12 +143,12 @@ export default function MuscleRadarChart({ data, size }: Props) {
               key={point.label}
               x={at.x}
               y={at.y + 4}
-              fill={theme.colors.text}
-              fontFamily={fontFamily.textSemiBold}
-              fontSize={12}
+              fill={theme.colors.textMuted}
+              fontFamily={fontFamily.mono}
+              fontSize={10}
               textAnchor={anchor}
             >
-              {point.label}
+              {point.label.toUpperCase()}
             </SvgText>
           );
         })}

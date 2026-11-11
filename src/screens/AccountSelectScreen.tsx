@@ -2,7 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ActionSheet from '../components/ActionSheet';
@@ -15,6 +15,7 @@ import {
   ScreenHeader,
   SectionTitle,
   StateView,
+  SystemBar,
   type ConfirmRequest,
 } from '../components/ui';
 import { OBJECTIFS, SESSION_FORMATS, optionLabel } from '../domain/profile';
@@ -23,7 +24,8 @@ import { useAccount } from '../services/account';
 import { deleteAccount, getAccounts, resetAppData, type Account } from '../services/database';
 import { clearAllPreferences } from '../services/preferences';
 import { useThemedStyles, type Theme } from '../theme';
-import { radius, spacing, text } from '../theme/tokens';
+import { padIndex } from '../lib/format';
+import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Accounts' | 'Welcome'>;
 
@@ -107,7 +109,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
     (account: Account) => {
       setConfirm({
         title: 'Supprimer le profil',
-        message: `« ${account.prenom} » et toutes ses séances/historique seront supprimés.`,
+        message: `« ${account.prenom} », ses séances et son historique seront supprimés.`,
         confirmLabel: 'Supprimer',
         destructive: true,
         onConfirm: async () => {
@@ -125,7 +127,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
     setConfirm({
       title: 'Réinitialiser les données',
       message:
-        'Tous les profils, séances et historiques enregistrés sur cet appareil seront effacés. Cette action est définitive.',
+        'Profils, séances et historiques seront effacés. Action définitive.',
       confirmLabel: 'Tout effacer',
       destructive: true,
       onConfirm: async () => {
@@ -153,20 +155,17 @@ export default function AccountSelectScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={onboarding ? ['top', 'bottom'] : ['bottom']}>
-      {onboarding ? (
-        <>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            accessibilityLabel="Logo Arny"
-            accessibilityIgnoresInvertColors
-          />
-          <ScreenHeader
-            title="Arny"
-            subtitle="Choisis ton profil. Chaque compte garde ses séances et son historique."
-          />
-        </>
-      ) : null}
+      {onboarding ? <SystemBar center="SÉLECTION" /> : null}
+      <ScreenHeader
+        kicker="Sélection opérateur"
+        title="Profils"
+        subtitle={
+          onboarding
+            ? 'Choisis ton profil. Chacun a ses séances et son historique.'
+            : undefined
+        }
+        compact
+      />
 
       {loading ? (
         <StateView kind="loading" />
@@ -176,7 +175,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
         <StateView
           kind="empty"
           title="Aucun profil"
-          message="Crée ton profil pour définir ton objectif, ton matériel et tes séances."
+          message="Crée ton profil pour commencer."
           // Un écran vide propose **une** action : créer le profil. La remise à
           // zéro vit plus bas, dans « Zone sensible », une fois des données là.
           action={<Button label="Créer mon profil" size="lg" onPress={() => openForm()} />}
@@ -194,19 +193,15 @@ export default function AccountSelectScreen({ navigation }: Props) {
                 onPress={() => choose(account.id)}
                 accessibilityLabel={`Choisir ${account.prenom}`}
               >
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {account.prenom.trim().charAt(0).toUpperCase() || '?'}
-                    </Text>
-                  </View>
                   <View style={styles.body}>
                     <View style={styles.titleRow}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {account.prenom}
-                      </Text>
-                      {active ? <Text style={styles.activeTag}>actif</Text> : null}
+                      <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.ref}>{`OP-${padIndex(index + 1, 2)}`}</Text>
+                      {active ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.activeTag}>[■] ACTIF</Text> : null}
                     </View>
-                    <Text style={styles.meta} numberOfLines={1}>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.name} numberOfLines={1}>
+                      {account.prenom}
+                    </Text>
+                    <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.meta} numberOfLines={1}>
                       {accountMeta(account)}
                     </Text>
                   </View>
@@ -221,13 +216,13 @@ export default function AccountSelectScreen({ navigation }: Props) {
 
           <Appear style={styles.danger}>
             <SectionTitle>Zone sensible</SectionTitle>
-            <Text style={styles.dangerText}>
-              Efface tous les profils et leur historique sur cet appareil (les exercices du
-              catalogue sont conservés). Pratique pour repartir d'une base propre.
+            <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.dangerText}>
+              Efface tous les profils et leur historique. Le catalogue d'exercices est conservé.
             </Text>
             <Button
               label="Réinitialiser toutes les données"
-              variant="tertiary"
+              variant="danger"
+              code="RESET"
               onPress={resetAll}
             />
           </Appear>
@@ -240,6 +235,7 @@ export default function AccountSelectScreen({ navigation }: Props) {
             label="Nouveau profil"
             variant="secondary"
             size="lg"
+            code="NEW"
             onPress={() => openForm()}
           />
         </View>
@@ -266,13 +262,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.control,
-    marginTop: spacing.lg,
-    marginLeft: spacing.xl,
-  },
   rowActive: {
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.action,
@@ -285,17 +274,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     ...text.meta,
     color: theme.colors.textMuted,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.action,
-  },
-  avatarText: {
-    ...text.title,
-    color: theme.colors.onAction,
+  ref: {
+    ...text.caption,
+    color: theme.colors.action,
   },
   body: {
     flex: 1,
@@ -306,9 +287,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.sm,
   },
   name: {
-    ...text.subtitle,
+    ...text.cardTitle,
     color: theme.colors.text,
-    flexShrink: 1,
+    marginTop: 2,
   },
   activeTag: {
     ...text.caption,

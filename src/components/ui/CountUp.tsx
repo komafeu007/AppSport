@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Easing, Text, type StyleProp, type TextStyle } from 'react-native';
 
 import { useReduceMotion } from '../../theme/motion';
-import { duration } from '../../theme/tokens';
+import { MAX_FONT_SCALE, duration } from '../../theme/tokens';
 
 interface Props {
   value: number;
@@ -51,5 +51,5 @@ export default function CountUp({ value, format, durationMs = duration.slow * 2,
     return () => cancelAnimationFrame(frame);
   }, [durationMs, reduceMotion, value]);
 
-  return <Text style={style}>{format(display)}</Text>;
+  return <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={style}>{format(display)}</Text>;
 }
