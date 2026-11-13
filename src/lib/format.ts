@@ -107,3 +107,17 @@ export function isoWeekNumber(value: string | Date = new Date()): number {
 export function padIndex(value: number, width = 2): string {
   return String(value).padStart(width, '0');
 }
+
+/** Mois et année en toutes lettres : « novembre 2026 ». */
+export function formatMonthYear(value: string | Date): string {
+  const date = parseDate(value);
+  if (date === null) return '—';
+  return `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Clé de jour locale « 2026-11-13 » (regroupement par jour calendaire). */
+export function dayKey(value: string | Date): string {
+  const date = parseDate(value);
+  if (date === null) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}

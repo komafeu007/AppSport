@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, spacing, text, touch } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text, touch } from '../../theme/tokens';
 import Icon from './Icon';
 import PressableScale from './PressableScale';
 
@@ -111,7 +111,7 @@ export default function Button({
               {code ? (
                 <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.code, { color: labelColor }]}>{`[ ${code} ]`}</Text>
               ) : null}
-              {arrow ? <Icon name="arrowRight" size={20} color={labelColor} /> : null}
+              {arrow ? <Icon name="arrowRight" size={scale(20)} color={labelColor} /> : null}
             </View>
           ) : null}
         </>
@@ -151,10 +151,10 @@ const createStyles = (theme: Theme) =>
     },
     sm: { minHeight: Platform.OS === 'android' ? touch.min : 44, paddingHorizontal: spacing.lg },
     md: { minHeight: touch.session, paddingHorizontal: spacing.lg },
-    lg: { minHeight: 60, paddingHorizontal: spacing.lg },
+    lg: { minHeight: scale(60), paddingHorizontal: spacing.lg },
     label_sm: text.label,
     label_md: text.button,
-    label_lg: { ...text.button, fontSize: 20, lineHeight: 24 },
+    label_lg: { ...text.button, fontSize: scale(20), lineHeight: scale(24) },
     primary: {
       backgroundColor: theme.colors.action,
       borderColor: theme.colors.action,

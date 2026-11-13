@@ -46,7 +46,7 @@ import {
   type SessionSetDetail,
 } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionSummary'>;
 
@@ -488,7 +488,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   emptyText: {
     ...text.meta,
     color: theme.colors.textMuted,
-    lineHeight: 20,
+    lineHeight: scale(20),
   },
   exercise: {
     paddingVertical: spacing.md,
@@ -507,7 +507,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   codeText: {
     ...text.caption,
-    fontSize: 10,
+    fontSize: scale(10),
     color: theme.colors.textMuted,
   },
   exerciseName: {

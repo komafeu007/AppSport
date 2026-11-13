@@ -6,7 +6,7 @@
 
 ## État du projet
 
-- [x] Base SQLite locale (migrations versionnées, **v11**) + catalogue de **1 324 exercices**
+- [x] Base SQLite locale (migrations versionnées, **v17**) + catalogue de **1 324 exercices**
 - [x] **Identité Arny** : nom de l'app, icône iOS, icônes adaptatives (couleur marine + variante monochrome) et splash marine, à partir du logo de `docs/`
 - [x] **Recherche** d'exercices par nom (FR/EN) ou par muscle (résultats *Principal* puis *Secondaire*), dans le picker de séance
 - [x] Vignettes **embarquées** (hors-ligne) **+ démonstration animée (GIF)** chargée à la demande dans la fiche exercice
@@ -18,9 +18,10 @@
 - [x] Module 3 — **Endurance (cardio)** : les exercices d'endurance (course, vélo, rameur, corde à sauter…) se comptent **au temps** et non en reps — cible `mm:ss` par série, poids masqué, et **chrono par série** (▶ lance, ■ arrête et enregistre la durée mesurée, la coche de la série l'arrête aussi). Le récapitulatif compte le **temps d'effort** au lieu des répétitions.
 - [ ] Module 3 — Exercices volatils (ajouter un exercice non prévu en pleine séance)
 - [x] Module 4 — **Récapitulatif de fin de séance** : volume, durée, reps, **radar des muscles — réparti en répétitions (pas en kilos)**, courbe d'évolution, détail des exercices et **records** (SVG). *(À venir : 1RM estimé, progression par exercice.)*
+- [x] Onglet **Stats** : **mensurations** (**poids** en kg, repris dans le profil, puis cou, épaules, pectoraux, abdos, fessiers, cuisse, mollet, bras, avant-bras en cm — historique daté) saisies depuis un **mannequin interactif** (SVG, toucher une zone) ou la liste, avec leur **évolution** (courbe, départ / actuel / écart, mini-courbe par mesure), puis **calendrier des séances** faites (semaine ; un toucher déplie le mois)
 - [ ] Module 4 — Statistiques globales (progression par exercice, volume par semaine)
 - [x] Écran **Accueil** : date du jour en toutes lettres, carte de la séance à faire (nom, aperçu des 3 premiers exercices au format « 4 × 8–12 », bouton **Commencer la séance**, ou **Reprendre la séance** si elle est en cours ; rotation par groupe), choix du groupe, **couloir « Cette semaine »** gradué selon la fréquence du profil (« 2 sur 4 ») et dernières séances **du groupe actif** (chaque séance garde le groupe où elle a été faite ; date en toutes lettres, volume ou temps d'effort à droite) ; une séance se **supprime de l'historique** par appui long sur sa ligne ou depuis son récapitulatif (confirmation demandée, les charges des programmes ne changent pas). Une séance terminée se **corrige** depuis son récapitulatif (« Corriger la saisie » : poids, reps ou durée de chaque série, séries ajoutées/retirées, durée totale) ; volume et records sont recalculés, et les charges des programmes suivent si c'est la dernière fois que l'exercice a été fait. Un groupe peut être **retiré de l'accueil** via son menu « ⋯ » dans l'onglet Séances.
-- [x] Navigation : **2 onglets** (Accueil / Séances) + écrans empilés (éditeur, séance en cours, récapitulatif, profils)
+- [x] Navigation : **3 onglets** (Accueil / Séances / Stats) + écrans empilés (éditeur, séance en cours, récapitulatif, profils)
 - [x] **Refonte « Terminal »** : thème sombre unique, trois polices (Chakra Petch, IBM Plex Sans Condensed, IBM Plex Mono), angles vifs et relevés mono
 - [x] EAS configuré ([`eas.json`](eas.json)) : profil `preview` = **APK Android** autonome
 
@@ -28,7 +29,7 @@
 
 - **Expo SDK 57**, React Native 0.86, React 19, TypeScript strict
 - `expo-sqlite` (persistance) et `expo-sqlite/kv-store` (préférences clé/valeur : groupe actif, groupes masqués, barres/disques, **séance en cours**)
-- `@react-navigation/native` + `native-stack` + `bottom-tabs` (onglets Accueil / Séances + écrans empilés)
+- `@react-navigation/native` + `native-stack` + `bottom-tabs` (onglets Accueil / Séances / Stats + écrans empilés)
 - `expo-font` + les deux polices de la DA (`@expo-google-fonts/big-shoulders-display`, `@expo-google-fonts/public-sans`), `react-native-svg` (graphiques du récapitulatif), `expo-image` (GIF de démonstration)
 - `expo-notifications` + `expo-audio` (fin de repos), `expo-location`, `expo-status-bar`, `expo-splash-screen` (splash marine), `react-native-safe-area-context`
 - EAS (`eas.json`) pour les builds cloud ; `npx expo run:android|ios` pour un build local
@@ -126,18 +127,22 @@ src/
   components/
     ActionSheet.tsx         # menu d'actions en feuille basse (appui à côté = fermer)
     ActiveWorkoutBubble.tsx # bulle « Reprendre la séance » au-dessus des onglets
+    BodyMannequin.tsx       # mannequin SVG des mensurations (zones touchables)
+    MeasurementLineChart.tsx # courbe d'évolution d'une mesure (SVG, version compacte)
     DurationField.tsx       # champ de durée d'effort mm:ss (exercices d'endurance)
     ExerciseAlternatives.tsx # substituts d'un exercice (mêmes muscles) dans la fiche
     ExerciseDetailModal.tsx # fiche exercice (démonstration animée + tuto) en feuille basse
     ExerciseSearchList.tsx  # liste + recherche d'exercices (picker de séance)
     MuscleRadarChart.tsx    # radar des muscles du récapitulatif (SVG)
     PlateCalculatorModal.tsx # calculateur de chargement (barre + disques)
+    SessionCalendar.tsx     # grille des séances faites (semaine ↔ mois)
     VolumeLineChart.tsx     # courbe de volume/progression du récapitulatif (SVG)
     ui/                     # Design system : Button, Card, Row, Chip, Sheet, SheetScrollView, ConfirmSheet, SystemBar, StatTiles, LeaderRow, DashedLine…
   data/
     exercises.seed.json     # catalogue (généré depuis le dataset)
     exerciseImages.ts       # map fichier -> require() des vignettes (généré)
   domain/                   # règles métier pures, sans UI ni base
+    bodyMeasurements.ts     # zones de mensuration, lecture/format des mesures (cm)
     exerciseAlternatives.ts # substituts d'un exercice (même muscle / même mouvement)
     exerciseCatalog.ts      # profil → matériel, garde-fous par zone, patterns, familles
     exerciseLabels.ts       # vocabulaire français du catalogue (cible, matériel, muscles…)
@@ -151,8 +156,8 @@ src/
     exerciseSearch.ts       # logique de recherche / classement par pertinence
     format.ts               # formatage court (kg, durée, date)
   navigation/
-    RootNavigator.tsx       # onglets (Accueil, Séances) + stack (éditeur, séance, récap…)
-    StartLineTabBar.tsx     # barre d'onglets numérotée (01 ACCUEIL / 02 SÉANCES, trait orange)
+    RootNavigator.tsx       # onglets (Accueil, Séances, Stats) + stack (éditeur, séance, récap…)
+    StartLineTabBar.tsx     # barre d'onglets numérotée (01 ACCUEIL / 02 SÉANCES / 03 STATS, trait orange)
     TerminalStackHeader.tsx # en-tête des écrans poussés (retour carré + intitulé mono)
     types.ts                # RootStackParamList + MainTabParamList + types de navigation
   screens/
@@ -160,6 +165,7 @@ src/
     AccountFormScreen.tsx   # création / édition d'un profil et questionnaire
     MainScreen.tsx          # accueil : date, séance à faire (aperçu + Commencer/Reprendre), semaine, historique
     SessionListScreen.tsx   # onglet Séances : groupes/splits + séances + génération
+    StatsScreen.tsx         # onglet Stats : mensurations (mannequin) + calendrier des séances
     ProgramGeneratorScreen.tsx # aperçu d'un programme généré (régénérer, enregistrer)
     SessionEditorScreen.tsx # création/édition de séance (fiche exercice, substitution)
     LiveWorkoutScreen.tsx   # séance en cours : poids/séries/reps, repos, reprise, arrêt

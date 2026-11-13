@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { spacing } from '../../theme/tokens';
+import { scale, spacing } from '../../theme/tokens';
 import DashedLine from './DashedLine';
 import PressableScale from './PressableScale';
 
@@ -67,7 +67,7 @@ const createStyles = (theme: Theme) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 64,
+      minHeight: scale(64),
       paddingHorizontal: spacing.xl,
       paddingVertical: spacing.md,
       gap: spacing.md,

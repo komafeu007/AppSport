@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 
 interface Props {
   /** Mention de gauche ; « ARN-SYS / v2.6 » par défaut. */
@@ -45,7 +45,7 @@ const createStyles = (theme: Theme) =>
     },
     cell: {
       ...text.caption,
-      fontSize: 11,
+      fontSize: scale(11),
       color: theme.colors.textMuted,
     },
     center: { textAlign: 'center' },

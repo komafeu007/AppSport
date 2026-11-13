@@ -45,7 +45,7 @@ import {
   setGroupHidden,
 } from '../services/preferences';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 const groupLetter = (index: number) => String.fromCharCode(65 + (index % 26));
 
@@ -94,15 +94,15 @@ function DragHandle({
 
   return (
     <View style={dragHandleStyles.handle} {...pan.panHandlers}>
-      <Icon name="grip" size={20} color={theme.colors.textMuted} />
+      <Icon name="grip" size={scale(20)} color={theme.colors.textMuted} />
     </View>
   );
 }
 
 const dragHandleStyles = StyleSheet.create({
   handle: {
-    width: 32,
-    height: 44,
+    width: scale(32),
+    height: scale(44),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -341,7 +341,7 @@ export default function SessionListScreen() {
         >
           <View style={styles.generatorStrip}>
             <View style={styles.generatorStripTitle}>
-              <Icon name="alert" size={14} color={theme.colors.onAction} />
+              <Icon name="alert" size={scale(14)} color={theme.colors.onAction} />
               <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorStripText}>Générateur auto</Text>
             </View>
             <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.generatorStripText}>ARN-GEN</Text>
@@ -364,7 +364,7 @@ export default function SessionListScreen() {
                   : 'Un programme adapté à ton profil. Tu le vois avant de l’enregistrer.'}
               </Text>
             </View>
-            <Icon name="arrowRight" size={24} color={theme.colors.action} />
+            <Icon name="arrowRight" size={scale(24)} color={theme.colors.action} />
           </View>
         </PressableScale>
       </View>
@@ -676,7 +676,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   groupNameWrap: {
     flex: 1,
-    minHeight: 44,
+    minHeight: scale(44),
     justifyContent: 'center',
   },
   groupName: {

@@ -6,6 +6,8 @@ export type MainTabParamList = {
   Main: undefined;
   /** `createGroup` ouvre la feuille « Nouveau groupe » en arrivant sur l'onglet. */
   Seance: { createGroup?: boolean } | undefined;
+  /** Mensurations + calendrier des séances. */
+  Stats: undefined;
 };
 
 export type RootStackParamList = {

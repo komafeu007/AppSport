@@ -6,7 +6,7 @@ import { findExerciseAlternatives } from '../domain/exerciseAlternatives';
 import { exerciseTermLabel } from '../domain/exerciseLabels';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 import { PressableScale, SectionTitle, Thumb } from './ui';
 import Row from './ui/Row';
 
@@ -71,7 +71,7 @@ export default function ExerciseAlternatives({
               onPress={() => onReplace(exercise)}
               accessibilityLabel={`Remplacer par ${exercise.nom}`}
             >
-              <Thumb source={source} size={44} />
+              <Thumb source={source} size={scale(44)} />
               <View style={styles.rowBody}>
                 <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.rowTitle} numberOfLines={2}>
                   {exercise.nom}
@@ -123,7 +123,7 @@ const createStyles = (theme: Theme) =>
     },
     rowMeta: {
       ...text.caption,
-      fontSize: 11,
+      fontSize: scale(11),
       color: theme.colors.textMuted,
       marginTop: 2,
     },
@@ -134,7 +134,7 @@ const createStyles = (theme: Theme) =>
     seeAll: {
       alignSelf: 'flex-start',
       paddingVertical: spacing.md,
-      minHeight: 44,
+      minHeight: scale(44),
       justifyContent: 'center',
     },
     seeAllText: {

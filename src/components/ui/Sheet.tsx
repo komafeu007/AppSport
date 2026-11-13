@@ -11,7 +11,6 @@ import {
   Animated,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -19,12 +18,24 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  type PanGesture,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
+import { MAX_FONT_SCALE, duration, easing, radius, scale, spacing, spring, text } from '../../theme/tokens';
+
+/** Distance (px) au-delà de laquelle relâcher ferme la feuille. */
+export const SHEET_DISMISS_DISTANCE = 72;
+/** Vitesse (px/s) d'un lancer vers le bas qui ferme la feuille. */
+export const SHEET_DISMISS_VELOCITY = 700;
+/** Seuil d'activation du geste (px), pour ne pas voler un simple appui. */
+export const SHEET_DRAG_START = 8;
 
 interface Props {
   visible: boolean;
@@ -47,6 +58,11 @@ export interface SheetDrag {
   follow: (dy: number) => void;
   /** Fin du geste : ferme la feuille si `dismiss`, sinon elle reprend sa place. */
   release: (dismiss: boolean) => void;
+  /**
+   * Geste de glissement porté par la feuille entière. Un contenu défilant
+   * (`SheetScrollView`) le bloque pour garder la main sur son propre geste.
+   */
+  pan: PanGesture;
 }
 
 const SheetDragContext = createContext<SheetDrag | null>(null);
@@ -57,9 +73,11 @@ export function useSheetDrag(): SheetDrag | null {
 }
 
 /**
- * Feuille basse commune à toutes les modales de l'app (§8.10) : coins à 20,
- * poignée 36 × 4, voile d'encre, **seule ombre autorisée** de l'app, et
- * fermeture en touchant à côté de la feuille.
+ * Feuille basse commune à toutes les modales de l'app (§8.10) : poignée,
+ * voile d'encre, **seule ombre autorisée** de l'app, fermeture en touchant à
+ * côté, et **fermeture par glissement vers le bas** depuis n'importe quel point
+ * de la feuille (la feuille suit le doigt). Un contenu défilant doit passer par
+ * `SheetScrollView`, qui ne laisse glisser la feuille que s'il est tout en haut.
  */
 export default function Sheet({ visible, onClose, onDismissed, title, children, style }: Props) {
   const insets = useSafeAreaInsets();
@@ -78,28 +96,43 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
-  const drag = useMemo<SheetDrag>(
-    () => ({
-      follow: (dy) => dragY.setValue(Math.max(0, dy)),
-      release: (dismiss) => {
-        if (dismiss) {
-          // La feuille finit sa course hors de l'écran avant de fermer : un
-          // retour à zéro la ferait remonter juste avant de disparaître.
-          Animated.timing(dragY, {
-            toValue: 1200,
-            duration: motionDuration === 0 ? 0 : 180,
-            easing: easing.exit,
-            useNativeDriver: true,
-          }).start(({ finished }) => {
-            if (finished) closeRef.current();
-          });
-          return;
-        }
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, ...spring }).start();
-      },
-    }),
-    [dragY, motionDuration]
-  );
+  const drag = useMemo<SheetDrag>(() => {
+    const follow = (dy: number) => dragY.setValue(Math.max(0, dy));
+    const release = (dismiss: boolean) => {
+      if (dismiss) {
+        // La feuille finit sa course hors de l'écran avant de fermer : un
+        // retour à zéro la ferait remonter juste avant de disparaître.
+        Animated.timing(dragY, {
+          toValue: 1200,
+          duration: motionDuration === 0 ? 0 : 180,
+          easing: easing.exit,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (finished) closeRef.current();
+        });
+        return;
+      }
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, ...spring }).start();
+    };
+    // Glissement depuis une zone qui ne défile pas (poignée, titre, boutons) :
+    // s'active seulement vers le bas, un simple appui reste un appui.
+    const pan = Gesture.Pan()
+      // Reanimated n'est pas installé : les rappels restent sur le fil JS.
+      .runOnJS(true)
+      .activeOffsetY([-100000, SHEET_DRAG_START])
+      .failOffsetY([-16, 100000])
+      .failOffsetX([-24, 24])
+      .onUpdate((event) => follow(event.translationY - SHEET_DRAG_START))
+      .onEnd((event) =>
+        release(
+          event.translationY > SHEET_DISMISS_DISTANCE || event.velocityY > SHEET_DISMISS_VELOCITY
+        )
+      )
+      .onFinalize((_event, success) => {
+        if (!success) release(false);
+      });
+    return { follow, release, pan };
+  }, [dragY, motionDuration]);
 
   useEffect(() => {
     if (visible) {
@@ -136,11 +169,9 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
       {/* `Modal` ouvre une racine native séparée : Gesture Handler a besoin de
           son propre point d'ancrage à l'intérieur pour les gestes du contenu. */}
       <GestureHandlerRootView style={styles.root}>
-        <KeyboardAvoidingView
-          style={styles.root}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
-        >
+        {/* `padding` sur les deux plateformes : avec l'affichage bord à bord
+            d'Android, `height` laisse la feuille sous le clavier. */}
+        <KeyboardAvoidingView style={styles.root} behavior="padding" keyboardVerticalOffset={0}>
           <Animated.View
             style={[
               styles.backdrop,
@@ -164,27 +195,29 @@ export default function Sheet({ visible, onClose, onDismissed, title, children, 
               accessibilityLabel="Fermer"
             />
           </Animated.View>
-          <Animated.View
-            style={[
-              styles.sheet,
-              { paddingBottom: insets.bottom },
-              style,
-              {
-                transform: [
-                  {
-                    translateY: Animated.add(
-                      progress.interpolate({ inputRange: [0, 1], outputRange: [64, 0] }),
-                      dragY
-                    ),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.handle} />
-            {title ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>{title}</Text> : null}
-            <SheetDragContext.Provider value={drag}>{children}</SheetDragContext.Provider>
-          </Animated.View>
+          <GestureDetector gesture={drag.pan}>
+            <Animated.View
+              style={[
+                styles.sheet,
+                { paddingBottom: insets.bottom },
+                style,
+                {
+                  transform: [
+                    {
+                      translateY: Animated.add(
+                        progress.interpolate({ inputRange: [0, 1], outputRange: [64, 0] }),
+                        dragY
+                      ),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.handle} />
+              {title ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.title}>{title}</Text> : null}
+              <SheetDragContext.Provider value={drag}>{children}</SheetDragContext.Provider>
+            </Animated.View>
+          </GestureDetector>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
@@ -223,7 +256,7 @@ const createStyles = (theme: Theme) =>
     },
     handle: {
       alignSelf: 'center',
-      width: 36,
+      width: scale(36),
       height: 4,
       backgroundColor: theme.colors.borderStrong,
       marginTop: spacing.sm,

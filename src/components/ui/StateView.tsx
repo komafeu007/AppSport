@@ -4,7 +4,7 @@ import Svg, { Circle, Line, Rect } from 'react-native-svg';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, radius, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, radius, spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 import Icon from './Icon';
 
@@ -33,8 +33,8 @@ function PitchMark() {
   const theme = useTheme();
   return (
     <Svg
-      width={120}
-      height={76}
+      width={scale(120)}
+      height={scale(76)}
       viewBox="0 0 120 76"
       style={markStyles.mark}
       accessibilityElementsHidden
@@ -43,8 +43,8 @@ function PitchMark() {
       <Rect
         x={1}
         y={1}
-        width={118}
-        height={74}
+        width={scale(118)}
+        height={scale(74)}
         rx={radius.xs}
         stroke={theme.colors.border}
         strokeWidth={2}
@@ -107,7 +107,7 @@ export default function StateView({ kind, title, message, action, style }: Props
           <View style={[styles.skeletonBar, styles.skeletonShort]} />
         </Animated.View>
       ) : null}
-      {kind === 'error' ? <Icon name="alert" size={36} color={theme.colors.danger} /> : null}
+      {kind === 'error' ? <Icon name="alert" size={scale(36)} color={theme.colors.danger} /> : null}
       {kind === 'empty' ? <PitchMark /> : null}
       {heading ? (
         <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={[styles.title, kind === 'error' && styles.titleError]}>{heading}</Text>
@@ -127,18 +127,18 @@ const createStyles = (theme: Theme) =>
       paddingHorizontal: spacing.xxxl,
     },
     skeleton: {
-      width: 240,
+      width: scale(240),
       gap: spacing.sm,
       marginBottom: spacing.xs,
     },
     skeletonBar: {
-      height: 12,
+      height: scale(12),
       borderRadius: radius.none,
       backgroundColor: theme.colors.borderStrong,
     },
     skeletonTitle: {
-      width: 140,
-      height: 16,
+      width: scale(140),
+      height: scale(16),
     },
     skeletonShort: {
       width: '75%',

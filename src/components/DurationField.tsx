@@ -17,7 +17,7 @@ import {
   parseDurationInput,
 } from '../domain/workoutRules';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 
 interface Props {
   /** Durée en secondes. */
@@ -101,7 +101,7 @@ const createStyles = (theme: Theme) =>
       marginBottom: spacing.xs,
     },
     input: {
-      minHeight: 56,
+      minHeight: scale(56),
       textAlign: 'center',
       ...text.subtitle,
       fontFamily: fontFamily.monoMedium,

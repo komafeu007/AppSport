@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import IconButton from '../components/ui/IconButton';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 /**
  * En-tête des écrans poussés, DA « Terminal » : bouton retour carré à gauche,
@@ -24,7 +24,7 @@ export default function TerminalStackHeader({ navigation, options, back, route }
           {canGoBack ? (
             <IconButton
               icon="arrowLeft"
-              size={48}
+              size={scale(48)}
               onPress={() => navigation.goBack()}
               accessibilityLabel="Retour"
             />
@@ -50,13 +50,13 @@ const createStyles = (theme: Theme) =>
     bar: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 64,
+      minHeight: scale(64),
       paddingBottom: spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.borderStrong,
     },
     side: {
-      width: 64,
+      width: scale(64),
       justifyContent: 'center',
     },
     sideRight: {

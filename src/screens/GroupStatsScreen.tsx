@@ -16,7 +16,7 @@ import {
 import type { RootStackParamList } from '../navigation/types';
 import { getGroupPlanExercises, type GroupPlanExercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupStats'>;
 
@@ -169,11 +169,11 @@ const createStyles = (theme: Theme) =>
       ...text.caption,
       color: theme.colors.textMuted,
       marginTop: spacing.lg,
-      lineHeight: 18,
+      lineHeight: scale(18),
     },
     emptyText: {
       ...text.meta,
       color: theme.colors.textMuted,
-      lineHeight: 20,
+      lineHeight: scale(20),
     },
   });

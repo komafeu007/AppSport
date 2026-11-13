@@ -21,6 +21,7 @@ import CompletedSessionEditScreen from '../screens/CompletedSessionEditScreen';
 import GroupStatsScreen from '../screens/GroupStatsScreen';
 import SessionListScreen from '../screens/SessionListScreen';
 import SessionSummaryScreen from '../screens/SessionSummaryScreen';
+import StatsScreen from '../screens/StatsScreen';
 import { useAccount } from '../services/account';
 import { useTheme, type Theme } from '../theme';
 import { duration } from '../theme/tokens';
@@ -49,7 +50,7 @@ function toNavigationTheme(theme: Theme): NavigationTheme {
   };
 }
 
-/** Fondu + glissement court quand on change d'onglet (Accueil ↔ Séances). */
+/** Fondu + glissement court quand on change d'onglet (Accueil ↔ Séances ↔ Stats). */
 const tabTransition = {
   animation: 'shift',
   transitionSpec: {
@@ -58,7 +59,7 @@ const tabTransition = {
   },
 } as const;
 
-/** Onglets principaux (accueil + séances), affichés une fois un compte choisi. */
+/** Onglets principaux (accueil, séances, stats), affichés une fois un compte choisi. */
 function MainTabs() {
   const theme = useTheme();
 
@@ -74,6 +75,7 @@ function MainTabs() {
       >
         <Tab.Screen name="Main" component={MainScreen} options={{ title: 'Accueil' }} />
         <Tab.Screen name="Seance" component={SessionListScreen} options={{ title: 'Séances' }} />
+        <Tab.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
       </Tab.Navigator>
       {/* Séance quittée en cours de route : accessible d'un appui depuis les onglets. */}
       <ActiveWorkoutBubble />

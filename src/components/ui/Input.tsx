@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
 
 interface Props extends TextInputProps {
   /** Agrandit le texte (champ mis en avant, ex. poids total). */
@@ -47,7 +47,7 @@ const createStyles = (theme: Theme) =>
     // Champ « terminal » : bloc acier à angles vifs, souligné d'un filet qui
     // passe à 2 px orange au focus.
     input: {
-      minHeight: 52,
+      minHeight: scale(52),
       backgroundColor: theme.colors.surfaceAlt,
       borderRadius: radius.control,
       borderBottomWidth: 1,

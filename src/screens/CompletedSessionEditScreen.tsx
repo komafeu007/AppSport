@@ -34,7 +34,7 @@ import {
   type SaveWorkoutSet,
 } from '../services/database';
 import { useTheme, useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CompletedSessionEdit'>;
 
@@ -450,7 +450,7 @@ const createStyles = (theme: Theme) =>
     },
     codeText: {
       ...text.caption,
-      fontSize: 10,
+      fontSize: scale(10),
       color: theme.colors.textMuted,
     },
     exerciseName: {
@@ -473,13 +473,13 @@ const createStyles = (theme: Theme) =>
       gap: spacing.sm,
     },
     setCol: {
-      width: 44,
+      width: scale(44),
     },
     fieldCol: {
       flex: 1,
     },
     actionCol: {
-      width: 44,
+      width: scale(44),
       alignItems: 'center',
     },
     setNum: {
@@ -487,7 +487,7 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.textMuted,
     },
     numberInput: {
-      minHeight: 48,
+      minHeight: scale(48),
       textAlign: 'center',
       ...text.subtitle,
       fontFamily: fontFamily.monoMedium,

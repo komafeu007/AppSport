@@ -44,7 +44,7 @@ import {
 } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
 import { padIndex } from '../lib/format';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountForm' | 'WelcomeForm'>;
 
@@ -567,7 +567,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   fieldsetTitle: {
     ...text.caption,
     position: 'absolute',
-    top: -9,
+    top: scale(-9),
     left: spacing.md,
     paddingHorizontal: spacing.sm,
     backgroundColor: theme.colors.background,
@@ -587,7 +587,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginTop: spacing.sm,
   },
   unitInput: {
-    paddingRight: 44,
+    paddingRight: scale(44),
   },
   unit: {
     ...text.caption,
@@ -597,7 +597,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
   },
   noteInput: {
-    minHeight: 72,
+    minHeight: scale(72),
     textAlignVertical: 'top',
     paddingTop: spacing.md,
   },
@@ -624,7 +624,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 52,
+    minHeight: scale(52),
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.borderStrong,
@@ -658,8 +658,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.sm,
   },
   cell: {
-    minWidth: 52,
-    height: 48,
+    minWidth: scale(52),
+    height: scale(48),
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -680,13 +680,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   rules: {
     ...text.meta,
     color: theme.colors.text,
-    lineHeight: 20,
+    lineHeight: scale(20),
     marginBottom: spacing.sm,
   },
   rulesHint: {
     ...text.caption,
     color: theme.colors.textMuted,
-    lineHeight: 18,
+    lineHeight: scale(18),
     marginTop: spacing.xs,
   },
   footer: {

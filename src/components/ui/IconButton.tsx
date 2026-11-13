@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { radius } from '../../theme/tokens';
+import { scale, radius } from '../../theme/tokens';
 import Icon, { type IconName } from './Icon';
 import PressableScale from './PressableScale';
 
@@ -23,7 +23,7 @@ export default function IconButton({
   onPress,
   tone = 'neutral',
   active = false,
-  size = 44,
+  size = scale(44),
   accessibilityLabel,
 }: Props) {
   const theme = useTheme();

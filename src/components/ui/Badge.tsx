@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../../theme/tokens';
 
 export type BadgeTone = 'neutral' | 'outline' | 'action' | 'marker' | 'success' | 'danger';
 
@@ -48,8 +48,8 @@ const createStyles = (theme: Theme) =>
     label: {
       ...text.caption,
       fontFamily: fontFamily.monoBold,
-      fontSize: 11,
-      lineHeight: 15,
+      fontSize: scale(11),
+      lineHeight: scale(15),
       letterSpacing: 1,
       textAlign: 'center',
     },

@@ -69,7 +69,7 @@ import {
   type SessionGroup,
 } from '../services/database';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SessionEditor'>;
 
@@ -155,7 +155,7 @@ function StepperField({
           onPress={() => adjust(-1)}
           accessibilityLabel={`Diminuer ${label}`}
         >
-          <Icon name="minus" size={20} color={theme.colors.action} />
+          <Icon name="minus" size={scale(20)} color={theme.colors.action} />
         </PressableScale>
         <TextInput maxFontSizeMultiplier={MAX_FONT_SCALE}
           style={styles.stepInput}
@@ -171,7 +171,7 @@ function StepperField({
           onPress={() => adjust(1)}
           accessibilityLabel={`Augmenter ${label}`}
         >
-          <Icon name="plus" size={20} color={theme.colors.action} />
+          <Icon name="plus" size={scale(20)} color={theme.colors.action} />
         </PressableScale>
       </View>
       {hint ? <Text maxFontSizeMultiplier={MAX_FONT_SCALE} style={styles.fieldHint}>{hint}</Text> : null}
@@ -211,15 +211,15 @@ function DragHandle({
 
   return (
     <View style={dragHandleStyles.handle} {...pan.panHandlers}>
-      <Icon name="grip" size={20} color={theme.colors.textMuted} />
+      <Icon name="grip" size={scale(20)} color={theme.colors.textMuted} />
     </View>
   );
 }
 
 const dragHandleStyles = StyleSheet.create({
   handle: {
-    width: 32,
-    height: 44,
+    width: scale(32),
+    height: scale(44),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -683,7 +683,7 @@ export default function SessionEditorScreen({ navigation, route }: Props) {
                         source={
                           item.exercise.image ? exerciseImages[item.exercise.image] : undefined
                         }
-                        size={40}
+                        size={scale(40)}
                       />
                     </PressableScale>
                     <PressableScale
@@ -955,7 +955,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   cell: {
     flexGrow: 1,
     flexBasis: '30%',
-    minHeight: 48,
+    minHeight: scale(48),
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
@@ -1006,7 +1006,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   emptyText: {
     ...text.meta,
     color: theme.colors.textMuted,
-    lineHeight: 20,
+    lineHeight: scale(20),
   },
   card: {
     marginBottom: spacing.md,
@@ -1018,9 +1018,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   cardIndex: {
     ...text.caption,
-    fontSize: 13,
+    fontSize: scale(13),
     color: theme.colors.textMuted,
-    width: 22,
+    width: scale(22),
   },
   cardTitleBlock: {
     flex: 1,
@@ -1108,8 +1108,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     gap: spacing.xs,
   },
   stepButton: {
-    width: 36,
-    height: 44,
+    width: scale(36),
+    height: scale(44),
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1119,7 +1119,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   stepInput: {
     flex: 1,
-    height: 44,
+    height: scale(44),
     textAlign: 'center',
     ...text.subtitle,
     fontFamily: fontFamily.monoMedium,
@@ -1130,8 +1130,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderRadius: radius.control,
   },
   durationInput: {
-    height: 44,
-    minHeight: 44,
+    height: scale(44),
+    minHeight: scale(44),
   },
   fieldHint: {
     ...text.micro,
@@ -1147,7 +1147,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   setWeightsHint: {
     ...text.micro,
     color: theme.colors.textMuted,
-    lineHeight: 16,
+    lineHeight: scale(16),
     marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
@@ -1157,7 +1157,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   addButton: {
     marginTop: spacing.lg,
-    minHeight: 56,
+    minHeight: scale(56),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1196,7 +1196,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   pickerSubtitle: {
     ...text.caption,
     color: theme.colors.textMuted,
-    lineHeight: 18,
+    lineHeight: scale(18),
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xs,
   },

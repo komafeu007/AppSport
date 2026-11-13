@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, fontFamily, spacing } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, spacing } from '../../theme/tokens';
 import PressableScale from './PressableScale';
 
 export type CardTone = 'default' | 'accent' | 'danger' | 'marker' | 'success';
@@ -74,7 +74,7 @@ export default function Card({
   );
 }
 
-const MARK = 14;
+const MARK = scale(14);
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
@@ -96,7 +96,7 @@ const createStyles = (theme: Theme) =>
       height: MARK,
       textAlign: 'center',
       fontFamily: fontFamily.mono,
-      fontSize: 16,
+      fontSize: scale(16),
       lineHeight: MARK,
       color: theme.colors.action,
       // Le symbole reste décoratif : pas lu par le lecteur d'écran.

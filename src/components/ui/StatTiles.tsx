@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 
 export interface StatTile {
   /** Libellé mono : « A.01 Séances », « T.02 Durée ». */
@@ -76,8 +76,8 @@ const createStyles = (theme: Theme) =>
     },
     label: {
       ...text.caption,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: scale(10),
+      lineHeight: scale(14),
       color: theme.colors.textMuted,
     },
     valueRow: {
@@ -97,7 +97,7 @@ const createStyles = (theme: Theme) =>
     },
     unitBelow: {
       ...text.caption,
-      fontSize: 10,
+      fontSize: scale(10),
       color: theme.colors.textMuted,
     },
   });

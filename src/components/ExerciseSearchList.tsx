@@ -14,7 +14,7 @@ import { exerciseTermLabel } from '../domain/exerciseLabels';
 import { buildExerciseSections, type ExerciseSection } from '../lib/exerciseSearch';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 import ExerciseDetailModal from './ExerciseDetailModal';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -70,7 +70,7 @@ function ExerciseRow({
       accessibilityLabel={selected ? `${exercise.nom} (déjà ajouté)` : exercise.nom}
     >
       <PressableScale onPress={onOpenDetail} accessibilityLabel="Voir l’exercice" scaleTo={0.92}>
-        <Thumb source={source} size={48} />
+        <Thumb source={source} size={scale(48)} />
       </PressableScale>
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
@@ -233,7 +233,7 @@ const createStyles = (theme: Theme) =>
     },
     rowMeta: {
       ...text.caption,
-      fontSize: 11,
+      fontSize: scale(11),
       color: theme.colors.textMuted,
       marginTop: spacing.xs,
     },

@@ -6,7 +6,7 @@ import { joinKeyList } from '../domain/profile';
 export const DATABASE_NAME = 'appsportlocal.db';
 
 /** Incrémenter à chaque évolution du schéma et ajouter la migration correspondante. */
-const DATABASE_VERSION = 16;
+const DATABASE_VERSION = 17;
 
 export interface Exercise {
   id: number;
@@ -212,6 +212,16 @@ CREATE TABLE IF NOT EXISTS LOGS_SETS (
     FOREIGN KEY(session_id) REFERENCES LOGS_SESSION(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)
 );
+
+CREATE TABLE IF NOT EXISTS BODY_MEASUREMENTS (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    zone TEXT NOT NULL,
+    value_cm REAL NOT NULL,
+    date TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id)
+);
+CREATE INDEX IF NOT EXISTS idx_body_measurements_account ON BODY_MEASUREMENTS(account_id, zone, date);
 `;
 
 /**
@@ -667,6 +677,7 @@ export async function deleteAccount(db: SQLite.SQLiteDatabase, id: number): Prom
       id
     );
     await db.runAsync('DELETE FROM LOGS_SESSION WHERE account_id = ?', id);
+    await db.runAsync('DELETE FROM BODY_MEASUREMENTS WHERE account_id = ?', id);
     await db.runAsync(
       'DELETE FROM WORKOUT_EXOS WHERE program_id IN (SELECT id FROM PROGRAMS WHERE account_id = ?)',
       id
@@ -689,6 +700,7 @@ export async function resetAppData(db: SQLite.SQLiteDatabase): Promise<void> {
     await db.execAsync(
       `DELETE FROM LOGS_SETS;
        DELETE FROM LOGS_SESSION;
+       DELETE FROM BODY_MEASUREMENTS;
        DELETE FROM WORKOUT_EXOS;
        DELETE FROM PROGRAMS;
        DELETE FROM SESSION_GROUPS;
@@ -1523,4 +1535,57 @@ export function getExerciseBestSets(
    ) WHERE rn = 1`,
     accountId
   );
+}
+
+// --- Mensurations (onglet Stats) -------------------------------------------
+
+/** Une mesure datée (tour en cm, ou poids en kg pour la zone `poids`) : on garde l'historique. */
+export interface BodyMeasurement {
+  id: number;
+  zone: string;
+  value_cm: number;
+  date: string;
+}
+
+/** Toutes les mensurations d'un compte, de la plus récente à la plus ancienne. */
+export function getBodyMeasurements(
+  db: SQLite.SQLiteDatabase,
+  accountId: number
+): Promise<BodyMeasurement[]> {
+  return db.getAllAsync<BodyMeasurement>(
+    `SELECT id, zone, value_cm, date FROM BODY_MEASUREMENTS
+      WHERE account_id = ?
+      ORDER BY date DESC, id DESC`,
+    accountId
+  );
+}
+
+/** Ajoute une mesure (la précédente reste dans l'historique). */
+export async function addBodyMeasurement(
+  db: SQLite.SQLiteDatabase,
+  accountId: number,
+  zone: string,
+  valueCm: number
+): Promise<void> {
+  await db.runAsync(
+    'INSERT INTO BODY_MEASUREMENTS (account_id, zone, value_cm, date) VALUES (?, ?, ?, ?)',
+    accountId,
+    zone,
+    valueCm,
+    new Date().toISOString()
+  );
+}
+
+/** Poids du profil, tenu à jour par la dernière pesée de l'onglet Stats. */
+export async function setAccountWeight(
+  db: SQLite.SQLiteDatabase,
+  accountId: number,
+  weightKg: number
+): Promise<void> {
+  await db.runAsync('UPDATE ACCOUNTS SET poids = ? WHERE id = ?', weightKg, accountId);
+}
+
+/** Retire une mesure saisie par erreur. */
+export async function deleteBodyMeasurement(db: SQLite.SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM BODY_MEASUREMENTS WHERE id = ?', id);
 }

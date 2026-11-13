@@ -4,7 +4,7 @@ import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg
 
 import { useReduceMotion } from '../theme/motion';
 import { useTheme } from '../theme';
-import { duration, easing, fontFamily } from '../theme/tokens';
+import { scale, duration, easing, fontFamily } from '../theme/tokens';
 
 export interface RadarPoint {
   label: string;
@@ -19,7 +19,7 @@ interface Props {
 
 const LEVELS = [0.25, 0.5, 0.75, 1];
 /** Marge réservée aux libellés autour du cercle. */
-const LABEL_PAD = 74;
+const LABEL_PAD = scale(74);
 
 /**
  * Graphique « araignée » (radar) des muscles travaillés : un axe par muscle,
@@ -145,7 +145,7 @@ export default function MuscleRadarChart({ data, size }: Props) {
               y={at.y + 4}
               fill={theme.colors.textMuted}
               fontFamily={fontFamily.mono}
-              fontSize={10}
+              fontSize={scale(10)}
               textAnchor={anchor}
             >
               {point.label.toUpperCase()}

@@ -3,7 +3,7 @@ import { Animated, StyleSheet } from 'react-native';
 
 import { useReduceMotion } from '../../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../../theme/tokens';
 import PressableScale from './PressableScale';
 
 interface Props {
@@ -79,7 +79,7 @@ export default function Chip({ label, selected, onPress, onLongPress, accessibil
       onLongPress={onLongPress}
       delayLongPress={350}
       // 36 px visuels + 6 px de chaque côté = 48 dp de cible (Android).
-      hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
+      hitSlop={{ top: scale(6), bottom: scale(6), left: 2, right: 2 }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel}
@@ -104,7 +104,7 @@ const createStyles = (_theme: Theme) =>
     chip: {
       // `minHeight` (et non `height`) : le libellé peut grandir avec la taille
       // de texte système sans être coupé.
-      minHeight: 36,
+      minHeight: scale(36),
       paddingVertical: spacing.xs,
       justifyContent: 'center',
       borderWidth: 1,

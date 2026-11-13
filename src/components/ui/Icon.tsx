@@ -1,3 +1,4 @@
+import { scale } from '../../theme/tokens';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import ArrowRight from 'lucide-react-native/icons/arrow-right';
 import ArrowRightLeft from 'lucide-react-native/icons/arrow-right-left';
@@ -59,7 +60,7 @@ interface Props {
   strokeWidth?: number;
 }
 
-export default function Icon({ name, size = 24, color, strokeWidth = 2 }: Props) {
+export default function Icon({ name, size = scale(24), color, strokeWidth = 2 }: Props) {
   const theme = useTheme();
   const Glyph = ICONS[name];
   return <Glyph size={size} color={color ?? theme.colors.text} strokeWidth={strokeWidth} />;

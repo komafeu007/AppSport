@@ -6,11 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PressableScale from '../components/ui/PressableScale';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, duration, easing, spacing, spring, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, spacing, spring, text } from '../theme/tokens';
 
 
 /**
- * Barre d'onglets de la DA « Terminal » : deux moitiés séparées par un filet,
+ * Barre d'onglets de la DA « Terminal » : des colonnes égales séparées par un filet,
  * chacune avec son numéro mono (« 01 ») et son libellé en Chakra Petch
  * capitales. L'onglet actif passe en crème, son numéro en orange suivi d'un
  * point, et porte un trait orange de 3 px sur toute sa largeur, qui **glisse**
@@ -121,6 +121,9 @@ export default function StartLineTabBar({ state, descriptors, navigation }: Bott
             </Animated.Text>
             <Animated.Text
               maxFontSizeMultiplier={MAX_FONT_SCALE}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={[
                 styles.label,
                 {
@@ -151,9 +154,9 @@ const createStyles = (theme: Theme) =>
     tab: {
       flex: 1,
       // Hauteur minimale : le libellé suit la taille de texte du système.
-      minHeight: 72,
+      minHeight: scale(72),
       paddingVertical: spacing.md,
-      paddingHorizontal: spacing.xl,
+      paddingHorizontal: spacing.lg,
       justifyContent: 'center',
       gap: 2,
     },
@@ -174,11 +177,11 @@ const createStyles = (theme: Theme) =>
     },
     number: {
       ...text.caption,
-      fontSize: 11,
+      fontSize: scale(11),
     },
     label: {
       ...text.sectionTitle,
-      fontSize: 22,
-      lineHeight: 26,
+      fontSize: scale(22),
+      lineHeight: scale(26),
     },
   });

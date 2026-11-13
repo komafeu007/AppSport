@@ -33,7 +33,7 @@ import {
   sessionSummary,
 } from '../services/programGeneration';
 import { useTheme, useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, spacing, text } from '../theme/tokens';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProgramGenerator' | 'WelcomeGenerator'>;
@@ -103,7 +103,7 @@ function ExerciseRow({
         <IconButton
           icon={rerolling ? 'more' : 'swap'}
           tone="neutral"
-          size={36}
+          size={scale(36)}
           accessibilityLabel="Proposer un autre exercice"
           onPress={onReroll}
         />
@@ -380,7 +380,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
                         <View style={styles.moduleSquare} />
                       ) : (
                         <View style={styles.modulePlus}>
-                          <Icon name="plus" size={18} color={theme.colors.text} />
+                          <Icon name="plus" size={scale(18)} color={theme.colors.text} />
                         </View>
                       )}
                     </PressableScale>
@@ -436,7 +436,7 @@ export default function ProgramGeneratorScreen({ navigation, route }: Props) {
           <Button
             label="Relancer"
             variant="secondary"
-            leading={<Icon name="refresh" size={18} color={theme.colors.text} />}
+            leading={<Icon name="refresh" size={scale(18)} color={theme.colors.text} />}
             onPress={() => setSeed(newSeed())}
             disabled={saving || loading}
             style={styles.footerSecondary}
@@ -510,7 +510,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.text,
   },
   barTrack: {
-    height: 96,
+    height: scale(96),
     width: '100%',
     justifyContent: 'flex-end',
   },
@@ -527,16 +527,16 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   // Petite coupe en biais en bas à droite des barres crème.
   barCut: {
     position: 'absolute',
-    right: -6,
-    bottom: -6,
-    width: 12,
-    height: 12,
+    right: scale(-6),
+    bottom: scale(-6),
+    width: scale(12),
+    height: scale(12),
     backgroundColor: theme.colors.background,
     transform: [{ rotate: '45deg' }],
   },
   barLabel: {
     ...text.caption,
-    fontSize: 10,
+    fontSize: scale(10),
     color: theme.colors.textMuted,
   },
   module: {
@@ -549,7 +549,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    minHeight: 64,
+    minHeight: scale(64),
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
@@ -566,13 +566,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.text,
   },
   moduleSquare: {
-    width: 10,
-    height: 10,
+    width: scale(10),
+    height: scale(10),
     backgroundColor: theme.colors.action,
   },
   modulePlus: {
-    width: 32,
-    height: 32,
+    width: scale(32),
+    height: scale(32),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -592,7 +592,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   exerciseRef: {
     ...text.caption,
     color: theme.colors.textMuted,
-    width: 36,
+    width: scale(36),
   },
   exerciseText: {
     flex: 1,
@@ -634,11 +634,11 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginTop: spacing.xs,
   },
   bulletDot: {
-    width: 6,
-    height: 6,
+    width: scale(6),
+    height: scale(6),
     backgroundColor: theme.colors.success,
     // Centre la puce sur la première ligne de texte (22 px).
-    marginTop: 8,
+    marginTop: scale(8),
   },
   bullet: {
     ...text.body,

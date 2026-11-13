@@ -9,6 +9,18 @@ import { Easing, type TextStyle } from 'react-native';
  * cohérentes.
  */
 
+/**
+ * Échelle globale de l'interface : toutes les tailles (espacements, polices,
+ * cibles tactiles, dimensions fixes des composants) passent par `scale()`.
+ * Changer ce facteur redimensionne toute l'app d'un coup.
+ */
+export const UI_SCALE = 0.85;
+
+/** Taille de la maquette ramenée à l'échelle de l'app (arrondie au pixel). */
+export function scale(size: number): number {
+  return Math.round(size * UI_SCALE);
+}
+
 /** Familles chargées par `useFonts` (voir App.tsx) : la graisse est dans le nom. */
 export const fontFamily = {
   /** Chakra Petch — titres (en capitales) et grands chiffres. */
@@ -25,16 +37,16 @@ export const fontFamily = {
   monoBold: 'IBMPlexMono_600SemiBold',
 } as const;
 
-/** Échelle d'espacement (base 4 px, §7.1). */
+/** Échelle d'espacement (base 4 px de la maquette, §7.1, mise à l'échelle). */
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-  huge: 48,
+  xs: scale(4),
+  sm: scale(8),
+  md: scale(12),
+  lg: scale(16),
+  xl: scale(20),
+  xxl: scale(24),
+  xxxl: scale(32),
+  huge: scale(48),
 } as const;
 
 /**
@@ -55,8 +67,9 @@ export const radius = {
 
 /** Cibles tactiles minimales (§7.3) : 48 px, 56 px pendant la séance. */
 export const touch = {
-  min: 48,
-  session: 56,
+  // Plancher à 44 px (minimum d'accessibilité) malgré l'échelle globale.
+  min: Math.max(44, scale(48)),
+  session: Math.max(44, scale(56)),
 } as const;
 
 /**
@@ -78,85 +91,85 @@ const MONO_TRACKING = 1.2;
  */
 export const text = {
   /** Chiffres de l'écran de séance : charge, répétitions, chrono. */
-  numXl: { fontFamily: fontFamily.displayHeavy, fontSize: 96, lineHeight: 96 },
+  numXl: { fontFamily: fontFamily.displayHeavy, fontSize: scale(96), lineHeight: scale(96) },
   /** Chiffre clé d'un écran (durée de fin de séance…). */
-  numL: { fontFamily: fontFamily.displayHeavy, fontSize: 48, lineHeight: 52 },
+  numL: { fontFamily: fontFamily.displayHeavy, fontSize: scale(48), lineHeight: scale(52) },
   /** Valeurs dans les tuiles et tableaux. */
-  numM: { fontFamily: fontFamily.displayHeavy, fontSize: 30, lineHeight: 34 },
+  numM: { fontFamily: fontFamily.displayHeavy, fontSize: scale(30), lineHeight: scale(34) },
   /** Saisies chiffrées compactes : poids, reps et durée d'une ligne de série. */
-  numS: { fontFamily: fontFamily.displayHeavy, fontSize: 20, lineHeight: 24 },
+  numS: { fontFamily: fontFamily.displayHeavy, fontSize: scale(20), lineHeight: scale(24) },
   /** Titre d'écran (« ACCUEIL », « SÉANCES »). */
   screenTitle: {
     fontFamily: fontFamily.displayHeavy,
-    fontSize: 52,
-    lineHeight: 54,
+    fontSize: scale(52),
+    lineHeight: scale(54),
     textTransform: 'uppercase',
   },
   /** Titre de section (« JOURNAL », « EXERCICES »). */
   sectionTitle: {
     fontFamily: fontFamily.displayHeavy,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: scale(26),
+    lineHeight: scale(30),
     textTransform: 'uppercase',
   },
   /** Titre de bloc (nom de groupe, nom de séance dans une carte). */
   title: {
     fontFamily: fontFamily.displayHeavy,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: scale(24),
+    lineHeight: scale(28),
     textTransform: 'uppercase',
   },
   /** Nom d'exercice, titre de ligne. */
-  cardTitle: { fontFamily: fontFamily.textSemiBold, fontSize: 18, lineHeight: 22 },
+  cardTitle: { fontFamily: fontFamily.textSemiBold, fontSize: scale(18), lineHeight: scale(22) },
   /** Sous-titre, valeur mise en avant. */
-  subtitle: { fontFamily: fontFamily.textSemiBold, fontSize: 16, lineHeight: 22 },
+  subtitle: { fontFamily: fontFamily.textSemiBold, fontSize: scale(16), lineHeight: scale(22) },
   /** Texte courant. */
-  body: { fontFamily: fontFamily.text, fontSize: 16, lineHeight: 22 },
+  body: { fontFamily: fontFamily.text, fontSize: scale(16), lineHeight: scale(22) },
   /** Texte courant appuyé. */
-  bodyStrong: { fontFamily: fontFamily.textSemiBold, fontSize: 16, lineHeight: 22 },
+  bodyStrong: { fontFamily: fontFamily.textSemiBold, fontSize: scale(16), lineHeight: scale(22) },
   /** Libellé de bouton principal (Chakra en capitales). */
   button: {
     fontFamily: fontFamily.displayHeavy,
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: scale(18),
+    lineHeight: scale(22),
     textTransform: 'uppercase',
   },
   /** Libellé de champ, puce, petit bouton : mono en capitales espacées. */
   label: {
     fontFamily: fontFamily.monoMedium,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: scale(13),
+    lineHeight: scale(18),
     letterSpacing: MONO_TRACKING,
     textTransform: 'uppercase',
   },
   /** Texte secondaire, aides (phrase, casse normale). */
-  meta: { fontFamily: fontFamily.text, fontSize: 14, lineHeight: 20 },
+  meta: { fontFamily: fontFamily.text, fontSize: scale(14), lineHeight: scale(20) },
   /** Métadonnée technique : « 07.11 · 6 EXOS », axes, unités. */
   caption: {
     fontFamily: fontFamily.mono,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: Math.max(11, scale(12)),
+    lineHeight: scale(16),
     letterSpacing: MONO_TRACKING,
     textTransform: 'uppercase',
   },
   /** Rubrique d'écran : « // 01 — TABLEAU DE BORD » (en orange). */
   kicker: {
     fontFamily: fontFamily.mono,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: scale(13),
+    lineHeight: scale(18),
     letterSpacing: MONO_TRACKING,
     textTransform: 'uppercase',
   },
   /** Valeur mono appuyée (« 5 023 KG », « 6 915 KG »). */
   monoValue: {
     fontFamily: fontFamily.monoBold,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: scale(15),
+    lineHeight: scale(20),
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  /** Mention très discrète (aide sous un champ). Plancher à 12 px. */
-  micro: { fontFamily: fontFamily.text, fontSize: 12, lineHeight: 16 },
+  /** Mention très discrète (aide sous un champ). Plancher à 11 px après mise à l'échelle. */
+  micro: { fontFamily: fontFamily.text, fontSize: Math.max(11, scale(12)), lineHeight: scale(16) },
 } satisfies Record<string, TextStyle>;
 
 /** Durées d'animation en ms (§11.2). */

@@ -4,7 +4,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import type { MuscleAmount } from '../domain/muscles';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, duration, easing, radius, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, radius, spacing, text } from '../theme/tokens';
 
 interface Props {
   muscles: readonly MuscleAmount[];
@@ -110,17 +110,17 @@ const createStyles = (theme: Theme) =>
     legendLabel: {
       ...text.caption,
       color: theme.colors.text,
-      width: 88,
+      width: scale(88),
     },
     legendTrack: {
       flex: 1,
-      height: 8,
+      height: scale(8),
       borderRadius: radius.xs,
       backgroundColor: theme.colors.surfaceAlt,
       overflow: 'hidden',
     },
     legendFill: {
-      height: 8,
+      height: scale(8),
       borderRadius: radius.xs,
       backgroundColor: theme.colors.action,
     },

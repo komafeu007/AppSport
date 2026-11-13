@@ -7,14 +7,12 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import { useSheetDrag } from './Sheet';
-
-/** Distance (px) au-delà de laquelle relâcher ferme la feuille. */
-const DISMISS_DISTANCE = 72;
-/** Vitesse (px/s) d'un lancer vers le bas qui ferme la feuille. */
-const DISMISS_VELOCITY = 700;
-/** Seuil d'activation du geste (px), pour ne pas voler un simple appui. */
-const DRAG_START = 8;
+import {
+  SHEET_DISMISS_DISTANCE as DISMISS_DISTANCE,
+  SHEET_DISMISS_VELOCITY as DISMISS_VELOCITY,
+  SHEET_DRAG_START as DRAG_START,
+  useSheetDrag,
+} from './Sheet';
 
 type Props = Omit<ScrollViewProps, 'onScroll' | 'scrollEventThrottle' | 'bounces' | 'overScrollMode'> & {
   scrollRef?: RefObject<ScrollView | null>;
@@ -42,10 +40,14 @@ export default function SheetScrollView({ scrollRef, children, ...rest }: Props)
   /** Le geste en cours a commencé alors que le contenu était en haut. */
   const fromTop = useRef(false);
 
-  const gesture = useMemo(
-    () =>
-      Gesture.Simultaneous(
-        Gesture.Native(),
+  const gesture = useMemo(() => {
+    const native = Gesture.Native();
+    // Le glissement de la feuille entière attend que ce contenu lâche la main :
+    // sans ça, tirer vers le bas au milieu du contenu ferait descendre la
+    // feuille en même temps qu'il défile.
+    if (sheetDrag) native.blocksExternalGesture(sheetDrag.pan);
+    return Gesture.Simultaneous(
+        native,
         Gesture.Pan()
           // Reanimated n'est pas installé : les rappels restent sur le fil JS.
           .runOnJS(true)
@@ -76,9 +78,8 @@ export default function SheetScrollView({ scrollRef, children, ...rest }: Props)
             fromTop.current = false;
             sheetDrag?.release(false);
           })
-      ),
-    [sheetDrag]
-  );
+      );
+  }, [sheetDrag]);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     atTop.current = event.nativeEvent.contentOffset.y <= 0;

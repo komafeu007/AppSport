@@ -48,7 +48,7 @@ import {
 } from '../services/database';
 import { getActiveGroupId, getHiddenGroupIds, setActiveGroupId } from '../services/preferences';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 /** Barres du code-barres décoratif (largeurs en px, alternées barre / vide). */
 const BARCODE = [2, 1, 1, 3, 2, 1, 4, 1, 2, 2, 1, 3, 1, 1, 2, 4, 1, 2, 3, 1, 1, 2, 1, 3, 2, 1, 1, 4, 2, 1];
@@ -471,14 +471,14 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 36,
+    minHeight: scale(36),
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.borderStrong,
   },
   operatorDot: {
-    width: 8,
-    height: 8,
+    width: scale(8),
+    height: scale(8),
     backgroundColor: theme.colors.action,
   },
   operatorText: {
@@ -500,8 +500,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   heroTitle: {
     ...text.screenTitle,
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: scale(34),
+    lineHeight: scale(38),
     color: theme.colors.text,
   },
   heroMeta: {
@@ -521,7 +521,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   barcode: {
     flexDirection: 'row',
-    height: 24,
+    height: scale(24),
     opacity: 0.6,
   },
   bar: {
@@ -550,7 +550,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   historyEmpty: {
     ...text.meta,
     color: theme.colors.textMuted,
-    lineHeight: 20,
+    lineHeight: scale(20),
   },
   historyIndex: {
     ...text.caption,

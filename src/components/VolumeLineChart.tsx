@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../theme/tokens';
 
 export interface VolumeLinePoint {
   label: string;
@@ -110,16 +110,16 @@ const createStyles = (theme: Theme) =>
     date: {
       ...text.caption,
       color: theme.colors.textMuted,
-      width: 44,
+      width: scale(44),
     },
     track: {
       flex: 1,
-      height: 12,
+      height: scale(12),
       borderWidth: 1,
       borderColor: theme.colors.borderStrong,
     },
     fill: {
-      height: 10,
+      height: scale(10),
       backgroundColor: theme.colors.textMuted,
     },
     fillLast: {
@@ -128,13 +128,13 @@ const createStyles = (theme: Theme) =>
     value: {
       ...text.caption,
       color: theme.colors.textMuted,
-      minWidth: 84,
+      minWidth: scale(84),
       textAlign: 'right',
     },
     valueLast: {
       ...text.monoValue,
       color: theme.colors.text,
-      minWidth: 84,
+      minWidth: scale(84),
     },
     caption: {
       ...text.caption,

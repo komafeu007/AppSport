@@ -5,7 +5,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import type { MuscleAmount } from '../domain/muscles';
 import { useReduceMotion } from '../theme/motion';
 import { useTheme, useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, duration, easing, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, spacing, text } from '../theme/tokens';
 
 interface Props {
   muscles: readonly MuscleAmount[];
@@ -13,9 +13,9 @@ interface Props {
   format: (value: number) => string;
 }
 
-const LABEL_WIDTH = 84;
-const VALUE_WIDTH = 40;
-const BAR_HEIGHT = 12;
+const LABEL_WIDTH = scale(84);
+const VALUE_WIDTH = scale(40);
+const BAR_HEIGHT = scale(12);
 const CUT = 6;
 const STAGGER = 40;
 
@@ -163,7 +163,7 @@ const createStyles = (theme: Theme) =>
     },
     tick: {
       ...text.caption,
-      fontSize: 10,
+      fontSize: scale(10),
       color: theme.colors.textMuted,
     },
   });

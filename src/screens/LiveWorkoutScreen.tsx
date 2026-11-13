@@ -95,7 +95,7 @@ import {
 } from '../services/restAlert';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, radius, spacing, spring, text } from '../theme/tokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveWorkout'>;
 
@@ -159,7 +159,7 @@ function isLastOfSuperset(exercises: LiveExercise[], index: number): boolean {
 
 /** Haltère du jeu d'icônes unique (ouvre le calculateur de disques). */
 function BarbellIcon({ color }: { color: string }) {
-  return <Icon name="dumbbell" size={22} color={color} />;
+  return <Icon name="dumbbell" size={scale(22)} color={color} />;
 }
 
 /**
@@ -224,7 +224,7 @@ function CheckToggle({
   onPress,
   accessibilityLabel,
   // 44 pt de largeur tactile : une coche de série se valide au pouce, en séance.
-  width = 44,
+  width = scale(44),
 }: {
   checked: boolean;
   onPress: () => void;
@@ -260,7 +260,7 @@ function CheckToggle({
     inputRange: [0, 1],
     outputRange: [1, 0],
   });
-  const scale = progress.interpolate({
+  const checkScale = progress.interpolate({
     inputRange: [0, 0.7, 1],
     outputRange: [1, 1.12, 1],
   });
@@ -274,13 +274,13 @@ function CheckToggle({
       accessibilityLabel={accessibilityLabel}
     >
       <Animated.View
-        style={[styles.check, { width, backgroundColor, borderColor, transform: [{ scale }] }]}
+        style={[styles.check, { width, backgroundColor, borderColor, transform: [{ scale: checkScale }] }]}
       >
         <Animated.View style={{ opacity: mutedOpacity }}>
-          <Icon name="check" size={18} color={theme.colors.textMuted} />
+          <Icon name="check" size={scale(18)} color={theme.colors.textMuted} />
         </Animated.View>
         <Animated.View style={[styles.checkOverlay, { opacity: progress }]}>
-          <Icon name="check" size={18} color={theme.colors.onSuccess} />
+          <Icon name="check" size={scale(18)} color={theme.colors.onSuccess} />
         </Animated.View>
       </Animated.View>
     </PressableScale>
@@ -1248,7 +1248,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                             ? exerciseImages[exercise.exercise.image]
                             : undefined
                         }
-                        size={40}
+                        size={scale(40)}
                       />
                     </PressableScale>
                     <PressableScale
@@ -1320,7 +1320,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 ? exerciseImages[exercise.exercise.image]
                                 : undefined
                             }
-                            size={44}
+                            size={scale(44)}
                           />
                         </PressableScale>
                         <View style={styles.cardTitleStack}>
@@ -1418,7 +1418,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                                 icon={running ? 'stop' : 'play'}
                                 tone={running ? 'danger' : 'accent'}
                                 active={running}
-                                size={40}
+                                size={scale(40)}
                                 accessibilityLabel={
                                   running ? 'Arrêter le chrono' : 'Lancer le chrono'
                                 }
@@ -1470,7 +1470,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                     <View style={styles.setActions}>
                       <Button
                         label="Retirer"
-                        leading={<Icon name="minus" size={16} color={theme.colors.action} />}
+                        leading={<Icon name="minus" size={scale(16)} color={theme.colors.action} />}
                         variant="secondary"
                         size="sm"
                         style={styles.setActionButton}
@@ -1478,7 +1478,7 @@ export default function LiveWorkoutScreen({ navigation, route }: Props) {
                       />
                       <Button
                         label="Ajouter"
-                        leading={<Icon name="plus" size={16} color={theme.colors.action} />}
+                        leading={<Icon name="plus" size={scale(16)} color={theme.colors.action} />}
                         variant="secondary"
                         size="sm"
                         style={styles.setActionButton}
@@ -1714,9 +1714,9 @@ function RestPanel({ remaining, total, done, onShift, onSkip }: RestPanelProps) 
 }
 
 /** Largeurs des colonnes du tableau des séries (en-tête et lignes alignés). */
-const SET_COL = 24;
-const PREV_COL = 52;
-const CALC_COL = 30;
+const SET_COL = scale(24);
+const PREV_COL = scale(52);
+const CALC_COL = scale(30);
 
 const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
@@ -1741,8 +1741,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   headerTitle: {
     ...text.screenTitle,
-    fontSize: 36,
-    lineHeight: 40,
+    fontSize: scale(36),
+    lineHeight: scale(40),
     color: theme.colors.text,
     maxWidth: '100%',
   },
@@ -1786,7 +1786,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   colHead: {
     ...text.caption,
-    fontSize: 10,
+    fontSize: scale(10),
     color: theme.colors.textMuted,
     textAlign: 'center',
   },
@@ -1798,8 +1798,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   /** Une étiquette dans une ligne : centrée verticalement (la pastille se cale en haut par défaut). */
   badgeInRow: { alignSelf: 'center' },
   colWeight: { paddingRight: CALC_COL },
-  colReps: { width: 56 },
-  colCheck: { width: 44 },
+  colReps: { width: scale(56) },
+  colCheck: { width: scale(44) },
   cardSuperset: {
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.action,
@@ -1896,7 +1896,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   previousText: {
     ...text.caption,
-    fontSize: 11,
+    fontSize: scale(11),
     letterSpacing: 0,
     color: theme.colors.textMuted,
     width: PREV_COL,
@@ -1913,7 +1913,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: theme.colors.borderStrong,
     borderRadius: radius.control,
-    minHeight: 48,
+    minHeight: scale(48),
     paddingLeft: 2,
   },
   weightInput: {
@@ -1929,13 +1929,13 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   calcButton: {
     width: CALC_COL,
-    height: 44,
+    height: scale(44),
     alignItems: 'center',
     justifyContent: 'center',
   },
   repsInput: {
-    width: 56,
-    minHeight: 48,
+    width: scale(56),
+    minHeight: scale(48),
     textAlign: 'center',
     ...text.numS,
     color: theme.colors.text,
@@ -1948,7 +1948,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   /** Durée d'une série d'endurance : même case que les reps, sur toute la largeur restante. */
   durationInput: {
-    minHeight: 48,
+    minHeight: scale(48),
     textAlign: 'center',
     ...text.numS,
     color: theme.colors.text,
@@ -1960,7 +1960,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     paddingHorizontal: 0,
   },
   check: {
-    minHeight: 48,
+    minHeight: scale(48),
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1986,7 +1986,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   emptyText: {
     ...text.meta,
     color: theme.colors.textMuted,
-    lineHeight: 20,
+    lineHeight: scale(20),
   },
   footer: {
     padding: spacing.xl,
@@ -2039,7 +2039,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   restButton: {
     flexShrink: 1,
-    minHeight: 36,
+    minHeight: scale(36),
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2063,14 +2063,14 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   restTrack: {
-    height: 4,
+    height: scale(4),
     borderRadius: radius.none,
     borderWidth: 1,
     borderColor: theme.colors.onMarker,
     overflow: 'hidden',
   },
   restFill: {
-    height: 4,
+    height: scale(4),
     width: '100%',
     // La jauge se vide en `scaleX` depuis la gauche (pas de marge animée).
     transformOrigin: 'left',

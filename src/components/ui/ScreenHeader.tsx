@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 import Appear from './Appear';
 
 interface Props {
@@ -69,13 +69,13 @@ const createStyles = (theme: Theme) =>
       flexShrink: 1,
     },
     titleCompact: {
-      fontSize: 40,
-      lineHeight: 42,
+      fontSize: scale(40),
+      lineHeight: scale(42),
     },
     subtitle: {
       ...text.meta,
-      fontSize: 16,
-      lineHeight: 22,
+      fontSize: scale(16),
+      lineHeight: scale(22),
       color: theme.colors.textMuted,
       marginTop: spacing.sm,
     },

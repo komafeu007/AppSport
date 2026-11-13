@@ -8,11 +8,11 @@ import { useAccount } from '../services/account';
 import { abandonActiveWorkout, loadActiveWorkout, useActiveWorkout } from '../services/activeWorkout';
 import { useReduceMotion } from '../theme/motion';
 import { useThemedStyles, useTheme, type Theme } from '../theme';
-import { MAX_FONT_SCALE, duration, easing, spacing, spring, text, touch } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, duration, easing, spacing, spring, text, touch } from '../theme/tokens';
 import { ConfirmSheet, Icon, PressableScale, type ConfirmRequest } from './ui';
 
 /** Hauteur de la barre d'onglets (§8.9) : la bulle flotte juste au-dessus. */
-const TAB_BAR_HEIGHT = 56;
+const TAB_BAR_HEIGHT = scale(56);
 
 /**
  * Place à réserver en bas des écrans à onglets : la bulle flotte au-dessus de
@@ -143,7 +143,7 @@ export default function ActiveWorkoutBubble() {
               scaleTo={0.9}
               hitSlop={8}
             >
-              <Icon name="close" size={18} color={theme.colors.text} />
+              <Icon name="close" size={scale(18)} color={theme.colors.text} />
             </PressableScale>
           </PressableScale>
         </Animated.View>
@@ -188,8 +188,8 @@ const createStyles = (theme: Theme) =>
       marginTop: 2,
     },
     close: {
-      width: 32,
-      height: 32,
+      width: scale(32),
+      height: scale(32),
       borderWidth: 1,
       borderColor: theme.colors.borderStrong,
       alignItems: 'center',

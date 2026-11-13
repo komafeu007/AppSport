@@ -8,7 +8,7 @@ import { exerciseTermLabel, exerciseTermLabels } from '../domain/exerciseLabels'
 import { exerciseGifUrls } from '../lib/exerciseMedia';
 import type { Exercise } from '../services/database';
 import { useThemedStyles, type Theme } from '../theme';
-import { MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
+import { scale, MAX_FONT_SCALE, fontFamily, radius, spacing, text } from '../theme/tokens';
 import ExerciseAlternatives from './ExerciseAlternatives';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -207,7 +207,7 @@ const createStyles = (theme: Theme) =>
     },
     image: {
       width: '100%',
-      height: 240,
+      height: scale(240),
       borderRadius: radius.card,
       backgroundColor: theme.colors.surfaceAlt,
     },
@@ -272,7 +272,7 @@ const createStyles = (theme: Theme) =>
       ...text.body,
       fontFamily: fontFamily.textBold,
       color: theme.colors.action,
-      width: 24,
+      width: scale(24),
     },
     stepText: {
       ...text.body,

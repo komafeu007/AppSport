@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemedStyles, type Theme } from '../../theme';
-import { MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
+import { scale, MAX_FONT_SCALE, spacing, text } from '../../theme/tokens';
 import DashedLine from './DashedLine';
 
 interface Props {
@@ -30,12 +30,12 @@ const createStyles = (theme: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      minHeight: 24,
+      minHeight: scale(24),
     },
     label: {
       ...text.caption,
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: scale(13),
+      lineHeight: scale(18),
       color: theme.colors.textMuted,
     },
     leader: {
@@ -44,7 +44,7 @@ const createStyles = (theme: Theme) =>
     },
     value: {
       ...text.monoValue,
-      fontSize: 14,
+      fontSize: scale(14),
       color: theme.colors.text,
     },
   });

@@ -90,3 +90,15 @@ CREATE TABLE IF NOT EXISTS LOGS_SETS (
     FOREIGN KEY(session_id) REFERENCES LOGS_SESSION(id),
     FOREIGN KEY(exercise_id) REFERENCES EXERCISES(id)
 );
+
+-- Mensurations (v17) : un tour en cm par zone et par date, historique conservé.
+-- zone ∈ cou, epaules, pectoraux, abdos, fessiers, cuisse, mollet, bras, avant_bras
+CREATE TABLE IF NOT EXISTS BODY_MEASUREMENTS (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    zone TEXT NOT NULL,
+    value_cm REAL NOT NULL,
+    date TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES ACCOUNTS(id)
+);
+CREATE INDEX IF NOT EXISTS idx_body_measurements_account ON BODY_MEASUREMENTS(account_id, zone, date);
